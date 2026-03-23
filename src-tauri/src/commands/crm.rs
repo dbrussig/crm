@@ -66,3 +66,53 @@ pub fn update_resource(app: tauri::AppHandle, id: String, updates: Value) -> Res
 pub fn delete_resource(app: tauri::AppHandle, id: String) -> Result<(), String> {
     repository::delete_resource(&app, &id)
 }
+
+#[tauri::command]
+pub fn list_messages(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
+    repository::list_messages(&app)
+}
+
+#[tauri::command]
+pub fn upsert_message(app: tauri::AppHandle, message: Value) -> Result<(), String> {
+    repository::upsert_message(&app, &message)
+}
+
+#[tauri::command]
+pub fn list_payments(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
+    repository::list_payments(&app)
+}
+
+#[tauri::command]
+pub fn upsert_payment(app: tauri::AppHandle, payment: Value) -> Result<(), String> {
+    repository::upsert_payment(&app, &payment)
+}
+
+#[tauri::command]
+pub fn delete_payment(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    repository::delete_payment(&app, &id)
+}
+
+#[tauri::command]
+pub fn list_invoices(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
+    repository::list_invoices(&app)
+}
+
+#[tauri::command]
+pub fn upsert_invoice(app: tauri::AppHandle, invoice: Value) -> Result<(), String> {
+    repository::upsert_invoice(&app, &invoice)
+}
+
+#[tauri::command]
+pub fn delete_invoice(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    repository::delete_invoice(&app, &id)
+}
+
+#[tauri::command]
+pub fn list_invoice_items(app: tauri::AppHandle, invoiceId: String) -> Result<Vec<Value>, String> {
+    repository::list_invoice_items(&app, &invoiceId)
+}
+
+#[tauri::command]
+pub fn replace_invoice_items(app: tauri::AppHandle, invoiceId: String, items: Vec<Value>) -> Result<(), String> {
+    repository::replace_invoice_items(&app, &invoiceId, &items)
+}

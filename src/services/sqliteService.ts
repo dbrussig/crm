@@ -90,16 +90,34 @@ async function saveRentals(rentals: RentalRequest[]) {
 }
 
 async function loadMessages(): Promise<Message[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<Message[]>('list_messages');
+  }
   return loadJson<Message[]>(KEY_MESSAGES, []);
 }
 async function saveMessages(messages: Message[]) {
+  if (isDesktopApp()) {
+    for (const message of messages) {
+      await invokeDesktopCommand('upsert_message', { message });
+    }
+    return;
+  }
   await saveJson(KEY_MESSAGES, messages);
 }
 
 async function loadPayments(): Promise<Payment[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<Payment[]>('list_payments');
+  }
   return loadJson<Payment[]>(KEY_PAYMENTS, []);
 }
 async function savePayments(payments: Payment[]) {
+  if (isDesktopApp()) {
+    for (const payment of payments) {
+      await invokeDesktopCommand('upsert_payment', { payment });
+    }
+    return;
+  }
   await saveJson(KEY_PAYMENTS, payments);
 }
 
@@ -127,9 +145,18 @@ async function saveAccessories(accessories: RentalAccessory[]) {
 }
 
 async function loadInvoices(): Promise<Invoice[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<Invoice[]>('list_invoices');
+  }
   return loadJson<Invoice[]>(KEY_INVOICES, []);
 }
 async function saveInvoices(invoices: Invoice[]) {
+  if (isDesktopApp()) {
+    for (const invoice of invoices) {
+      await invokeDesktopCommand('upsert_invoice', { invoice });
+    }
+    return;
+  }
   await saveJson(KEY_INVOICES, invoices);
 }
 
@@ -137,6 +164,19 @@ async function loadInvoiceItems(): Promise<InvoiceItem[]> {
   return loadJson<InvoiceItem[]>(KEY_INVOICE_ITEMS, []);
 }
 async function saveInvoiceItems(items: InvoiceItem[]) {
+  if (isDesktopApp()) {
+    const grouped = new Map<string, InvoiceItem[]>();
+    for (const item of items) {
+      const bucket = grouped.get(item.invoiceId) || [];
+      bucket.push(item);
+      grouped.set(item.invoiceId, bucket);
+    }
+
+    for (const [invoiceId, invoiceItems] of grouped.entries()) {
+      await invokeDesktopCommand('replace_invoice_items', { invoiceId, items: invoiceItems });
+    }
+    return;
+  }
   await saveJson(KEY_INVOICE_ITEMS, items);
 }
 
@@ -325,6 +365,10 @@ export async function getRentalRequestsByStatus(status: RentalRequest['status'])
 
 // Messages
 export async function createMessage(message: Message): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_message', { message });
+    return;
+  }
   const messages = await loadMessages();
   messages.push(message);
   await saveMessages(messages);
@@ -346,6 +390,10 @@ export async function getAllMessages(): Promise<Message[]> {
 
 // Payments
 export async function addPayment(payment: Payment): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_payment', { payment });
+    return;
+  }
   const payments = await loadPayments();
   payments.push(payment);
   await savePayments(payments);
@@ -368,6 +416,10 @@ export async function getAllPayments(): Promise<Payment[]> {
 }
 
 export async function deletePayment(id: string): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_payment', { id });
+    return;
+  }
   await savePayments((await loadPayments()).filter((p) => p.id !== id));
 }
 
@@ -435,6 +487,11 @@ export async function getAllInvoices(): Promise<Invoice[]> {
 }
 
 export async function addInvoice(invoice: Invoice, items: InvoiceItem[]): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_invoice', { invoice });
+    await invokeDesktopCommand('replace_invoice_items', { invoiceId: invoice.id, items });
+    return;
+  }
   const invoices = await loadInvoices();
   invoices.push(invoice);
   await saveInvoices(invoices);
@@ -445,6 +502,17 @@ export async function addInvoice(invoice: Invoice, items: InvoiceItem[]): Promis
 }
 
 export async function updateInvoice(id: string, updates: Partial<Invoice>, items?: InvoiceItem[]): Promise<void> {
+  if (isDesktopApp()) {
+    const invoices = await loadInvoices();
+    const current = invoices.find((invoice) => invoice.id === id);
+    if (!current) throw new Error('Invoice not found');
+    const next = { ...current, ...updates, updatedAt: Date.now() };
+    await invokeDesktopCommand('upsert_invoice', { invoice: next });
+    if (items) {
+      await invokeDesktopCommand('replace_invoice_items', { invoiceId: id, items });
+    }
+    return;
+  }
   const invoices = await loadInvoices();
   const idx = invoices.findIndex((i) => i.id === id);
   if (idx === -1) throw new Error('Invoice not found');
@@ -459,11 +527,18 @@ export async function updateInvoice(id: string, updates: Partial<Invoice>, items
 }
 
 export async function deleteInvoice(id: string): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_invoice', { id });
+    return;
+  }
   await saveInvoices((await loadInvoices()).filter((i) => i.id !== id));
   await saveInvoiceItems((await loadInvoiceItems()).filter((it) => it.invoiceId !== id));
 }
 
 export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<InvoiceItem[]>('list_invoice_items', { invoiceId });
+  }
   return (await loadInvoiceItems())
     .filter((it) => it.invoiceId === invoiceId)
     .sort((a, b) => a.orderIndex - b.orderIndex);

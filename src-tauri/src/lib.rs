@@ -29,6 +29,16 @@ pub fn run() {
             commands::crm::upsert_resource,
             commands::crm::update_resource,
             commands::crm::delete_resource,
+            commands::crm::list_messages,
+            commands::crm::upsert_message,
+            commands::crm::list_payments,
+            commands::crm::upsert_payment,
+            commands::crm::delete_payment,
+            commands::crm::list_invoices,
+            commands::crm::upsert_invoice,
+            commands::crm::delete_invoice,
+            commands::crm::list_invoice_items,
+            commands::crm::replace_invoice_items,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

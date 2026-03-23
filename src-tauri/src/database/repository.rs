@@ -223,6 +223,224 @@ pub fn delete_resource(app: &AppHandle, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn list_messages(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM messages ORDER BY created_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|error| error.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn upsert_message(app: &AppHandle, message: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(message, "id")?;
+    let rental_request_id = string_field_optional(message, "rentalRequestId");
+    let customer_id = string_field_optional(message, "customerId");
+    let subject = string_field_optional(message, "subject");
+    let body = string_field(message, "message");
+    let received_at = optional_number_field(message, "receivedAt").unwrap_or(number_field(message, "createdAt"));
+    let created_at = number_field(message, "createdAt");
+    let raw_json = message.to_string();
+
+    connection
+        .execute(
+            "INSERT INTO messages (
+               id, rental_request_id, customer_id, from_address, subject, body, received_at, created_at, raw_json
+             ) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+               rental_request_id = excluded.rental_request_id,
+               customer_id = excluded.customer_id,
+               subject = excluded.subject,
+               body = excluded.body,
+               received_at = excluded.received_at,
+               raw_json = excluded.raw_json",
+            params![id, rental_request_id, customer_id, subject, body, received_at, created_at, raw_json],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn list_payments(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM payments ORDER BY received_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|error| error.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn upsert_payment(app: &AppHandle, payment: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(payment, "id")?;
+    let rental_request_id = required_string(payment, "rentalRequestId")?;
+    let customer_id = string_field_optional(payment, "customerId");
+    let kind = required_string(payment, "kind")?;
+    let method = required_string(payment, "method")?;
+    let amount = value_to_f64(payment.get("amount")).unwrap_or(0.0);
+    let currency = required_string(payment, "currency")?;
+    let received_at = optional_number_field(payment, "receivedAt").unwrap_or(number_field(payment, "createdAt"));
+    let created_at = number_field(payment, "createdAt");
+    let raw_json = payment.to_string();
+
+    connection
+        .execute(
+            "INSERT INTO payments (
+               id, rental_request_id, customer_id, kind, method, amount, currency, received_at, created_at, raw_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(id) DO UPDATE SET
+               rental_request_id = excluded.rental_request_id,
+               customer_id = excluded.customer_id,
+               kind = excluded.kind,
+               method = excluded.method,
+               amount = excluded.amount,
+               currency = excluded.currency,
+               received_at = excluded.received_at,
+               raw_json = excluded.raw_json",
+            params![
+                id,
+                rental_request_id,
+                customer_id,
+                kind,
+                method,
+                amount,
+                currency,
+                received_at,
+                created_at,
+                raw_json
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn delete_payment(app: &AppHandle, id: &str) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection
+        .execute("DELETE FROM payments WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn list_invoices(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM invoices ORDER BY created_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|error| error.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn upsert_invoice(app: &AppHandle, invoice: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(invoice, "id")?;
+    let rental_request_id = string_field_optional(invoice, "rentalRequestId");
+    let invoice_type = required_string(invoice, "invoiceType")?;
+    let number = required_string(invoice, "invoiceNo")?;
+    let total_amount = value_to_f64(invoice.get("totalGross")).unwrap_or(0.0);
+    let created_at = number_field(invoice, "createdAt");
+    let updated_at = number_field(invoice, "updatedAt");
+    let raw_json = invoice.to_string();
+
+    connection
+        .execute(
+            "INSERT INTO invoices (
+               id, rental_request_id, type, number, total_amount, created_at, updated_at, raw_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+               rental_request_id = excluded.rental_request_id,
+               type = excluded.type,
+               number = excluded.number,
+               total_amount = excluded.total_amount,
+               updated_at = excluded.updated_at,
+               raw_json = excluded.raw_json",
+            params![id, rental_request_id, invoice_type, number, total_amount, created_at, updated_at, raw_json],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn delete_invoice(app: &AppHandle, id: &str) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection
+        .execute("DELETE FROM invoices WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute("DELETE FROM invoice_items WHERE invoice_id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn list_invoice_items(app: &AppHandle, invoice_id: &str) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM invoice_items WHERE invoice_id = ?1 ORDER BY order_index ASC")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map(params![invoice_id], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|error| error.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn replace_invoice_items(app: &AppHandle, invoice_id: &str, items: &[Value]) -> Result<(), String> {
+    let mut connection = open_connection(app)?;
+    let transaction = connection.transaction().map_err(|error| error.to_string())?;
+    transaction
+        .execute("DELETE FROM invoice_items WHERE invoice_id = ?1", params![invoice_id])
+        .map_err(|error| error.to_string())?;
+
+    for item in items {
+        let id = required_string(item, "id")?;
+        let order_index = optional_number_field(item, "orderIndex").unwrap_or(0);
+        let created_at = number_field(item, "createdAt");
+        let raw_json = item.to_string();
+
+        transaction
+            .execute(
+                "INSERT INTO invoice_items (id, invoice_id, order_index, created_at, raw_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![id, invoice_id, order_index, created_at, raw_json],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+
+    transaction.commit().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 fn open_connection(app: &AppHandle) -> Result<Connection, String> {
     let path = database_path(app).map_err(|error| error.to_string())?;
     Connection::open(path).map_err(|error| error.to_string())
@@ -276,4 +494,8 @@ fn number_field(value: &Value, key: &str) -> i64 {
 
 fn optional_number_field(value: &Value, key: &str) -> Option<i64> {
     value.get(key).and_then(Value::as_i64)
+}
+
+fn value_to_f64(value: Option<&Value>) -> Option<f64> {
+    value.and_then(|raw| raw.as_f64().or_else(|| raw.as_i64().map(|v| v as f64)))
 }

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     total_amount REAL NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL,
     FOREIGN KEY (rental_request_id) REFERENCES rental_requests(id)
 );
 
@@ -56,8 +57,33 @@ CREATE TABLE IF NOT EXISTS messages (
     subject TEXT,
     body TEXT NOT NULL,
     created_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL,
     FOREIGN KEY (rental_request_id) REFERENCES rental_requests(id),
     FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+    id TEXT PRIMARY KEY,
+    rental_request_id TEXT NOT NULL,
+    customer_id TEXT,
+    kind TEXT NOT NULL,
+    method TEXT NOT NULL,
+    amount REAL NOT NULL,
+    currency TEXT NOT NULL,
+    received_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL,
+    FOREIGN KEY (rental_request_id) REFERENCES rental_requests(id),
+    FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
+
+CREATE TABLE IF NOT EXISTS invoice_items (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL,
+    order_index INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
 );
 
 CREATE TABLE IF NOT EXISTS customer_documents (
