@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS customers (
     phone TEXT,
     address TEXT,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS resources (
@@ -16,7 +17,8 @@ CREATE TABLE IF NOT EXISTS resources (
     category TEXT,
     daily_rate REAL,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS rental_requests (
@@ -29,6 +31,7 @@ CREATE TABLE IF NOT EXISTS rental_requests (
     notes TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL,
     FOREIGN KEY (customer_id) REFERENCES customers(id),
     FOREIGN KEY (resource_id) REFERENCES resources(id)
 );

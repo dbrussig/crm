@@ -1,0 +1,279 @@
+use rusqlite::{params, Connection, OptionalExtension};
+use serde_json::{json, Value};
+use tauri::AppHandle;
+
+use super::init::database_path;
+
+pub fn list_customers(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM customers ORDER BY updated_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|error| error.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn get_customer_by_id(app: &AppHandle, id: &str) -> Result<Option<Value>, String> {
+    let connection = open_connection(app)?;
+    fetch_single_json(&connection, "SELECT raw_json FROM customers WHERE id = ?1", params![id])
+}
+
+pub fn find_customer_by_email(app: &AppHandle, email: &str) -> Result<Option<Value>, String> {
+    let connection = open_connection(app)?;
+    fetch_single_json(
+        &connection,
+        "SELECT raw_json FROM customers WHERE lower(email) = lower(?1) LIMIT 1",
+        params![email],
+    )
+}
+
+pub fn upsert_customer(app: &AppHandle, customer: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(customer, "id")?;
+    let first_name = string_field(customer, "firstName");
+    let last_name = string_field(customer, "lastName");
+    let name = format!("{} {}", first_name, last_name).trim().to_string();
+    let email = string_field_optional(customer, "email");
+    let phone = string_field_optional(customer, "phone");
+    let address = customer.get("address").cloned().unwrap_or_else(|| json!({})).to_string();
+    let created_at = number_field(customer, "createdAt");
+    let updated_at = number_field(customer, "updatedAt");
+    let raw_json = customer.to_string();
+
+    connection
+        .execute(
+            "INSERT INTO customers (id, name, email, phone, address, created_at, updated_at, raw_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               email = excluded.email,
+               phone = excluded.phone,
+               address = excluded.address,
+               updated_at = excluded.updated_at,
+               raw_json = excluded.raw_json",
+            params![id, name, email, phone, address, created_at, updated_at, raw_json],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn delete_customer(app: &AppHandle, id: &str) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection
+        .execute("DELETE FROM customers WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn list_rental_requests(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM rental_requests ORDER BY created_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|error| error.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn get_rental_request(app: &AppHandle, id: &str) -> Result<Option<Value>, String> {
+    let connection = open_connection(app)?;
+    fetch_single_json(
+        &connection,
+        "SELECT raw_json FROM rental_requests WHERE id = ?1",
+        params![id],
+    )
+}
+
+pub fn upsert_rental_request(app: &AppHandle, rental: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(rental, "id")?;
+    let customer_id = required_string(rental, "customerId")?;
+    let resource_id = string_field_optional(rental, "resourceId");
+    let status = required_string(rental, "status")?;
+    let notes = string_field_optional(rental, "description");
+    let start_date = optional_number_field(rental, "rentalStart");
+    let end_date = optional_number_field(rental, "rentalEnd");
+    let created_at = number_field(rental, "createdAt");
+    let updated_at = number_field(rental, "updatedAt");
+    let raw_json = rental.to_string();
+
+    connection
+        .execute(
+            "INSERT INTO rental_requests (
+               id, customer_id, resource_id, start_date, end_date, status, notes, created_at, updated_at, raw_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(id) DO UPDATE SET
+               customer_id = excluded.customer_id,
+               resource_id = excluded.resource_id,
+               start_date = excluded.start_date,
+               end_date = excluded.end_date,
+               status = excluded.status,
+               notes = excluded.notes,
+               updated_at = excluded.updated_at,
+               raw_json = excluded.raw_json",
+            params![
+                id,
+                customer_id,
+                resource_id,
+                start_date,
+                end_date,
+                status,
+                notes,
+                created_at,
+                updated_at,
+                raw_json
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn update_rental_request(app: &AppHandle, id: &str, updates: &Value) -> Result<(), String> {
+    let existing = get_rental_request(app, id)?.ok_or_else(|| "Rental not found".to_string())?;
+    let mut merged = existing;
+    merge_json(&mut merged, updates);
+
+    if merged.get("updatedAt").is_none() {
+      merged["updatedAt"] = json!(chrono::Utc::now().timestamp_millis());
+    }
+
+    upsert_rental_request(app, &merged)
+}
+
+pub fn list_resources(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM resources ORDER BY created_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|error| error.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn upsert_resource(app: &AppHandle, resource: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(resource, "id")?;
+    let name = required_string(resource, "name")?;
+    let category = string_field(resource, "type");
+    let daily_rate = optional_number_field(resource, "dailyRate").unwrap_or(0);
+    let created_at = number_field(resource, "createdAt");
+    let updated_at = optional_number_field(resource, "updatedAt").unwrap_or(created_at);
+    let raw_json = resource.to_string();
+
+    connection
+        .execute(
+            "INSERT INTO resources (id, name, license_plate, category, daily_rate, created_at, updated_at, raw_json)
+             VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               category = excluded.category,
+               daily_rate = excluded.daily_rate,
+               updated_at = excluded.updated_at,
+               raw_json = excluded.raw_json",
+            params![id, name, category, daily_rate, created_at, updated_at, raw_json],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn update_resource(app: &AppHandle, id: &str, updates: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let existing = fetch_single_json(
+        &connection,
+        "SELECT raw_json FROM resources WHERE id = ?1",
+        params![id],
+    )?
+    .ok_or_else(|| "Resource not found".to_string())?;
+
+    let mut merged = existing;
+    merge_json(&mut merged, updates);
+    upsert_resource(app, &merged)
+}
+
+pub fn delete_resource(app: &AppHandle, id: &str) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection
+        .execute("DELETE FROM resources WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn open_connection(app: &AppHandle) -> Result<Connection, String> {
+    let path = database_path(app).map_err(|error| error.to_string())?;
+    Connection::open(path).map_err(|error| error.to_string())
+}
+
+fn fetch_single_json<P>(connection: &Connection, sql: &str, params: P) -> Result<Option<Value>, String>
+where
+    P: rusqlite::Params,
+{
+    let raw = connection
+        .query_row(sql, params, |row| row.get::<_, String>(0))
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    raw.map(|value| serde_json::from_str::<Value>(&value).map_err(|error| error.to_string()))
+        .transpose()
+}
+
+fn merge_json(target: &mut Value, updates: &Value) {
+    match (target, updates) {
+        (Value::Object(target_map), Value::Object(update_map)) => {
+            for (key, value) in update_map {
+                target_map.insert(key.clone(), value.clone());
+            }
+        }
+        (target_value, update_value) => {
+            *target_value = update_value.clone();
+        }
+    }
+}
+
+fn required_string(value: &Value, key: &str) -> Result<String, String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(|v| v.to_string())
+        .ok_or_else(|| format!("Missing field: {}", key))
+}
+
+fn string_field(value: &Value, key: &str) -> String {
+    value.get(key).and_then(Value::as_str).unwrap_or_default().to_string()
+}
+
+fn string_field_optional(value: &Value, key: &str) -> Option<String> {
+    value.get(key).and_then(Value::as_str).map(|v| v.to_string())
+}
+
+fn number_field(value: &Value, key: &str) -> i64 {
+    optional_number_field(value, key).unwrap_or(chrono::Utc::now().timestamp_millis())
+}
+
+fn optional_number_field(value: &Value, key: &str) -> Option<i64> {
+    value.get(key).and_then(Value::as_i64)
+}

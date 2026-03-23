@@ -8,6 +8,7 @@
 import type { Customer, CustomerDocument, RentalRequest, Message, Resource, Invoice, InvoiceItem, Payment, DocumentCategory, RentalAccessory } from '../types';
 import { deleteKey, loadJson, saveJson } from './_storage';
 import { idbGet, idbSet } from './idbKv';
+import { invokeDesktopCommand, isDesktopApp } from '../platform/runtime';
 
 const KEY_CUSTOMERS = 'mietpark_crm_customers_v1';
 const KEY_RENTALS = 'mietpark_crm_rentals_v1';
@@ -21,6 +22,9 @@ const KEY_CUSTOMER_DOCS = 'mietpark_crm_customer_docs_v1';
 const KEY_CUSTOMER_DOC_PAYLOAD_PREFIX = 'mietpark_crm_customer_doc_payload_v1:';
 
 async function loadCustomers(): Promise<Customer[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<Customer[]>('list_customers');
+  }
   const raw = await loadJson<Customer[]>(KEY_CUSTOMERS, []);
   // Normalize roof-rail photo storage (legacy single photo -> array; keep primary field in sync).
   return raw.map((c) => {
@@ -38,6 +42,12 @@ async function loadCustomers(): Promise<Customer[]> {
   });
 }
 async function saveCustomers(customers: Customer[]) {
+  if (isDesktopApp()) {
+    for (const customer of customers) {
+      await invokeDesktopCommand('upsert_customer', { customer });
+    }
+    return;
+  }
   // Ensure the legacy primary field stays consistent.
   const normalized = customers.map((c) => {
     const urls = Array.isArray((c as any).roofRailPhotoDataUrls) ? (c as any).roofRailPhotoDataUrls.filter(Boolean) : [];
@@ -53,6 +63,9 @@ async function saveCustomers(customers: Customer[]) {
 }
 
 async function loadRentals(): Promise<RentalRequest[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<RentalRequest[]>('list_rental_requests');
+  }
   const raw = await loadJson<RentalRequest[]>(KEY_RENTALS, []);
   // Normalize defaults for older data:
   // - Deposit: Heckbox + Dachboxen => 150 EUR (if not set)
@@ -67,6 +80,12 @@ async function loadRentals(): Promise<RentalRequest[]> {
   });
 }
 async function saveRentals(rentals: RentalRequest[]) {
+  if (isDesktopApp()) {
+    for (const rental of rentals) {
+      await invokeDesktopCommand('upsert_rental_request', { rental });
+    }
+    return;
+  }
   await saveJson(KEY_RENTALS, rentals);
 }
 
@@ -85,9 +104,18 @@ async function savePayments(payments: Payment[]) {
 }
 
 async function loadResources(): Promise<Resource[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<Resource[]>('list_resources');
+  }
   return loadJson<Resource[]>(KEY_RESOURCES, []);
 }
 async function saveResources(resources: Resource[]) {
+  if (isDesktopApp()) {
+    for (const resource of resources) {
+      await invokeDesktopCommand('upsert_resource', { resource });
+    }
+    return;
+  }
   await saveJson(KEY_RESOURCES, resources);
 }
 
@@ -165,22 +193,36 @@ export async function getAllCustomers(): Promise<Customer[]> {
 }
 
 export async function getCustomerById(id: string): Promise<Customer | null> {
+  if (isDesktopApp()) {
+    return (await invokeDesktopCommand<Customer | null>('get_customer_by_id', { id })) ?? null;
+  }
   return (await loadCustomers()).find((c) => c.id === id) ?? null;
 }
 
 export async function findCustomerByEmail(email: string): Promise<Customer | null> {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
+  if (isDesktopApp()) {
+    return (await invokeDesktopCommand<Customer | null>('find_customer_by_email', { email: normalized })) ?? null;
+  }
   return (await loadCustomers()).find((c) => c.email?.trim().toLowerCase() === normalized) ?? null;
 }
 
 export async function createCustomer(customer: Customer): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_customer', { customer });
+    return;
+  }
   const customers = await loadCustomers();
   customers.push(customer);
   await saveCustomers(customers);
 }
 
 export async function updateCustomer(customer: Customer): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_customer', { customer });
+    return;
+  }
   const customers = await loadCustomers();
   const idx = customers.findIndex((c) => c.id === customer.id);
   if (idx === -1) throw new Error('Customer not found');
@@ -189,6 +231,10 @@ export async function updateCustomer(customer: Customer): Promise<void> {
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_customer', { id });
+    return;
+  }
   const customers = (await loadCustomers()).filter((c) => c.id !== id);
   await saveCustomers(customers);
 }
@@ -241,12 +287,19 @@ export async function deleteCustomerDocument(docId: string): Promise<void> {
 
 // Rentals
 export async function addRentalRequest(rental: RentalRequest): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_rental_request', { rental });
+    return;
+  }
   const rentals = await loadRentals();
   rentals.push(rental);
   await saveRentals(rentals);
 }
 
 export async function getRentalRequest(id: string): Promise<RentalRequest | null> {
+  if (isDesktopApp()) {
+    return (await invokeDesktopCommand<RentalRequest | null>('get_rental_request', { id })) ?? null;
+  }
   return (await loadRentals()).find((r) => r.id === id) ?? null;
 }
 
@@ -255,6 +308,10 @@ export async function getAllRentalRequests(): Promise<RentalRequest[]> {
 }
 
 export async function updateRentalRequest(id: string, updates: Partial<RentalRequest>): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('update_rental_request', { id, updates });
+    return;
+  }
   const rentals = await loadRentals();
   const idx = rentals.findIndex((r) => r.id === id);
   if (idx === -1) throw new Error('Rental not found');
@@ -320,12 +377,20 @@ export async function getAllResources(): Promise<Resource[]> {
 }
 
 export async function addResource(resource: Resource): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_resource', { resource });
+    return;
+  }
   const resources = await loadResources();
   resources.push(resource);
   await saveResources(resources);
 }
 
 export async function updateResource(id: string, updates: Partial<Resource>): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('update_resource', { id, updates });
+    return;
+  }
   const resources = await loadResources();
   const idx = resources.findIndex((r) => r.id === id);
   if (idx === -1) throw new Error('Resource not found');
@@ -334,6 +399,10 @@ export async function updateResource(id: string, updates: Partial<Resource>): Pr
 }
 
 export async function deleteResource(id: string): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_resource', { id });
+    return;
+  }
   await saveResources((await loadResources()).filter((r) => r.id !== id));
 }
 

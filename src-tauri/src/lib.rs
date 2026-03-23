@@ -16,6 +16,19 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::health::healthcheck,
             commands::database::database_summary,
+            commands::crm::list_customers,
+            commands::crm::get_customer_by_id,
+            commands::crm::find_customer_by_email,
+            commands::crm::upsert_customer,
+            commands::crm::delete_customer,
+            commands::crm::list_rental_requests,
+            commands::crm::get_rental_request,
+            commands::crm::upsert_rental_request,
+            commands::crm::update_rental_request,
+            commands::crm::list_resources,
+            commands::crm::upsert_resource,
+            commands::crm::update_resource,
+            commands::crm::delete_resource,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
