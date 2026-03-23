@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pricing>
+  <product id="1" key="dachbox-1-xl" supportsRoofRack="true">
+    <tooltip>Die Dachbox wird standardmäßig mit Dachträger vermietet. Falls bereits passende Träger vorhanden sind, reduziert sich der Preis automatisch.</tooltip>
+    <info>Die angegebenen Preise gelten inklusive Dachträger. Wenn Sie bereits passende Träger besitzen, reduziert sich der Preis automatisch nach Ihrer Auswahl.</info>
+    <seasonPeriods>
+      <period label="Sommerferien (Juli &amp; August)" start="07-01" end="08-31" surchargePerWeek="15" />
+      <period label="Weihnachtsferien (15.12 – 14.01)" start="12-15" end="01-14" surchargePerWeek="15" />
+    </seasonPeriods>
+    <tableRows>
+      <row duration="1 Woche" withRack="55" withoutRack="45" seasonNote="+15€ / Woche in der Saison" />
+      <row duration="2 Wochen" withRack="90" withoutRack="75" seasonNote="+15€ / Woche in der Saison" />
+      <row duration="3 Wochen" withRack="135" withoutRack="115" seasonNote="+15€ / Woche in der Saison" />
+    </tableRows>
+    <calculator>
+      <weeklyRates>
+        <rate label="1 Woche" weeks="1" withRack="55" withoutRack="45" />
+        <rate label="2 Wochen" weeks="2" withRack="90" withoutRack="75" />
+        <rate label="3 Wochen" weeks="3" withRack="135" withoutRack="115" />
+      </weeklyRates>
+    </calculator>
+  </product>
+
+  <product id="2" key="dachbox-2-xl" supportsRoofRack="true">
+    <tooltip>Die Dachbox wird standardmäßig mit Dachträger vermietet. Falls bereits passende Träger vorhanden sind, reduziert sich der Preis automatisch.</tooltip>
+    <info>Die angegebenen Preise gelten inklusive Dachträger. Wenn Sie bereits passende Träger besitzen, reduziert sich der Preis automatisch nach Ihrer Auswahl.</info>
+    <seasonPeriods>
+      <period label="Sommerferien (Juli &amp; August)" start="07-01" end="08-31" surchargePerWeek="15" />
+      <period label="Weihnachtsferien (15.12 – 14.01)" start="12-15" end="01-14" surchargePerWeek="15" />
+    </seasonPeriods>
+    <tableRows>
+      <row duration="1 Woche" withRack="55" withoutRack="45" seasonNote="+15€ / Woche in der Saison" />
+      <row duration="2 Wochen" withRack="90" withoutRack="75" seasonNote="+15€ / Woche in der Saison" />
+      <row duration="3 Wochen" withRack="135" withoutRack="115" seasonNote="+15€ / Woche in der Saison" />
+    </tableRows>
+    <calculator>
+      <weeklyRates>
+        <rate label="1 Woche" weeks="1" withRack="55" withoutRack="45" />
+        <rate label="2 Wochen" weeks="2" withRack="90" withoutRack="75" />
+        <rate label="3 Wochen" weeks="3" withRack="135" withoutRack="115" />
+      </weeklyRates>
+    </calculator>
+  </product>
+
+  <product id="6" key="dachbox-3-m" supportsRoofRack="true">
+    <tooltip>Die Dachbox wird standardmäßig mit Dachträger vermietet. Falls bereits passende Träger vorhanden sind, reduziert sich der Preis automatisch.</tooltip>
+    <info>Die angegebenen Preise gelten inklusive Dachträger. Wenn Sie keine Träger benötigen, reduziert sich der Preis automatisch.</info>
+    <seasonPeriods>
+      <period label="Sommerferien (Juli &amp; August)" start="07-01" end="08-31" surchargePerWeek="10" />
+    </seasonPeriods>
+    <tableRows>
+      <row duration="1 Woche" withRack="45" withoutRack="35" seasonNote="+10€ / Woche in der Saison" />
+      <row duration="2 Wochen" withRack="70" withoutRack="55" seasonNote="+10€ / Woche in der Saison" />
+      <row duration="3 Wochen" withRack="110" withoutRack="85" seasonNote="+10€ / Woche in der Saison" />
+    </tableRows>
+    <calculator>
+      <weeklyRates>
+        <rate label="1 Woche" weeks="1" withRack="45" withoutRack="35" />
+        <rate label="2 Wochen" weeks="2" withRack="70" withoutRack="55" />
+        <rate label="3 Wochen" weeks="3" withRack="110" withoutRack="85" />
+      </weeklyRates>
+    </calculator>
+  </product>
+
+  <product id="3" key="heckbox" supportsRoofRack="false">
+    <info>Alle Preise verstehen sich inklusive Montage-Service und Kofferraum-Zugang dank Kippfunktion.</info>
+    <seasonPeriods>
+      <period label="Sommerferien (Juli &amp; August)" start="07-01" end="08-31" surchargePerWeek="10" />
+    </seasonPeriods>
+    <tableRows>
+      <row duration="1 Woche" withRack="50" seasonNote="+10€ / Woche in der Saison" />
+      <row duration="2 Wochen" withRack="80" seasonNote="+10€ / Woche in der Saison" />
+      <row duration="3 Wochen" withRack="120" seasonNote="+10€ / Woche in der Saison" />
+    </tableRows>
+    <calculator>
+      <weeklyRates>
+        <rate label="1 Woche" weeks="1" withRack="50" />
+        <rate label="2 Wochen" weeks="2" withRack="80" />
+        <rate label="3 Wochen" weeks="3" withRack="120" />
+      </weeklyRates>
+    </calculator>
+  </product>
+
+  <product id="4" key="fahrradtraeger" supportsRoofRack="false">
+    <info>Preise inklusive Einweisung in das Schnellverschluss-System.</info>
+    <tableRows>
+      <row duration="1 Tag" withRack="8" seasonNote="–" />
+      <row duration="1 Woche" withRack="50" seasonNote="–" />
+      <row duration="2 Wochen" withRack="80" seasonNote="–" />
+      <row duration="3 Wochen" withRack="120" seasonNote="–" />
+    </tableRows>
+    <calculator>
+      <dayRates>
+        <rate type="weekday" label="1 Tag" withRack="8" />
+        <rate type="weekend" label="1 Tag" withRack="8" />
+      </dayRates>
+      <weeklyRates>
+        <rate label="1 Woche" weeks="1" withRack="50" />
+        <rate label="2 Wochen" weeks="2" withRack="80" />
+        <rate label="3 Wochen" weeks="3" withRack="120" />
+      </weeklyRates>
+    </calculator>
+  </product>
+
+  <product id="5" key="huepfburg" supportsRoofRack="false">
+    <info>Stromkosten, Gebläse und Zubehör sind bereits im Preis enthalten.</info>
+    <tableRows>
+      <row duration="1 Tag (Mo-Fr)" withRack="40" seasonNote="–" />
+      <row duration="1 Tag (Sa/So/Feiertag)" withRack="50" seasonNote="–" />
+      <row duration="Wochenende (Fr-So)" withRack="75" seasonNote="–" />
+    </tableRows>
+    <calculator>
+      <dayRates>
+        <rate type="weekday" label="1 Tag (Mo-Fr)" withRack="40" />
+        <rate type="weekend" label="1 Tag (Sa/So/Feiertag)" withRack="50" />
+      </dayRates>
+      <weekendRate label="Wochenende (Fr-So)" days="3" withRack="75" />
+    </calculator>
+  </product>
+
+  <product id="7" key="dachtraeger" supportsRoofRack="false">
+    <info>Passende Dachträger für Ihr Fahrzeugmodell, inklusive Einweisung und Anpassung.</info>
+    <tableRows>
+      <row duration="1 Woche" withRack="10" seasonNote="–" />
+      <row duration="2 Wochen" withRack="15" seasonNote="–" />
+      <row duration="3 Wochen" withRack="20" seasonNote="–" />
+    </tableRows>
+    <calculator>
+      <weeklyRates>
+        <rate label="1 Woche" weeks="1" withRack="10" />
+        <rate label="2 Wochen" weeks="2" withRack="15" />
+        <rate label="3 Wochen" weeks="3" withRack="20" />
+      </weeklyRates>
+    </calculator>
+  </product>
+</pricing>
+

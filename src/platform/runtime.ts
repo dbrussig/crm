@@ -1,10 +1,20 @@
-import { invoke } from '@tauri-apps/api/core';
+export type RuntimePlatform = 'browser' | 'mac-app';
 
-export function getRuntimeInfo(): string {
-  if ('__TAURI_INTERNALS__' in window) return 'tauri-desktop';
-  return 'browser-dev';
+declare global {
+  interface Window {
+    webkit?: {
+      messageHandlers?: Record<string, { postMessage: (message: unknown) => void }>;
+    };
+    mietparkCRMBridgeResponse?: (response: unknown) => void;
+  }
 }
 
-export async function invokeBackend<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  return await invoke<T>(command, args);
+export function getRuntimePlatform(): RuntimePlatform {
+  if (typeof window === 'undefined') return 'browser';
+  if (window.webkit?.messageHandlers?.mietparkCRM) return 'mac-app';
+  return 'browser';
+}
+
+export function isMacApp(): boolean {
+  return getRuntimePlatform() === 'mac-app';
 }

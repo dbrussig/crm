@@ -5,23 +5,44 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@tauri-apps/api": "^2.0.0",
+    "chart.js": "^4.5.1",
+    "date-fns": "^4.1.0",
+    "jszip": "^3.10.1",
+    "lodash-es": "^4.17.23",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-chartjs-2": "^5.3.1",
+    "react-datepicker": "^9.1.0",
+    "react-dom": "^19.0.0",
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
+    "@playwright/test": "^1.58.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^22.14.0",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "^5.8.0",
-    "vite": "^6.0.0"
+    "@vitest/coverage-v8": "^4.0.18",
+    "jsdom": "^28.0.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.4.1",
+    "vitest": "^4.0.18"
   }
 }

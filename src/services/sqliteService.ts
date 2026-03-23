@@ -1,0 +1,409 @@
+/**
+ * Local persistence layer.
+ *
+ * The original project used sql.js + IndexedDB. For reconstruction we keep the
+ * public API but back it with localStorage so the UI can run again.
+ */
+
+import type { Customer, CustomerDocument, RentalRequest, Message, Resource, Invoice, InvoiceItem, Payment, DocumentCategory, RentalAccessory } from '../types';
+import { deleteKey, loadJson, saveJson } from './_storage';
+import { idbGet, idbSet } from './idbKv';
+
+const KEY_CUSTOMERS = 'mietpark_crm_customers_v1';
+const KEY_RENTALS = 'mietpark_crm_rentals_v1';
+const KEY_MESSAGES = 'mietpark_crm_messages_v1';
+const KEY_PAYMENTS = 'mietpark_crm_payments_v1';
+const KEY_RESOURCES = 'mietpark_crm_resources_v1';
+const KEY_ACCESSORIES = 'mietpark_crm_accessories_v1';
+const KEY_INVOICES = 'mietpark_crm_invoices_v1';
+const KEY_INVOICE_ITEMS = 'mietpark_crm_invoice_items_v1';
+const KEY_CUSTOMER_DOCS = 'mietpark_crm_customer_docs_v1';
+const KEY_CUSTOMER_DOC_PAYLOAD_PREFIX = 'mietpark_crm_customer_doc_payload_v1:';
+
+async function loadCustomers(): Promise<Customer[]> {
+  const raw = await loadJson<Customer[]>(KEY_CUSTOMERS, []);
+  // Normalize roof-rail photo storage (legacy single photo -> array; keep primary field in sync).
+  return raw.map((c) => {
+    const urls = Array.isArray((c as any).roofRailPhotoDataUrls)
+      ? (c as any).roofRailPhotoDataUrls.filter(Boolean)
+      : [];
+    const legacy = (c as any).roofRailPhotoDataUrl ? [String((c as any).roofRailPhotoDataUrl)] : [];
+    const nextUrls = urls.length ? urls : legacy;
+    const primary = nextUrls[0] || undefined;
+    return {
+      ...c,
+      roofRailPhotoDataUrls: nextUrls.length ? nextUrls : undefined,
+      roofRailPhotoDataUrl: primary,
+    } as Customer;
+  });
+}
+async function saveCustomers(customers: Customer[]) {
+  // Ensure the legacy primary field stays consistent.
+  const normalized = customers.map((c) => {
+    const urls = Array.isArray((c as any).roofRailPhotoDataUrls) ? (c as any).roofRailPhotoDataUrls.filter(Boolean) : [];
+    const primary = urls[0] || (c as any).roofRailPhotoDataUrl || undefined;
+    const nextUrls = urls.length ? urls : (primary ? [primary] : []);
+    return {
+      ...c,
+      roofRailPhotoDataUrls: nextUrls.length ? nextUrls : undefined,
+      roofRailPhotoDataUrl: primary,
+    } as Customer;
+  });
+  await saveJson(KEY_CUSTOMERS, normalized);
+}
+
+async function loadRentals(): Promise<RentalRequest[]> {
+  const raw = await loadJson<RentalRequest[]>(KEY_RENTALS, []);
+  // Normalize defaults for older data:
+  // - Deposit: Heckbox + Dachboxen => 150 EUR (if not set)
+  return raw.map((r) => {
+    const needsDefaultDeposit =
+      (r.productType === 'Heckbox' || r.productType === 'Dachbox XL' || r.productType === 'Dachbox M') &&
+      (r.deposit === undefined || r.deposit === null || Number.isNaN(Number(r.deposit)));
+    return {
+      ...r,
+      deposit: needsDefaultDeposit ? 150 : r.deposit,
+    } as RentalRequest;
+  });
+}
+async function saveRentals(rentals: RentalRequest[]) {
+  await saveJson(KEY_RENTALS, rentals);
+}
+
+async function loadMessages(): Promise<Message[]> {
+  return loadJson<Message[]>(KEY_MESSAGES, []);
+}
+async function saveMessages(messages: Message[]) {
+  await saveJson(KEY_MESSAGES, messages);
+}
+
+async function loadPayments(): Promise<Payment[]> {
+  return loadJson<Payment[]>(KEY_PAYMENTS, []);
+}
+async function savePayments(payments: Payment[]) {
+  await saveJson(KEY_PAYMENTS, payments);
+}
+
+async function loadResources(): Promise<Resource[]> {
+  return loadJson<Resource[]>(KEY_RESOURCES, []);
+}
+async function saveResources(resources: Resource[]) {
+  await saveJson(KEY_RESOURCES, resources);
+}
+
+async function loadAccessories(): Promise<RentalAccessory[]> {
+  return loadJson<RentalAccessory[]>(KEY_ACCESSORIES, []);
+}
+async function saveAccessories(accessories: RentalAccessory[]) {
+  await saveJson(KEY_ACCESSORIES, accessories);
+}
+
+async function loadInvoices(): Promise<Invoice[]> {
+  return loadJson<Invoice[]>(KEY_INVOICES, []);
+}
+async function saveInvoices(invoices: Invoice[]) {
+  await saveJson(KEY_INVOICES, invoices);
+}
+
+async function loadInvoiceItems(): Promise<InvoiceItem[]> {
+  return loadJson<InvoiceItem[]>(KEY_INVOICE_ITEMS, []);
+}
+async function saveInvoiceItems(items: InvoiceItem[]) {
+  await saveJson(KEY_INVOICE_ITEMS, items);
+}
+
+async function loadCustomerDocs(): Promise<CustomerDocument[]> {
+  const raw = await loadJson<CustomerDocument[]>(KEY_CUSTOMER_DOCS, []);
+  // Normalize legacy categories (older builds used 'Anfrage'/'Anleitung').
+  const normalizeCategory = (c: any): DocumentCategory | undefined => {
+    const v = String(c || '').trim();
+    if (!v) return undefined;
+    if (v === 'Angebot' || v === 'Auftrag' || v === 'Rechnung' || v === 'Ausweis' || v === 'Sonstiges') return v as any;
+    if (v === 'Anfrage') return 'Sonstiges';
+    if (v === 'Anleitung') return 'Sonstiges';
+    return 'Sonstiges';
+  };
+  const next = raw.map((d) => ({ ...d, category: normalizeCategory((d as any).category) })) as CustomerDocument[];
+  return next;
+}
+async function saveCustomerDocs(docs: CustomerDocument[]) {
+  await saveJson(KEY_CUSTOMER_DOCS, docs);
+}
+
+export async function getAllCustomerDocuments(): Promise<CustomerDocument[]> {
+  return (await loadCustomerDocs()).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+export async function updateCustomerDocumentMeta(docId: string, patch: Partial<CustomerDocument>): Promise<void> {
+  const docs = await loadCustomerDocs();
+  const idx = docs.findIndex((d) => d.id === docId);
+  if (idx === -1) throw new Error('Document not found');
+  docs[idx] = { ...docs[idx], ...patch };
+  await saveCustomerDocs(docs);
+}
+
+export async function deleteAllCustomerDocuments(): Promise<void> {
+  const docs = await loadCustomerDocs();
+  await saveCustomerDocs([]);
+  for (const d of docs) {
+    await deleteKey(`${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${d.id}`);
+  }
+}
+
+export async function setCustomerDocumentPayload(docId: string, payload: Blob | string): Promise<void> {
+  const key = `${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${docId}`;
+  if (payload instanceof Blob) {
+    await idbSet(key, payload);
+  } else {
+    await saveJson(key, payload);
+  }
+}
+
+// Customers
+export async function getAllCustomers(): Promise<Customer[]> {
+  return (await loadCustomers()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+export async function getCustomerById(id: string): Promise<Customer | null> {
+  return (await loadCustomers()).find((c) => c.id === id) ?? null;
+}
+
+export async function findCustomerByEmail(email: string): Promise<Customer | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  return (await loadCustomers()).find((c) => c.email?.trim().toLowerCase() === normalized) ?? null;
+}
+
+export async function createCustomer(customer: Customer): Promise<void> {
+  const customers = await loadCustomers();
+  customers.push(customer);
+  await saveCustomers(customers);
+}
+
+export async function updateCustomer(customer: Customer): Promise<void> {
+  const customers = await loadCustomers();
+  const idx = customers.findIndex((c) => c.id === customer.id);
+  if (idx === -1) throw new Error('Customer not found');
+  customers[idx] = customer;
+  await saveCustomers(customers);
+}
+
+export async function deleteCustomer(id: string): Promise<void> {
+  const customers = (await loadCustomers()).filter((c) => c.id !== id);
+  await saveCustomers(customers);
+}
+
+// Customer documents (PDFs etc.)
+export async function getDocumentsByCustomer(customerId: string): Promise<CustomerDocument[]> {
+  return (await loadCustomerDocs())
+    .filter((d) => d.customerId === customerId)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+export async function addCustomerDocument(doc: CustomerDocument, payloadBase64: string): Promise<void> {
+  const docs = await loadCustomerDocs();
+  docs.push(doc);
+  await saveCustomerDocs(docs);
+  await saveJson(`${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${doc.id}`, payloadBase64);
+}
+
+export async function addCustomerDocumentBlob(doc: CustomerDocument, payload: Blob): Promise<void> {
+  const docs = await loadCustomerDocs();
+  docs.push(doc);
+  await saveCustomerDocs(docs);
+  try {
+    // Store binary payload as Blob in IndexedDB (no base64 overhead).
+    await idbSet(`${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${doc.id}`, payload);
+  } catch (e) {
+    // Roll back metadata entry if payload cannot be stored.
+    await saveCustomerDocs(docs.filter((d) => d.id !== doc.id));
+    throw e;
+  }
+}
+
+export async function getCustomerDocumentPayload(docId: string): Promise<Blob | string | null> {
+  const key = `${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${docId}`;
+  try {
+    const v = await idbGet<any>(key);
+    if (v instanceof Blob) return v;
+    if (typeof v === 'string') return v; // legacy base64
+    if (v !== undefined && v !== null) return v as any;
+  } catch {
+    // Fall back to legacy JSON loader below.
+  }
+  return loadJson<any>(key, null);
+}
+
+export async function deleteCustomerDocument(docId: string): Promise<void> {
+  await saveCustomerDocs((await loadCustomerDocs()).filter((d) => d.id !== docId));
+  await deleteKey(`${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${docId}`);
+}
+
+// Rentals
+export async function addRentalRequest(rental: RentalRequest): Promise<void> {
+  const rentals = await loadRentals();
+  rentals.push(rental);
+  await saveRentals(rentals);
+}
+
+export async function getRentalRequest(id: string): Promise<RentalRequest | null> {
+  return (await loadRentals()).find((r) => r.id === id) ?? null;
+}
+
+export async function getAllRentalRequests(): Promise<RentalRequest[]> {
+  return (await loadRentals()).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function updateRentalRequest(id: string, updates: Partial<RentalRequest>): Promise<void> {
+  const rentals = await loadRentals();
+  const idx = rentals.findIndex((r) => r.id === id);
+  if (idx === -1) throw new Error('Rental not found');
+  rentals[idx] = { ...rentals[idx], ...updates, updatedAt: Date.now() };
+  await saveRentals(rentals);
+}
+
+export async function getRentalRequestsByStatus(status: RentalRequest['status']): Promise<RentalRequest[]> {
+  return (await loadRentals()).filter((r) => r.status === status);
+}
+
+// Messages
+export async function createMessage(message: Message): Promise<void> {
+  const messages = await loadMessages();
+  messages.push(message);
+  await saveMessages(messages);
+}
+
+export async function getMessagesByRental(rentalRequestId: string): Promise<Message[]> {
+  return (await loadMessages()).filter((m) => m.rentalRequestId === rentalRequestId);
+}
+
+export async function getMessagesByCustomer(customerId: string): Promise<Message[]> {
+  return (await loadMessages())
+    .filter((m) => m.customerId === customerId)
+    .sort((a, b) => (b.receivedAt || b.createdAt || 0) - (a.receivedAt || a.createdAt || 0));
+}
+
+export async function getAllMessages(): Promise<Message[]> {
+  return (await loadMessages()).sort((a, b) => (b.receivedAt || b.createdAt || 0) - (a.receivedAt || a.createdAt || 0));
+}
+
+// Payments
+export async function addPayment(payment: Payment): Promise<void> {
+  const payments = await loadPayments();
+  payments.push(payment);
+  await savePayments(payments);
+}
+
+export async function getPaymentsByRental(rentalRequestId: string): Promise<Payment[]> {
+  return (await loadPayments())
+    .filter((p) => p.rentalRequestId === rentalRequestId)
+    .sort((a, b) => (b.receivedAt || b.createdAt || 0) - (a.receivedAt || a.createdAt || 0));
+}
+
+export async function getPaymentsByCustomer(customerId: string): Promise<Payment[]> {
+  return (await loadPayments())
+    .filter((p) => p.customerId === customerId)
+    .sort((a, b) => (b.receivedAt || b.createdAt || 0) - (a.receivedAt || a.createdAt || 0));
+}
+
+export async function getAllPayments(): Promise<Payment[]> {
+  return (await loadPayments()).sort((a, b) => (b.receivedAt || b.createdAt || 0) - (a.receivedAt || a.createdAt || 0));
+}
+
+export async function deletePayment(id: string): Promise<void> {
+  await savePayments((await loadPayments()).filter((p) => p.id !== id));
+}
+
+// Resources
+export async function getAllResources(): Promise<Resource[]> {
+  return (await loadResources()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+export async function addResource(resource: Resource): Promise<void> {
+  const resources = await loadResources();
+  resources.push(resource);
+  await saveResources(resources);
+}
+
+export async function updateResource(id: string, updates: Partial<Resource>): Promise<void> {
+  const resources = await loadResources();
+  const idx = resources.findIndex((r) => r.id === id);
+  if (idx === -1) throw new Error('Resource not found');
+  resources[idx] = { ...resources[idx], ...updates };
+  await saveResources(resources);
+}
+
+export async function deleteResource(id: string): Promise<void> {
+  await saveResources((await loadResources()).filter((r) => r.id !== id));
+}
+
+// Accessories
+export async function getAllAccessories(): Promise<RentalAccessory[]> {
+  return (await loadAccessories()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+export async function addAccessory(accessory: RentalAccessory): Promise<void> {
+  const accessories = await loadAccessories();
+  accessories.push(accessory);
+  await saveAccessories(accessories);
+}
+
+export async function updateAccessory(id: string, updates: Partial<RentalAccessory>): Promise<void> {
+  const accessories = await loadAccessories();
+  const idx = accessories.findIndex((a) => a.id === id);
+  if (idx === -1) throw new Error('Accessory not found');
+  accessories[idx] = { ...accessories[idx], ...updates, updatedAt: Date.now() };
+  await saveAccessories(accessories);
+}
+
+export async function deleteAccessory(id: string): Promise<void> {
+  await saveAccessories((await loadAccessories()).filter((a) => a.id !== id));
+}
+
+// Invoices
+export async function getAllInvoices(): Promise<Invoice[]> {
+  return (await loadInvoices()).sort((a, b) => b.invoiceDate - a.invoiceDate);
+}
+
+export async function addInvoice(invoice: Invoice, items: InvoiceItem[]): Promise<void> {
+  const invoices = await loadInvoices();
+  invoices.push(invoice);
+  await saveInvoices(invoices);
+
+  const allItems = await loadInvoiceItems();
+  allItems.push(...items.map((it) => ({ ...it, invoiceId: invoice.id })));
+  await saveInvoiceItems(allItems);
+}
+
+export async function updateInvoice(id: string, updates: Partial<Invoice>, items?: InvoiceItem[]): Promise<void> {
+  const invoices = await loadInvoices();
+  const idx = invoices.findIndex((i) => i.id === id);
+  if (idx === -1) throw new Error('Invoice not found');
+  invoices[idx] = { ...invoices[idx], ...updates, updatedAt: Date.now() };
+  await saveInvoices(invoices);
+
+  if (items) {
+    const allItems = (await loadInvoiceItems()).filter((it) => it.invoiceId !== id);
+    allItems.push(...items.map((it) => ({ ...it, invoiceId: id })));
+    await saveInvoiceItems(allItems);
+  }
+}
+
+export async function deleteInvoice(id: string): Promise<void> {
+  await saveInvoices((await loadInvoices()).filter((i) => i.id !== id));
+  await saveInvoiceItems((await loadInvoiceItems()).filter((it) => it.invoiceId !== id));
+}
+
+export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
+  return (await loadInvoiceItems())
+    .filter((it) => it.invoiceId === invoiceId)
+    .sort((a, b) => a.orderIndex - b.orderIndex);
+}
+
+// Debug helper (kept for SQLDebugPanel)
+export async function executeQuery(query: string): Promise<{ ok: boolean; result: unknown }> {
+  return {
+    ok: false,
+    result: `SQL engine is not available in this reconstructed build. Query was: ${query}`,
+  };
+}
