@@ -42,6 +42,7 @@ Die bisherige Docker-Web-App wird schrittweise zu einer eigenstaendigen Desktop-
 - [x] Nachrichten nativ ueber Tauri/SQLite verdrahtet
 - [x] Zahlungen nativ ueber Tauri/SQLite verdrahtet
 - [x] Belege und Belegpositionen nativ ueber Tauri/SQLite verdrahtet
+- [x] Kundendokumente als SQLite-Metadaten + nativer Dateispeicher verdrahtet
 
 ### Teilweise erledigt
 
@@ -51,7 +52,6 @@ Die bisherige Docker-Web-App wird schrittweise zu einer eigenstaendigen Desktop-
 
 ### Offen
 
-- [ ] Kundendokumente und Anhaenge in nativen Dateispeicher + SQLite-Metadaten verschieben
 - [ ] Zubehoer nativ ueber Tauri/SQLite verdrahten
 - [ ] Backup-Historie und Backup-Dateien nativ verdrahten
 - [ ] OAuth-Token sicher in Keychain speichern
@@ -86,8 +86,8 @@ Die bisherige Docker-Web-App wird schrittweise zu einer eigenstaendigen Desktop-
 
 ### Phase 3: Dateispeicher und Sicherheit
 
-- [ ] Customer Documents
-- [ ] Dateiablage im nativen App-Container
+- [x] Customer Documents
+- [x] Dateiablage im nativen App-Container
 - [ ] Keychain fuer Tokens
 - [ ] verschluesselte lokale Backups
 
@@ -107,9 +107,9 @@ Die bisherige Docker-Web-App wird schrittweise zu einer eigenstaendigen Desktop-
 
 ## Naechste konkrete Schritte
 
-1. Kundendokumente und Anhaenge aus dem Browser-Fallback in nativen Dateispeicher ueberfuehren.
-2. Zubehoer und restliche Metadaten ebenfalls an SQLite/Tauri anschliessen.
-3. Danach Google OAuth und Keychain produktiv umsetzen.
+1. Zubehoer und restliche Metadaten ebenfalls an SQLite/Tauri anschliessen.
+2. Danach Google OAuth und Keychain produktiv umsetzen.
+3. Anschliessend Google Calendar und Gmail produktiv anbinden.
 
 ## Bewusste Verschiebungen
 

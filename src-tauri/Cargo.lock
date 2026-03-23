@@ -2229,6 +2229,7 @@ dependencies = [
 name = "mietpark-crm-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "oauth2",
  "reqwest 0.12.28",

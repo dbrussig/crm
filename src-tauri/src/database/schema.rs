@@ -92,7 +92,9 @@ CREATE TABLE IF NOT EXISTS customer_documents (
     file_path TEXT NOT NULL,
     file_name TEXT NOT NULL,
     mime_type TEXT,
+    size_bytes INTEGER,
     created_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL,
     FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
 

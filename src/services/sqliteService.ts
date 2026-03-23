@@ -21,6 +21,18 @@ const KEY_INVOICE_ITEMS = 'mietpark_crm_invoice_items_v1';
 const KEY_CUSTOMER_DOCS = 'mietpark_crm_customer_docs_v1';
 const KEY_CUSTOMER_DOC_PAYLOAD_PREFIX = 'mietpark_crm_customer_doc_payload_v1:';
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer();
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
 async function loadCustomers(): Promise<Customer[]> {
   if (isDesktopApp()) {
     return await invokeDesktopCommand<Customer[]>('list_customers');
@@ -181,6 +193,9 @@ async function saveInvoiceItems(items: InvoiceItem[]) {
 }
 
 async function loadCustomerDocs(): Promise<CustomerDocument[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<CustomerDocument[]>('list_customer_documents');
+  }
   const raw = await loadJson<CustomerDocument[]>(KEY_CUSTOMER_DOCS, []);
   // Normalize legacy categories (older builds used 'Anfrage'/'Anleitung').
   const normalizeCategory = (c: any): DocumentCategory | undefined => {
@@ -195,6 +210,12 @@ async function loadCustomerDocs(): Promise<CustomerDocument[]> {
   return next;
 }
 async function saveCustomerDocs(docs: CustomerDocument[]) {
+  if (isDesktopApp()) {
+    for (const doc of docs) {
+      await invokeDesktopCommand('upsert_customer_document', { doc });
+    }
+    return;
+  }
   await saveJson(KEY_CUSTOMER_DOCS, docs);
 }
 
@@ -203,6 +224,10 @@ export async function getAllCustomerDocuments(): Promise<CustomerDocument[]> {
 }
 
 export async function updateCustomerDocumentMeta(docId: string, patch: Partial<CustomerDocument>): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('update_customer_document_meta', { docId, patch });
+    return;
+  }
   const docs = await loadCustomerDocs();
   const idx = docs.findIndex((d) => d.id === docId);
   if (idx === -1) throw new Error('Document not found');
@@ -211,6 +236,10 @@ export async function updateCustomerDocumentMeta(docId: string, patch: Partial<C
 }
 
 export async function deleteAllCustomerDocuments(): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_all_customer_documents');
+    return;
+  }
   const docs = await loadCustomerDocs();
   await saveCustomerDocs([]);
   for (const d of docs) {
@@ -219,6 +248,11 @@ export async function deleteAllCustomerDocuments(): Promise<void> {
 }
 
 export async function setCustomerDocumentPayload(docId: string, payload: Blob | string): Promise<void> {
+  if (isDesktopApp()) {
+    const payloadBase64 = payload instanceof Blob ? await blobToBase64(payload) : payload;
+    await invokeDesktopCommand('set_customer_document_payload', { docId, payloadBase64 });
+    return;
+  }
   const key = `${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${docId}`;
   if (payload instanceof Blob) {
     await idbSet(key, payload);
@@ -287,6 +321,10 @@ export async function getDocumentsByCustomer(customerId: string): Promise<Custom
 }
 
 export async function addCustomerDocument(doc: CustomerDocument, payloadBase64: string): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_customer_document', { doc, payloadBase64 });
+    return;
+  }
   const docs = await loadCustomerDocs();
   docs.push(doc);
   await saveCustomerDocs(docs);
@@ -294,6 +332,11 @@ export async function addCustomerDocument(doc: CustomerDocument, payloadBase64: 
 }
 
 export async function addCustomerDocumentBlob(doc: CustomerDocument, payload: Blob): Promise<void> {
+  if (isDesktopApp()) {
+    const payloadBase64 = await blobToBase64(payload);
+    await invokeDesktopCommand('upsert_customer_document', { doc, payloadBase64 });
+    return;
+  }
   const docs = await loadCustomerDocs();
   docs.push(doc);
   await saveCustomerDocs(docs);
@@ -308,6 +351,10 @@ export async function addCustomerDocumentBlob(doc: CustomerDocument, payload: Bl
 }
 
 export async function getCustomerDocumentPayload(docId: string): Promise<Blob | string | null> {
+  if (isDesktopApp()) {
+    const response = await invokeDesktopCommand<{ dataBase64: string } | null>('get_customer_document_payload', { docId });
+    return response?.dataBase64 ?? null;
+  }
   const key = `${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${docId}`;
   try {
     const v = await idbGet<any>(key);
@@ -321,6 +368,10 @@ export async function getCustomerDocumentPayload(docId: string): Promise<Blob | 
 }
 
 export async function deleteCustomerDocument(docId: string): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_customer_document', { docId });
+    return;
+  }
   await saveCustomerDocs((await loadCustomerDocs()).filter((d) => d.id !== docId));
   await deleteKey(`${KEY_CUSTOMER_DOC_PAYLOAD_PREFIX}${docId}`);
 }

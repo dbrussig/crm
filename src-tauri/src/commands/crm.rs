@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::database::repository;
+use crate::database::{documents, repository};
 
 #[tauri::command]
 pub fn list_customers(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
@@ -115,4 +115,54 @@ pub fn list_invoice_items(app: tauri::AppHandle, invoiceId: String) -> Result<Ve
 #[tauri::command]
 pub fn replace_invoice_items(app: tauri::AppHandle, invoiceId: String, items: Vec<Value>) -> Result<(), String> {
     repository::replace_invoice_items(&app, &invoiceId, &items)
+}
+
+#[tauri::command]
+pub fn list_customer_documents(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
+    documents::list_customer_documents(&app)
+}
+
+#[tauri::command]
+pub fn upsert_customer_document(
+    app: tauri::AppHandle,
+    doc: Value,
+    payloadBase64: Option<String>,
+) -> Result<(), String> {
+    documents::upsert_customer_document(&app, &doc, payloadBase64.as_deref())
+}
+
+#[tauri::command]
+pub fn update_customer_document_meta(
+    app: tauri::AppHandle,
+    docId: String,
+    patch: Value,
+) -> Result<(), String> {
+    documents::update_customer_document_meta(&app, &docId, &patch)
+}
+
+#[tauri::command]
+pub fn get_customer_document_payload(
+    app: tauri::AppHandle,
+    docId: String,
+) -> Result<Option<documents::DocumentPayloadResponse>, String> {
+    documents::get_customer_document_payload(&app, &docId)
+}
+
+#[tauri::command]
+pub fn set_customer_document_payload(
+    app: tauri::AppHandle,
+    docId: String,
+    payloadBase64: String,
+) -> Result<(), String> {
+    documents::set_customer_document_payload(&app, &docId, &payloadBase64)
+}
+
+#[tauri::command]
+pub fn delete_customer_document(app: tauri::AppHandle, docId: String) -> Result<(), String> {
+    documents::delete_customer_document(&app, &docId)
+}
+
+#[tauri::command]
+pub fn delete_all_customer_documents(app: tauri::AppHandle) -> Result<(), String> {
+    documents::delete_all_customer_documents(&app)
 }

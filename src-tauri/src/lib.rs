@@ -39,6 +39,13 @@ pub fn run() {
             commands::crm::delete_invoice,
             commands::crm::list_invoice_items,
             commands::crm::replace_invoice_items,
+            commands::crm::list_customer_documents,
+            commands::crm::upsert_customer_document,
+            commands::crm::update_customer_document_meta,
+            commands::crm::get_customer_document_payload,
+            commands::crm::set_customer_document_payload,
+            commands::crm::delete_customer_document,
+            commands::crm::delete_all_customer_documents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
