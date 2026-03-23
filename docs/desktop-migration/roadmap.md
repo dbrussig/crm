@@ -43,18 +43,18 @@ Die bisherige Docker-Web-App wird schrittweise zu einer eigenstaendigen Desktop-
 - [x] Zahlungen nativ ueber Tauri/SQLite verdrahtet
 - [x] Belege und Belegpositionen nativ ueber Tauri/SQLite verdrahtet
 - [x] Kundendokumente als SQLite-Metadaten + nativer Dateispeicher verdrahtet
+- [x] sicherer Token-Speicher ueber nativen Keychain-Unterbau verdrahtet
 
 ### Teilweise erledigt
 
 - [~] UI ist migriert, nutzt aber noch an mehreren Stellen Browser-nahe Fallbacks
 - [~] TypeScript-Typpruefung der migrierten Alt-UI ist noch nicht bereinigt
-- [~] Architektur fuer OAuth, Backup und Keychain steht, produktive Implementierung fehlt noch
+- [~] Google OAuth-Architektur steht, produktiver PKCE-Flow fehlt noch
 
 ### Offen
 
 - [ ] Zubehoer nativ ueber Tauri/SQLite verdrahten
 - [ ] Backup-Historie und Backup-Dateien nativ verdrahten
-- [ ] OAuth-Token sicher in Keychain speichern
 - [ ] Google OAuth mit PKCE produktiv implementieren
 - [ ] Google Calendar Sync produktiv implementieren
 - [ ] Gmail-Integration produktiv implementieren
@@ -88,7 +88,7 @@ Die bisherige Docker-Web-App wird schrittweise zu einer eigenstaendigen Desktop-
 
 - [x] Customer Documents
 - [x] Dateiablage im nativen App-Container
-- [ ] Keychain fuer Tokens
+- [x] Keychain fuer Tokens
 - [ ] verschluesselte lokale Backups
 
 ### Phase 4: Google-Integration
@@ -108,7 +108,7 @@ Die bisherige Docker-Web-App wird schrittweise zu einer eigenstaendigen Desktop-
 ## Naechste konkrete Schritte
 
 1. Zubehoer und restliche Metadaten ebenfalls an SQLite/Tauri anschliessen.
-2. Danach Google OAuth und Keychain produktiv umsetzen.
+2. Danach Google OAuth mit PKCE produktiv umsetzen.
 3. Anschliessend Google Calendar und Gmail produktiv anbinden.
 
 ## Bewusste Verschiebungen

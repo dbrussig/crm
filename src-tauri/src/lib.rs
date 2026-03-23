@@ -14,6 +14,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::auth::auth_get_secret,
+            commands::auth::auth_set_secret,
+            commands::auth::auth_delete_secret,
             commands::health::healthcheck,
             commands::database::database_summary,
             commands::crm::list_customers,
