@@ -29,6 +29,7 @@ import { findActiveResourcesForType } from '../services/resourceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
+import { getCompanyProfile } from '../config/companyProfile';
 
 interface RentalRequestDetailProps {
   rentalId: string;
@@ -345,6 +346,12 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
         text: 'Auftrag bestätigt. Übergabe vorbereiten und Termine abstimmen.',
       };
     }
+    if (rental.status === 'uebergabe_rueckgabe') {
+      return {
+        title: 'Vorgang abschließen',
+        text: 'Nach Rückgabe den Vorgang auf abgeschlossen setzen.',
+      };
+    }
     return null;
   })();
 
@@ -392,11 +399,13 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
     }
 
     const originalPrice = rental.priceSnapshot || 0;
+    const profile = getCompanyProfile();
+    const overrideUser = String(profile.ownerName || profile.companyName || 'System').trim() || 'System';
     const priceOverride = {
       originalPrice,
       overridePrice: newPrice,
       reason: overrideReason,
-      overriddenBy: 'Daniel Brußig', // TODO: Dynamisch vom eingeloggten User
+      overriddenBy: overrideUser,
       overriddenAt: Date.now(),
     };
 
@@ -418,6 +427,18 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
     } catch (error) {
       console.error('Failed to update price:', error);
       alert('Fehler beim Speichern des Preises: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  const handleTransitionAction = async (nextStatus: RentalStatus, onSuccess?: (timestamp: number) => void) => {
+    try {
+      const ts = Date.now();
+      await transitionStatus(rental.id, nextStatus);
+      setRental((prev) => (prev ? { ...prev, status: nextStatus } : prev));
+      onSuccess?.(ts);
+      onRefresh?.();
+    } catch (e: any) {
+      alert(e?.error || e?.message || 'Status konnte nicht gesetzt werden.');
     }
   };
 
@@ -1928,9 +1949,9 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 <>
                   <button
                     onClick={async () => {
-                      await transitionStatus(rental.id, 'angenommen');
-                      setRental((prev) => (prev ? { ...prev, status: 'angenommen', acceptedAt: Date.now() } : prev));
-                      onRefresh?.();
+                      await handleTransitionAction('angenommen', (ts) => {
+                        setRental((prev) => (prev ? { ...prev, acceptedAt: ts } : prev));
+                      });
                     }}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
                   >
@@ -1940,16 +1961,42 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                     onClick={async () => {
                       const ok = confirm('Angebot als abgelehnt markieren?');
                       if (!ok) return;
-                      await transitionStatus(rental.id, 'abgelehnt');
+                      await handleTransitionAction('abgelehnt', (ts) => {
+                        setRental((prev) => (prev ? { ...prev, rejectedAt: ts } : prev));
+                      });
                       alert('Angebot als abgelehnt gespeichert.');
-                      setRental((prev) => (prev ? { ...prev, status: 'abgelehnt', rejectedAt: Date.now() } : prev));
-                      onRefresh?.();
                     }}
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
                   >
                     ❌ Angebot abgelehnt
                   </button>
                 </>
+              )}
+
+              {rental.status === 'angenommen' && (
+                <button
+                  onClick={async () => {
+                    await handleTransitionAction('uebergabe_rueckgabe');
+                  }}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm font-medium col-span-2"
+                >
+                  🚚 Übergabe/Rückgabe starten
+                </button>
+              )}
+
+              {rental.status === 'uebergabe_rueckgabe' && (
+                <button
+                  onClick={async () => {
+                    const ok = confirm('Vorgang als abgeschlossen markieren?');
+                    if (!ok) return;
+                    await handleTransitionAction('abgeschlossen', (ts) => {
+                      setRental((prev) => (prev ? { ...prev, completedAt: ts } : prev));
+                    });
+                  }}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium col-span-2"
+                >
+                  ✅ Vorgang abschließen
+                </button>
               )}
 
               {(rental.status === 'angenommen' || rental.status === 'uebergabe_rueckgabe') && (
