@@ -14,7 +14,7 @@ import {
 } from '../services/invoiceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
-import { getInvoiceItems } from '../services/sqliteService';
+import { getInvoiceItems, getPaymentsByInvoice } from '../services/sqliteService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 
 interface InvoiceListProps {
@@ -42,6 +42,8 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [amountByInvoiceId, setAmountByInvoiceId] = useState<Record<string, number>>({});
+  const [paymentTotalByInvoiceId, setPaymentTotalByInvoiceId] = useState<Record<string, number>>({});
+  const [paymentCountByInvoiceId, setPaymentCountByInvoiceId] = useState<Record<string, number>>({});
 
   // Filter
   const [filterType, setFilterType] = useState<InvoiceType | 'alle'>('alle');
@@ -221,6 +223,38 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
       }
       if (cancelled) return;
       setAmountByInvoiceId(nextMap);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [invoices]);
+
+  // Precompute linked payments per invoice.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const totalMap: Record<string, number> = {};
+      const countMap: Record<string, number> = {};
+      const all = invoices.slice();
+      const concurrency = 8;
+      for (let i = 0; i < all.length; i += concurrency) {
+        const batch = all.slice(i, i + concurrency);
+        const results = await Promise.all(
+          batch.map(async (inv) => {
+            const payments = await getPaymentsByInvoice(inv.id);
+            const total = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+            return { id: inv.id, count: payments.length, total };
+          })
+        );
+        if (cancelled) return;
+        for (const r of results) {
+          totalMap[r.id] = r.total;
+          countMap[r.id] = r.count;
+        }
+      }
+      if (cancelled) return;
+      setPaymentTotalByInvoiceId(totalMap);
+      setPaymentCountByInvoiceId(countMap);
     })();
     return () => {
       cancelled = true;
@@ -410,6 +444,9 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                   Betrag
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Zahlungen
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -420,7 +457,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
                     <div className="space-y-2">
                       <div>Keine Belege gefunden.</div>
                       <div className="text-xs text-slate-500">
@@ -457,6 +494,20 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                       {typeof amountByInvoiceId[invoice.id] === 'number'
                         ? `${amountByInvoiceId[invoice.id].toFixed(2)} €`
                         : '…'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {(paymentCountByInvoiceId[invoice.id] || 0) > 0 ? (
+                        <div className="flex flex-col">
+                          <span className="font-medium text-emerald-700">
+                            {(paymentTotalByInvoiceId[invoice.id] || 0).toFixed(2)} €
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {paymentCountByInvoiceId[invoice.id]} Eintrag{paymentCountByInvoiceId[invoice.id] === 1 ? '' : 'e'}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {getStatusBadge(invoice.state)}

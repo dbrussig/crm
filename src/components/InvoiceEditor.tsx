@@ -5,13 +5,14 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate } from '../types';
+import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
 import { downloadInvoicePDF, openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { INVOICE_LAYOUTS, getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
 import { getActiveSubTotalInvoiceTypeProfile } from '../services/subtotalInvoiceTypeProfileService';
+import { getPaymentsByInvoice } from '../services/sqliteService';
 
 interface InvoiceEditorProps {
   invoice?: Partial<Invoice>;
@@ -118,6 +119,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // Template
   const [template, setTemplate] = useState<InvoiceTemplate | null>(null);
   const [layoutId, setLayoutId] = useState<string>((initialInvoice as any)?.layoutId || getDefaultInvoiceLayoutId(invoiceType));
+  const [linkedPayments, setLinkedPayments] = useState<Payment[]>([]);
+  const [linkedPaymentsLoading, setLinkedPaymentsLoading] = useState(false);
 
   const layout = useMemo(() => getInvoiceLayout(layoutId), [layoutId]);
   const subtotalProfile = useMemo(() => getActiveSubTotalInvoiceTypeProfile(invoiceType), [invoiceType]);
@@ -239,6 +242,37 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       ? Math.round((totals.total * (depositPercent / 100)) * 100) / 100
       : 0;
   const grandTotalPreview = Math.round((totals.total + (depositText && depositAmountPreview > 0 ? depositAmountPreview : 0)) * 100) / 100;
+  const linkedPaymentsTotal = useMemo(
+    () => linkedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+    [linkedPayments]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const invoiceId = String(initialInvoice?.id || '').trim();
+    if (!invoiceId) {
+      setLinkedPayments([]);
+      setLinkedPaymentsLoading(false);
+      return;
+    }
+    setLinkedPaymentsLoading(true);
+    getPaymentsByInvoice(invoiceId)
+      .then((rows) => {
+        if (cancelled) return;
+        setLinkedPayments(rows);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLinkedPayments([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLinkedPaymentsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialInvoice?.id]);
 
   // Template laden bei Typ-Änderung
   useEffect(() => {
@@ -727,6 +761,33 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             />
           </div>
         </div>
+
+        {initialInvoice?.id && (
+          <div className="mb-6 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+            <h3 className="text-sm font-medium text-emerald-900 mb-2">Verknüpfte Zahlungen</h3>
+            {linkedPaymentsLoading ? (
+              <div className="text-sm text-emerald-800">Zahlungen werden geladen…</div>
+            ) : linkedPayments.length === 0 ? (
+              <div className="text-sm text-emerald-800">Noch keine Zahlungen zugeordnet.</div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-sm text-emerald-900">
+                  {linkedPayments.length} Zahlung{linkedPayments.length === 1 ? '' : 'en'} • Summe {linkedPaymentsTotal.toFixed(2)} €
+                </div>
+                <div className="max-h-40 overflow-auto rounded border border-emerald-200 bg-white">
+                  {linkedPayments.map((p) => (
+                    <div key={p.id} className="px-3 py-2 text-sm border-b last:border-b-0 border-emerald-100">
+                      <div className="font-medium text-gray-900">{(Number(p.amount) || 0).toFixed(2)} € • {p.kind}</div>
+                      <div className="text-xs text-gray-600">
+                        {new Date(p.receivedAt || p.createdAt).toLocaleDateString('de-DE')} • {p.method}{p.payerName ? ` • ${p.payerName}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Intro / Anschreiben */}
         {layout.editorBlocks.includes('intro') && (
