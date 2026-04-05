@@ -11,3 +11,8 @@ mietpark.db-wal
 *.db
 *.db-shm
 *.db-wal
+.local_archive/
+.tmp/
+node_modules_bak/
+
+.local_archive/
