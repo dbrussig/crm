@@ -55,6 +55,7 @@ Hinweis:
 - Fuer echte In-App-Updates muss der Update-Endpunkt fuer Clients erreichbar sein.
 - Bei privaten GitLab-Projekten ist ein zusaetzliches Konzept fuer authentifizierten Download noetig.
 - Release-Uploads in GitLab Generic Packages sind robust gegen Duplikate (bestehende Dateien fuehren nicht mehr zu hartem Job-Abbruch).
+- Wichtig fuer echte Updates: `src-tauri/tauri.conf.json` Version muss pro Release hochgezaehlt werden (nur hoehere Semver-Versionen werden installiert).
 
 ## Doku-Pflicht fuer Features/Fixes
 
@@ -74,3 +75,4 @@ Ab sofort gilt verbindlich:
 - Duplikat-Schutz aktiv: identische PDFs (SHA-256) werden pro Kunde nur einmal gespeichert.
 - PDF-Inhalt wird layoutnah aus derselben Beleg-HTML gerendert (mehrseitig), damit Vorschau und gespeicherte Datei visuell uebereinstimmen.
 - Seitenumbrueche werden beim Rendern automatisch an visuell ruhige Zeilen gelegt, um harte Schnitte in Tabellen/Text zu minimieren.
+- Dashboard-Kennzahlen `Offene Vorgänge` und `Aktiv ausgegeben` bewerten Mietdaten tagesbasiert (lokaler Tagesanfang), um UTC/Zeitzonen-Importe korrekt abzubilden.

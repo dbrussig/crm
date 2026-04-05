@@ -126,8 +126,19 @@ export default function App() {
   );
 
   const openStatuses: RentalStatus[] = ['neu', 'info_fehlt', 'check_verfuegbarkeit', 'angebot_gesendet', 'angenommen', 'uebergabe_rueckgabe'];
+  const toLocalDayStart = (ms: number) => {
+    const d = new Date(ms);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
   const openRentalsCount = useMemo(
-    () => dashboardRentals.filter((r) => openStatuses.includes(r.status)).length,
+    () =>
+      dashboardRentals.filter((r) => {
+        if (!openStatuses.includes(r.status)) return false;
+        const endDay = toLocalDayStart(r.rentalEnd);
+        const todayDay = toLocalDayStart(Date.now());
+        return endDay >= todayDay;
+      }).length,
     [dashboardRentals]
   );
   const draftInvoicesCount = useMemo(
@@ -143,22 +154,28 @@ export default function App() {
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   }, []);
-  const bookedTodayCount = useMemo(
+  const activeIssuedCount = useMemo(
     () =>
       dashboardRentals.filter((r) => {
         if (!openStatuses.includes(r.status)) return false;
-        return r.rentalStart <= today && r.rentalEnd >= today;
+        const startDay = toLocalDayStart(r.rentalStart);
+        const endDay = toLocalDayStart(r.rentalEnd);
+        return startDay <= today && endDay >= today;
       }).length,
     [dashboardRentals, today]
   );
-  const resourceAvailableCount = Math.max(0, dashboardResourceTotal - bookedTodayCount);
+  const resourceAvailableCount = Math.max(0, dashboardResourceTotal - activeIssuedCount);
   const upcomingRentals = useMemo(
     () =>
       dashboardRentals
-        .filter((r) => openStatuses.includes(r.status))
+        .filter((r) => {
+          if (!openStatuses.includes(r.status)) return false;
+          const endDay = toLocalDayStart(r.rentalEnd);
+          return endDay >= today;
+        })
         .sort((a, b) => a.rentalStart - b.rentalStart)
         .slice(0, 5),
-    [dashboardRentals]
+    [dashboardRentals, today]
   );
   const navBadges = useMemo(
     () => ({
@@ -466,8 +483,8 @@ export default function App() {
                 <div className="text-2xl font-semibold text-rose-900">{pendingInvoicesCount}</div>
               </div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="text-xs text-emerald-700">Heute verfügbar</div>
-                <div className="text-2xl font-semibold text-emerald-900">{resourceAvailableCount} / {dashboardResourceTotal}</div>
+                <div className="text-xs text-emerald-700">Aktiv ausgegeben</div>
+                <div className="text-2xl font-semibold text-emerald-900">{activeIssuedCount}</div>
               </div>
             </div>
 
@@ -504,7 +521,8 @@ export default function App() {
                   <li>• {openRentalsCount} Vorgänge aktiv bearbeiten</li>
                   <li>• {pendingInvoicesCount} gesendete Belege nachfassen</li>
                   <li>• {draftInvoicesCount} Entwürfe finalisieren</li>
-                  <li>• {bookedTodayCount} Ressource(n) aktuell im Einsatz</li>
+                  <li>• {activeIssuedCount} Ressource(n) aktuell im Einsatz</li>
+                  <li>• {resourceAvailableCount} / {dashboardResourceTotal} heute verfügbar</li>
                 </ul>
               </div>
             </div>

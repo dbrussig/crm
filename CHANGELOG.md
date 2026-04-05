@@ -22,3 +22,5 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - PDF-Dateinamen vereinheitlicht auf `{Belegtyp}_{Belegnummer}_{YYYY-MM-DD}.pdf`.
 - PDF-Rendering fuer Speicherung auf layoutnahe HTML->PDF-Generierung umgestellt (mehrseitig), damit gespeicherte Datei der Vorschau entspricht.
 - PDF-Seitenumbrueche gehaertet: Umbrueche werden auf visuell ruhige Linien verschoben, um abgeschnittene Tabellenzeilen/Text zu reduzieren.
+- Dashboard-Logik fuer `Offene Vorgänge` und `Aktiv ausgegeben` auf tagesbasierte Datumsbewertung umgestellt (robuster bei UTC-Importdaten/Zeitzonen).
+- Release-Version auf `0.1.1` angehoben, damit Desktop-Auto-Update die aktuellen Fixes ausliefert.
