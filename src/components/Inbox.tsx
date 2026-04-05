@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AISettings, Customer, GmailAttachmentSummary, InboxImportResult, ProductType, RentalRequest, PaymentKind, PaymentMethod } from '../types';
+import type { AISettings, Customer, GmailAttachmentSummary, InboxImportResult, ProductType, RentalRequest, PaymentKind, PaymentMethod, Invoice } from '../types';
 import { getThread, listInboxThreadSummaries, markThreadProcessedWithClientId, type GmailThreadSummary } from '../services/googleGmailService';
 import { detectDachboxRejectionReason, extractCustomerInfo, extractRentalInfo, generateReplySuggestion, suggestProductFromMessage } from '../services/messageService';
 import { deleteKey, loadJson, saveJson } from '../services/_storage';
-import { addPayment, getAllRentalRequests } from '../services/sqliteService';
+import { addPayment, getAllInvoices, getAllRentalRequests } from '../services/sqliteService';
 import { generateConciergeReply, isAIAvailable } from '../services/aiService';
 import { formatDisplayRef } from '../utils/displayId';
 
@@ -223,6 +223,24 @@ function stripQuotedText(text: string): string {
   return out.join('\n').trim();
 }
 
+function pickSuggestedInvoice(invoices: Invoice[]): Invoice | null {
+  if (!Array.isArray(invoices) || invoices.length === 0) return null;
+  const typeRank: Record<Invoice['invoiceType'], number> = {
+    Rechnung: 0,
+    Auftrag: 1,
+    Angebot: 2,
+  };
+  const stateRank = (state: Invoice['state']) => (state === 'storniert' || state === 'archiviert' ? 1 : 0);
+  const sorted = [...invoices].sort((a, b) => {
+    const stateDiff = stateRank(a.state) - stateRank(b.state);
+    if (stateDiff !== 0) return stateDiff;
+    const typeDiff = (typeRank[a.invoiceType] ?? 9) - (typeRank[b.invoiceType] ?? 9);
+    if (typeDiff !== 0) return typeDiff;
+    return (b.invoiceDate || b.createdAt || 0) - (a.invoiceDate || a.createdAt || 0);
+  });
+  return sorted[0] || null;
+}
+
 type InboxCacheV1 = {
   version: typeof CACHE_VERSION;
   savedAt: number;
@@ -437,8 +455,10 @@ export default function Inbox(props: {
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
   const [paymentRentals, setPaymentRentals] = useState<RentalRequest[] | null>(null);
+  const [paymentInvoicesByRentalId, setPaymentInvoicesByRentalId] = useState<Record<string, Invoice[]>>({});
   const [paymentSearch, setPaymentSearch] = useState('');
   const [paymentRentalId, setPaymentRentalId] = useState('');
+  const [paymentInvoiceId, setPaymentInvoiceId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentCurrency, setPaymentCurrency] = useState<string>('EUR');
   const [paymentKind, setPaymentKind] = useState<PaymentKind>('Anzahlung');
@@ -448,6 +468,7 @@ export default function Inbox(props: {
   const [paymentPayerName, setPaymentPayerName] = useState<string>('');
   const [paymentReceivedAt, setPaymentReceivedAt] = useState<number>(Date.now());
   const [paymentSuggestedRentalId, setPaymentSuggestedRentalId] = useState<string>('');
+  const [paymentSuggestedInvoiceId, setPaymentSuggestedInvoiceId] = useState<string>('');
   const [paymentReviewedByThreadId, setPaymentReviewedByThreadId] = useState<Record<string, boolean>>(() => {
     try {
       const raw = localStorage.getItem(PAYMENT_REVIEW_KEY);
@@ -517,6 +538,11 @@ export default function Inbox(props: {
     setConciergeApproved(false);
     resetSendChecklist();
   };
+
+  const paymentInvoicesForSelectedRental = useMemo(
+    () => (paymentRentalId ? (paymentInvoicesByRentalId[paymentRentalId] || []) : []),
+    [paymentInvoicesByRentalId, paymentRentalId]
+  );
 
   const applyRejectReplyDraft = () => {
     setReplyDraft(relingRejectTemplate());
@@ -1081,7 +1107,9 @@ export default function Inbox(props: {
     setPaymentFeedback(null);
     setPaymentAssignOpen(true);
     setPaymentSuggestedRentalId('');
+    setPaymentSuggestedInvoiceId('');
     setPaymentRentalId('');
+    setPaymentInvoiceId('');
     setPaymentMethod('PayPal');
     setPaymentKind('Anzahlung');
     setPaymentAmount(Number(payment.amount) || 0);
@@ -1099,6 +1127,15 @@ export default function Inbox(props: {
     try {
       const all = await getAllRentalRequests();
       setPaymentRentals(all);
+      const allInvoices = await getAllInvoices();
+      const invoicesByRental = allInvoices.reduce<Record<string, Invoice[]>>((acc, inv) => {
+        const rentalId = String(inv.rentalRequestId || '').trim();
+        if (!rentalId) return acc;
+        if (!acc[rentalId]) acc[rentalId] = [];
+        acc[rentalId].push(inv);
+        return acc;
+      }, {});
+      setPaymentInvoicesByRentalId(invoicesByRental);
 
       // Prefer manual linking. Only auto-suggest if we have an unambiguous 1:1 match by payer name.
       const normalize = (s: string) =>
@@ -1118,14 +1155,19 @@ export default function Inbox(props: {
             s === 'archiviert' || s === 'abgeschlossen' || s === 'abgelehnt' || s === 'storniert' || s === 'noshow';
           const openForCustomer = all.filter((r) => r.customerId === custId && !isClosed(r.status));
           if (openForCustomer.length === 1) {
-            setPaymentSuggestedRentalId(openForCustomer[0].id);
-            setPaymentRentalId(openForCustomer[0].id);
+            const autoRentalId = openForCustomer[0].id;
+            setPaymentSuggestedRentalId(autoRentalId);
+            setPaymentRentalId(autoRentalId);
+            const suggestion = pickSuggestedInvoice(invoicesByRental[autoRentalId] || []);
+            setPaymentSuggestedInvoiceId(suggestion?.id || '');
+            setPaymentInvoiceId(suggestion?.id || '');
             setSendChecklist((prev) => ({ ...prev, mapping: true }));
           }
         }
       }
     } catch {
       setPaymentRentals(null);
+      setPaymentInvoicesByRentalId({});
     }
   }
 
@@ -1566,8 +1608,16 @@ export default function Inbox(props: {
 	                  onClick={async () => {
 	                    setPaymentBusy(true);
 	                    try {
-	                      const all = await getAllRentalRequests();
-	                      setPaymentRentals(all);
+	                      const [allRentals, allInvoices] = await Promise.all([getAllRentalRequests(), getAllInvoices()]);
+	                      setPaymentRentals(allRentals);
+                        const invoicesByRental = allInvoices.reduce<Record<string, Invoice[]>>((acc, inv) => {
+                          const rentalId = String(inv.rentalRequestId || '').trim();
+                          if (!rentalId) return acc;
+                          if (!acc[rentalId]) acc[rentalId] = [];
+                          acc[rentalId].push(inv);
+                          return acc;
+                        }, {});
+                        setPaymentInvoicesByRentalId(invoicesByRental);
 	                    } catch (e) {
 	                      alert('Konnte Vorgänge nicht laden: ' + (e instanceof Error ? e.message : String(e)));
 	                    } finally {
@@ -1605,6 +1655,9 @@ export default function Inbox(props: {
 	                  onChange={(e) => {
                       const nextRentalId = e.target.value;
                       setPaymentRentalId(nextRentalId);
+                      const suggestion = pickSuggestedInvoice(paymentInvoicesByRentalId[nextRentalId] || []);
+                      setPaymentSuggestedInvoiceId(suggestion?.id || '');
+                      setPaymentInvoiceId(suggestion?.id || '');
                       setSendChecklist((prev) => ({ ...prev, mapping: Boolean(nextRentalId), paymentMarked: false }));
                     }}
 	                  disabled={paymentBusy}
@@ -1635,6 +1688,38 @@ export default function Inbox(props: {
 	                </div>
 	              </div>
 	            </div>
+
+              <div className="rounded-lg border border-slate-200 p-3 mt-3">
+                <div className="text-sm font-medium text-slate-900">Rechnung/Auftrag zuordnen (optional)</div>
+                <div className="mt-2">
+                  <select
+                    className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm disabled:bg-slate-50"
+                    value={paymentInvoiceId}
+                    onChange={(e) => setPaymentInvoiceId(e.target.value)}
+                    disabled={paymentBusy || !paymentRentalId}
+                    aria-label="Rechnung oder Auftrag auswählen"
+                  >
+                    <option value="">
+                      {paymentRentalId ? 'Ohne Belegzuordnung speichern' : 'Zuerst Vorgang wählen…'}
+                    </option>
+                    {paymentInvoicesForSelectedRental.map((inv) => (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.invoiceNo} | {inv.invoiceType} | {inv.state} | {new Date(inv.invoiceDate).toLocaleDateString('de-DE')}
+                      </option>
+                    ))}
+                  </select>
+                  {paymentSuggestedInvoiceId && paymentInvoiceId === paymentSuggestedInvoiceId && (
+                    <div className="mt-1 text-xs text-emerald-700">
+                      Vorschlag aktiv: passender Beleg wurde automatisch vorausgewählt.
+                    </div>
+                  )}
+                  {paymentRentalId && paymentInvoicesForSelectedRental.length === 0 && (
+                    <div className="mt-1 text-xs text-slate-500">
+                      Für diesen Vorgang existiert noch kein Beleg.
+                    </div>
+                  )}
+                </div>
+              </div>
 
 	            <label className="text-sm">
 	              <div className="text-xs font-medium text-slate-700 mb-1">Notiz (optional)</div>
@@ -1671,10 +1756,12 @@ export default function Inbox(props: {
 	                  try {
 	                    const rentals = paymentRentals || await getAllRentalRequests();
 	                    const rental = rentals.find((r) => r.id === paymentRentalId);
+                      const selectedInvoice = paymentInvoicesForSelectedRental.find((inv) => inv.id === paymentInvoiceId);
 	                    const id = `pay_${Date.now()}`;
 	                    await addPayment({
 	                      id,
 	                      rentalRequestId: paymentRentalId,
+                        invoiceId: paymentInvoiceId || undefined,
 	                      customerId: rental?.customerId,
 	                      kind: paymentKind,
 	                      method: paymentMethod,
@@ -1688,7 +1775,10 @@ export default function Inbox(props: {
 	                      providerTransactionId: paymentProviderTx?.trim() || undefined,
 	                      createdAt: Date.now(),
 	                    });
-	                    setPaymentFeedback(`Zahlung gespeichert und Vorgang ${formatDisplayRef(paymentRentalId)} zugeordnet.`);
+	                    setPaymentFeedback(
+                        `Zahlung gespeichert und Vorgang ${formatDisplayRef(paymentRentalId)} zugeordnet.` +
+                        (selectedInvoice ? ` Beleg: ${selectedInvoice.invoiceNo}.` : '')
+                      );
                       markPaymentReviewed(selectedThreadId, true);
                       setSendChecklist((prev) => ({
                         ...prev,
