@@ -53,16 +53,27 @@ function getInvoicePrefix(type: InvoiceType): string {
   return 'RE';
 }
 
-function genInvoiceNo(type: InvoiceType, now = new Date()): string {
-  // New format: AB/AU/RE + YYYY + 2-digit running number (per type + year).
-  // Existing imported invoices keep their invoiceNo untouched.
+async function genInvoiceNo(type: InvoiceType, now = new Date()): Promise<string> {
+  // Robust format: AB/AU/RE + YYYY + 3-digit running number, derived from persisted invoices.
+  // Avoids localStorage counter reset issues across reinstalls/cache clears.
   const yyyy = now.getFullYear();
   const prefix = getInvoicePrefix(type);
-  const key = `mietpark_invoice_seq_${prefix}_${yyyy}`;
-  const current = Number(localStorage.getItem(key) || '0');
-  const next = current + 1;
-  localStorage.setItem(key, String(next));
-  return `${prefix}${yyyy}${String(next).padStart(2, '0')}`;
+  const all = await getAllInvoices();
+  const re = new RegExp(`^${prefix}${yyyy}(\\d+)$`);
+  let maxSeq = 0;
+
+  for (const inv of all) {
+    const no = String(inv.invoiceNo || '').trim();
+    const m = re.exec(no);
+    if (!m?.[1]) continue;
+    const seq = Number(m[1]);
+    if (Number.isFinite(seq)) {
+      maxSeq = Math.max(maxSeq, seq);
+    }
+  }
+
+  const next = maxSeq + 1;
+  return `${prefix}${yyyy}${String(next).padStart(3, '0')}`;
 }
 
 export async function fetchInvoiceTemplate(type: InvoiceType): Promise<InvoiceTemplate | null> {
@@ -124,7 +135,7 @@ export async function createFollowUpInvoiceFromInvoice(
     ...src.invoice,
     id: newId,
     invoiceType: targetType,
-    invoiceNo: genInvoiceNo(targetType, new Date(invDate)),
+    invoiceNo: await genInvoiceNo(targetType, new Date(invDate)),
     invoiceDate: invDate,
     dueDate: due,
     state: 'entwurf',
@@ -261,7 +272,7 @@ export async function createInvoiceFromRental(
     id,
     rentalRequestId: rentalId,
     invoiceType,
-    invoiceNo: genInvoiceNo(invoiceType),
+    invoiceNo: await genInvoiceNo(invoiceType),
     invoiceDate: now,
     dueDate: opts?.dueDate,
     state: 'entwurf',
@@ -310,7 +321,7 @@ export async function saveInvoice(invoice: Partial<Invoice>, items: InvoiceItem[
       id,
       rentalRequestId: invoice.rentalRequestId,
       invoiceType: invoice.invoiceType || 'Angebot',
-      invoiceNo: invoice.invoiceNo || genInvoiceNo(invoice.invoiceType || 'Angebot'),
+      invoiceNo: invoice.invoiceNo || await genInvoiceNo(invoice.invoiceType || 'Angebot'),
       invoiceDate: invoice.invoiceDate || now,
       dueDate: invoice.dueDate,
       state: invoice.state || 'entwurf',

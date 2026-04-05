@@ -231,6 +231,8 @@ export async function createEventLegacy(
     description?: string;
     start: Date;
     end: Date;
+    visibility?: 'default' | 'public' | 'private' | 'confidential';
+    transparency?: 'opaque' | 'transparent';
   }
 ): Promise<string> {
   const clientId = getDefaultClientId();
@@ -255,6 +257,53 @@ export async function deleteEventLegacy(calendarId: string, eventId: string): Pr
   const clientId = getDefaultClientId();
   if (!clientId) throw new Error('Google Client ID fehlt');
   return deleteEvent(calendarId, eventId, { clientId });
+}
+
+export async function updateEvent(
+  calendarId: string,
+  eventId: string,
+  event: {
+    summary?: string;
+    description?: string;
+    start: Date;
+    end: Date;
+    visibility?: 'default' | 'public' | 'private' | 'confidential';
+    transparency?: 'opaque' | 'transparent';
+  },
+  opts: { clientId: string }
+): Promise<void> {
+  const token = await getAccessToken({ clientId: opts.clientId, scopes: SCOPES });
+  const body = {
+    ...(event.summary ? { summary: event.summary } : {}),
+    ...(event.description ? { description: event.description } : {}),
+    start: { dateTime: event.start.toISOString() },
+    end: { dateTime: event.end.toISOString() },
+    ...(event.visibility ? { visibility: event.visibility } : {}),
+    ...(event.transparency ? { transparency: event.transparency } : {}),
+  };
+  await googleFetchJson<any>({
+    url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    method: 'PATCH',
+    token,
+    body,
+  });
+}
+
+export async function updateEventLegacy(
+  calendarId: string,
+  eventId: string,
+  event: {
+    summary?: string;
+    description?: string;
+    start: Date;
+    end: Date;
+    visibility?: 'default' | 'public' | 'private' | 'confidential';
+    transparency?: 'opaque' | 'transparent';
+  }
+): Promise<void> {
+  const clientId = getDefaultClientId();
+  if (!clientId) throw new Error('Google Client ID fehlt');
+  return updateEvent(calendarId, eventId, event, { clientId });
 }
 
 export async function testGoogleCalendarConnection(opts: { clientId: string }): Promise<boolean> {

@@ -302,6 +302,8 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
       const reling = (rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox M') ? relingLabel(rental.relingType) : '';
       const vehicle = [rental.vehicleMake, rental.vehicleModel].filter(Boolean).join(' ');
 
+      const eventStartTs = Number(rental.pickupDate || rental.rentalStart || 0);
+      const eventEndTs = Number(rental.returnDate || rental.rentalEnd || 0);
       const parts = [
         rental.productType,
         customerName || rental.customerId,
@@ -316,12 +318,12 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
         description:
           `Vorgang: ${rental.id}\n` +
           `Kunde: ${customerName || rental.customerId}\n` +
-          `Zeitraum: ${new Date(rental.rentalStart).toLocaleDateString('de-DE')} - ${new Date(rental.rentalEnd).toLocaleDateString('de-DE')}\n` +
+          `Zeitraum: ${new Date(eventStartTs).toLocaleString('de-DE')} - ${new Date(eventEndTs).toLocaleString('de-DE')}\n` +
           `Betrag: ${amount !== undefined ? euro(amount) : '-'}\n` +
           (reling ? `${reling}\n` : '') +
           (vehicle ? `Fahrzeug: ${vehicle}\n` : ''),
-        start: new Date(rental.rentalStart),
-        end: new Date(rental.rentalEnd),
+        start: new Date(eventStartTs),
+        end: new Date(eventEndTs),
         visibility: 'private',
         transparency: 'opaque',
       });
@@ -339,6 +341,8 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
       const amount = rental.priceOverride ? rental.priceOverride.overridePrice : rental.priceSnapshot;
       const reling = (rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox M') ? relingLabel(rental.relingType) : '';
       const vehicle = [rental.vehicleMake, rental.vehicleModel].filter(Boolean).join(' ');
+      const eventStartTs = Number(rental.pickupDate || rental.rentalStart || 0);
+      const eventEndTs = Number(rental.returnDate || rental.rentalEnd || 0);
       const summaryParts = [
         'ABGELEHNT',
         rental.productType,
@@ -363,12 +367,12 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
           `Status: Angebot abgelehnt\n` +
           `Vorgang: ${rental.id}\n` +
           `Kunde: ${customerName || rental.customerId}\n` +
-          `Zeitraum: ${new Date(rental.rentalStart).toLocaleDateString('de-DE')} - ${new Date(rental.rentalEnd).toLocaleDateString('de-DE')}\n` +
+          `Zeitraum: ${new Date(eventStartTs).toLocaleString('de-DE')} - ${new Date(eventEndTs).toLocaleString('de-DE')}\n` +
           `Betrag: ${amount !== undefined ? euro(amount) : '-'}\n` +
           (reling ? `${reling}\n` : '') +
           (vehicle ? `Fahrzeug: ${vehicle}\n` : ''),
-        start: new Date(rental.rentalStart),
-        end: new Date(rental.rentalEnd),
+        start: new Date(eventStartTs),
+        end: new Date(eventEndTs),
         visibility: 'private',
         // Declined offers should not block availability.
         transparency: 'transparent',

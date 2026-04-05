@@ -19,7 +19,7 @@ import {
   getRoofRackBundleSuggestions,
   validateRoofRackAssignment,
 } from '../services/rentalService';
-import { checkAvailability } from '../services/googleCalendarService';
+import { checkAvailability, updateEventLegacy } from '../services/googleCalendarService';
 import { fetchAllInvoices } from '../services/invoiceService';
 import { generateTemplate } from '../services/templateService';
 import { getInvoiceItems, updateRentalRequest } from '../services/sqliteService';
@@ -63,6 +63,8 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [newStartDate, setNewStartDate] = useState('');
   const [newEndDate, setNewEndDate] = useState('');
+  const [newStartTime, setNewStartTime] = useState('10:00');
+  const [newEndTime, setNewEndTime] = useState('18:00');
 
   // Price Override State
   const [showPriceOverrideModal, setShowPriceOverrideModal] = useState(false);
@@ -268,8 +270,40 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
     return 'Unbekannter Kunde';
   })();
 
+  const displayStartTs = Number(rental.pickupDate || rental.rentalStart || 0);
+  const displayEndTs = Number(rental.returnDate || rental.rentalEnd || 0);
+
   const headerTitle = `${rental.productType} – ${customerLabel}`;
-  const headerSubtitle = `${formatDate(rental.rentalStart)} bis ${formatDate(rental.rentalEnd)}`;
+  const headerSubtitle = `${formatDate(displayStartTs)} bis ${formatDate(displayEndTs)}`;
+
+  const formatTimeForInput = (timestamp?: number, fallback = '10:00'): string => {
+    if (!timestamp) return fallback;
+    const d = new Date(timestamp);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  const formatDateForInput = (timestamp?: number): string => {
+    if (!timestamp) return '';
+    const d = new Date(timestamp);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const combineLocalDateAndTime = (dateIso: string, timeHHmm: string): number => {
+    const [hRaw, mRaw] = String(timeHHmm || '').split(':');
+    const h = Number(hRaw);
+    const m = Number(mRaw);
+    const date = new Date(dateIso);
+    if (Number.isNaN(date.getTime()) || Number.isNaN(h) || Number.isNaN(m)) {
+      return NaN;
+    }
+    date.setHours(h, m, 0, 0);
+    return date.getTime();
+  };
 
   const paymentsTotal = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
@@ -448,9 +482,18 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       // Persist availability + status
       await persistAvailabilityResult(rentalId, { isAvailable: result.isAvailable });
       await transitionStatus(rentalId, 'check_verfuegbarkeit');
-
-      // Reload
-      window.location.reload();
+      const nextStatus: RentalStatus = 'check_verfuegbarkeit';
+      setRental((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: nextStatus,
+              availabilityStatus: result.isAvailable ? 'frei' : 'belegt',
+              availabilityCheckedAt: Date.now(),
+            }
+          : prev
+      );
+      onRefresh?.();
     } catch (error: any) {
       console.error('Availability check failed:', error);
       alert(error.error || 'Verfügbarkeitsprüfung fehlgeschlagen');
@@ -861,11 +904,25 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       return;
     }
 
-    const start = new Date(newStartDate).getTime();
-    const end = new Date(newEndDate).getTime();
+    const start = combineLocalDateAndTime(newStartDate, '00:00');
+    const end = combineLocalDateAndTime(newEndDate, '00:00');
+    const pickupTs = combineLocalDateAndTime(newStartDate, newStartTime);
+    const returnTs = combineLocalDateAndTime(newEndDate, newEndTime);
 
+    if (Number.isNaN(start) || Number.isNaN(end)) {
+      alert('Bitte gültige Start- und Enddaten eingeben.');
+      return;
+    }
     if (start >= end) {
       alert('Ende muss nach Start liegen.');
+      return;
+    }
+    if (Number.isNaN(pickupTs) || Number.isNaN(returnTs)) {
+      alert('Bitte gültige Uhrzeiten für Abholung und Rückgabe eingeben.');
+      return;
+    }
+    if (pickupTs >= returnTs) {
+      alert('Rückgabe muss nach Abholung liegen.');
       return;
     }
 
@@ -887,6 +944,8 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       await updateRentalRequest(rental.id, {
         rentalStart: start,
         rentalEnd: end,
+        pickupDate: pickupTs,
+        returnDate: returnTs,
         priceSnapshot: price.total,
       });
 
@@ -895,16 +954,37 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
         ...rental,
         rentalStart: start,
         rentalEnd: end,
+        pickupDate: pickupTs,
+        returnDate: returnTs,
         priceSnapshot: price.total,
       };
       setRental(updated);
+
+      let calendarSyncError = false;
+      if (rental.googleCalendarId && rental.googleEventId) {
+        try {
+          await updateEventLegacy(rental.googleCalendarId, rental.googleEventId, {
+            start: new Date(pickupTs),
+            end: new Date(returnTs),
+          });
+        } catch (e) {
+          calendarSyncError = true;
+          console.error('Failed to update calendar event after reschedule:', e);
+        }
+      }
 
       // Close modal
       setShowRescheduleModal(false);
       setNewStartDate('');
       setNewEndDate('');
+      setNewStartTime('10:00');
+      setNewEndTime('18:00');
 
-      alert('Zeitraum erfolgreich geändert!');
+      if (calendarSyncError) {
+        alert('Zeitraum gespeichert. Kalender-Eintrag konnte nicht aktualisiert werden.');
+      } else {
+        alert('Zeitraum und Kalender erfolgreich geändert!');
+      }
       onRefresh?.();
     } catch (e: any) {
       console.error('Failed to reschedule rental:', e);
@@ -1012,12 +1092,34 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-indigo-900 mb-1">
+                    Abholzeit
+                  </label>
+                  <input
+                    type="time"
+                    value={newStartTime}
+                    onChange={(e) => setNewStartTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-indigo-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-indigo-900 mb-1">
                     Neues Enddatum
                   </label>
                   <input
                     type="date"
                     value={newEndDate}
                     onChange={(e) => setNewEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-indigo-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-indigo-900 mb-1">
+                    Rückgabezeit
+                  </label>
+                  <input
+                    type="time"
+                    value={newEndTime}
+                    onChange={(e) => setNewEndTime(e.target.value)}
                     className="w-full px-3 py-2 border border-indigo-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -1035,6 +1137,8 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       setShowRescheduleModal(false);
                       setNewStartDate('');
                       setNewEndDate('');
+                      setNewStartTime('10:00');
+                      setNewEndTime('18:00');
                     }}
                     disabled={actionLoading}
                   >
@@ -1190,6 +1294,14 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 <div>
                   <span className="text-gray-600">Ende:</span>
                   <span className="ml-2 font-medium">{formatDate(rental.rentalEnd)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Abholung:</span>
+                  <span className="ml-2 font-medium">{formatDate(rental.pickupDate || rental.rentalStart)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Rückgabe:</span>
+                  <span className="ml-2 font-medium">{formatDate(rental.returnDate || rental.rentalEnd)}</span>
                 </div>
                 <div>
                   <span className="text-gray-600">Preis:</span>
@@ -1724,8 +1836,12 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 onClick={() => {
                   setShowRescheduleModal(true);
                   // Pre-fill with current dates
-                  setNewStartDate(new Date(rental.rentalStart).toISOString().split('T')[0]);
-                  setNewEndDate(new Date(rental.rentalEnd).toISOString().split('T')[0]);
+                  const startForInput = new Date(rental.pickupDate || rental.rentalStart);
+                  const endForInput = new Date(rental.returnDate || rental.rentalEnd);
+                  setNewStartDate(formatDateForInput(startForInput.getTime()));
+                  setNewEndDate(formatDateForInput(endForInput.getTime()));
+                  setNewStartTime(formatTimeForInput(rental.pickupDate || rental.rentalStart, '10:00'));
+                  setNewEndTime(formatTimeForInput(rental.returnDate || rental.rentalEnd, '18:00'));
                 }}
                 disabled={actionLoading}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 text-sm font-medium"
@@ -1781,7 +1897,8 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                   <button
                     onClick={async () => {
                       await transitionStatus(rental.id, 'angenommen');
-                      window.location.reload();
+                      setRental((prev) => (prev ? { ...prev, status: 'angenommen', acceptedAt: Date.now() } : prev));
+                      onRefresh?.();
                     }}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
                   >
@@ -1793,7 +1910,8 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       if (!ok) return;
                       await transitionStatus(rental.id, 'abgelehnt');
                       alert('Angebot als abgelehnt gespeichert.');
-                      window.location.reload();
+                      setRental((prev) => (prev ? { ...prev, status: 'abgelehnt', rejectedAt: Date.now() } : prev));
+                      onRefresh?.();
                     }}
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
                   >

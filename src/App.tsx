@@ -11,8 +11,7 @@ import { generateRentalId } from './services/rentalIdService';
 import { fetchAllRentalRequests } from './services/rentalService';
 import { InvoiceList } from './components/InvoiceList';
 import { InvoiceEditor } from './components/InvoiceEditor';
-import { saveInvoice } from './services/invoiceService';
-import { createFollowUpInvoiceFromInvoice, fetchInvoiceById, reissueInvoice } from './services/invoiceService';
+import { createFollowUpInvoiceFromInvoice, fetchInvoiceById, reissueInvoice, removeInvoice, saveInvoice } from './services/invoiceService';
 import SettingsPanel from './components/SettingsPanel';
 import { testZAiConnection } from './services/zAiService';
 import { findActiveResourcesForType } from './services/resourceService';
@@ -1157,14 +1156,23 @@ export default function App() {
                 items={editingInvoiceItems || []}
                 customers={customers}
                 onSave={async (inv, items) => {
-                  await saveInvoice(inv, items);
+                  const wasCreate = !inv.id;
+                  const savedInvoiceId = await saveInvoice(inv, items);
                   if (editingInvoiceContext?.rentalId && editingInvoiceContext.nextRentalStatus) {
                     try {
                       await transitionStatus(editingInvoiceContext.rentalId, editingInvoiceContext.nextRentalStatus);
                       setKanbanKey((k) => k + 1);
                     } catch (e: any) {
+                      if (wasCreate) {
+                        try {
+                          await removeInvoice(savedInvoiceId);
+                        } catch (rollbackError) {
+                          console.error('Rollback failed after status transition error:', rollbackError);
+                        }
+                      }
                       const msg = e?.error || e?.message || 'Status konnte nicht automatisch gesetzt werden.';
-                      alert(msg);
+                      alert(`${msg}${wasCreate ? '\n\nDer neu erstellte Beleg wurde zur Konsistenz wieder entfernt.' : ''}`);
+                      return;
                     }
                   }
                   setInvoiceListKey((k) => k + 1);
@@ -1172,12 +1180,30 @@ export default function App() {
                   setEditingInvoice(null);
                 }}
                 onConvertToOrder={async (invoiceId) => {
+                  const source = await fetchInvoiceById(invoiceId);
                   const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, 'Auftrag');
+                  if (source?.invoice?.rentalRequestId) {
+                    try {
+                      await transitionStatus(source.invoice.rentalRequestId, 'angenommen');
+                      setKanbanKey((k) => k + 1);
+                    } catch (e) {
+                      console.error('Status sync failed after Angebot -> Auftrag:', e);
+                    }
+                  }
                   setInvoiceListKey((k) => k + 1);
                   await openInvoiceEditorById(nextId);
                 }}
                 onConvertToInvoice={async (invoiceId) => {
+                  const source = await fetchInvoiceById(invoiceId);
                   const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, 'Rechnung');
+                  if (source?.invoice?.rentalRequestId) {
+                    try {
+                      await transitionStatus(source.invoice.rentalRequestId, 'abgeschlossen');
+                      setKanbanKey((k) => k + 1);
+                    } catch (e) {
+                      console.error('Status sync failed after Auftrag -> Rechnung:', e);
+                    }
+                  }
                   setInvoiceListKey((k) => k + 1);
                   await openInvoiceEditorById(nextId);
                 }}
