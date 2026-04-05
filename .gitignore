@@ -5,3 +5,9 @@ src-tauri/gen/
 .DS_Store
 .env
 .env.local
+mietpark.db
+mietpark.db-shm
+mietpark.db-wal
+*.db
+*.db-shm
+*.db-wal
