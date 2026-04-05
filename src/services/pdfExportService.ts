@@ -695,6 +695,8 @@ async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Prom
     const sourceWidth = canvas.width;
     const sourceHeight = canvas.height;
     const pageHeightInSourcePx = Math.max(1, Math.floor((pageHeight * sourceWidth) / pageWidth));
+    const ctxMain = canvas.getContext('2d');
+    if (!ctxMain) throw new Error('2D context unavailable for source canvas');
 
     const chooseCutY = (fromY: number, idealCutY: number): number => {
       // Try to move page breaks to visually "quiet" lines to avoid cutting through text/rows.
@@ -736,9 +738,6 @@ async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Prom
 
       return Math.max(minY, Math.min(bestY, maxY));
     };
-
-    const ctxMain = canvas.getContext('2d');
-    if (!ctxMain) throw new Error('2D context unavailable for source canvas');
 
     let offset = 0;
     let page = 0;

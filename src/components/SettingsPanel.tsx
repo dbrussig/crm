@@ -46,7 +46,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [companyDirty, setCompanyDirty] = useState(false);
   const [mailBridgeTestStatus, setMailBridgeTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
-  const handleChange = (key: keyof AISettings, value: string | boolean) => {
+  const handleChange = (key: keyof AISettings, value: string | boolean | number) => {
     onSettingsChange({
       ...settings,
       [key]: value,
@@ -56,6 +56,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const handleGoogleOAuthChange = (key: keyof GoogleOAuthSettings, value: string | boolean) => {
     if (onGoogleOAuthChange) {
       onGoogleOAuthChange({
+        clientId: googleOAuthSettings?.clientId || '',
+        enabled: Boolean(googleOAuthSettings?.enabled),
         ...googleOAuthSettings,
         [key]: value,
       });

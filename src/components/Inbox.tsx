@@ -2512,7 +2512,8 @@ export default function Inbox(props: {
 	                  <button
 	                    className="shrink-0 px-3 py-2 rounded-md bg-emerald-700 text-white text-sm hover:bg-emerald-800"
 	                    onClick={async () => {
-                        await openPaymentAssignPrefilled(analysis.payment, { subject: selectedThread.subject });
+                        if (!analysis?.payment) return;
+	                        await openPaymentAssignPrefilled(analysis.payment, { subject: selectedThread.subject });
 	                    }}
 	                  >
 	                    Anzahlung zuordnen

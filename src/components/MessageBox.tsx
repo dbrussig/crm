@@ -18,7 +18,7 @@ import {
   generateReplySuggestion
 } from '../services/messageService';
 import { parseMessageFromAI, isAIAvailable } from '../services/aiService';
-import { announceToScreenreader, generateId } from '../utils/accessibility.tsx';
+import { announceToScreenreader, generateId } from '../utils/accessibility';
 import { createCustomer as createCustomerInDB } from '../services/sqliteService';
 import { logger } from '../services/logger';
 import {
@@ -135,12 +135,13 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
     if (!newMessage.trim()) return;
 
     // Prüfen ob AI verfügbar ist (hier hardcoded - sollte aus Settings kommen)
-    const config = {
-      apiKey: '',
-      endpoint: '',
-      modelParse: '',
-      modelResponse: '',
-    };
+	    const config = {
+      provider: 'zai' as const,
+	      apiKey: '',
+	      endpoint: '',
+	      modelParse: '',
+	      modelResponse: '',
+	    };
 
     if (!isAIAvailable(config)) {
       alert('AI ist nicht konfiguriert. Bitte API-Key in den Einstellungen setzen.');
@@ -684,20 +685,20 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
                 Gefundene Konversationen ({gmailThreads.length})
               </h4>
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {gmailThreads.map((thread) => (
+	                {gmailThreads.map((thread) => (
                   <div
                     key={thread.id}
                     onClick={() => handleSelectGmailThread(thread)}
                     className="p-3 bg-white border border-purple-200 rounded-md cursor-pointer hover:bg-purple-50 transition-colors"
                   >
-                    <div className="text-sm font-medium text-purple-900">
-                      {new Date(parseInt(thread.messages[0].internalDate)).toLocaleDateString('de-DE')}
-                    </div>
-                    <div className="text-xs text-gray-600 truncate">
-                      {thread.messages[0].snippet}
-                    </div>
-                  </div>
-                ))}
+	                    <div className="text-sm font-medium text-purple-900">
+	                      {thread.snippet ? 'Thread gefunden' : 'Thread'}
+	                    </div>
+	                    <div className="text-xs text-gray-600 truncate">
+	                      {thread.snippet}
+	                    </div>
+	                  </div>
+	                ))}
               </div>
             </div>
           )}
@@ -719,14 +720,14 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
                 </button>
               </div>
               <div className="space-y-3 max-h-80 overflow-y-auto">
-                {selectedGmailThread.messages.map((msg) => (
-                  <div key={msg.id} className="p-3 bg-gray-50 rounded">
-                    <div className="text-xs text-gray-500 mb-1">
-                      {msg.date.toLocaleString('de-DE')} • {msg.from}
-                    </div>
-                    <div className="text-sm text-gray-800">
-                      {msg.snippet}
-                    </div>
+	                {(selectedGmailThread.messages || []).map((msg) => (
+	                  <div key={msg.id} className="p-3 bg-gray-50 rounded">
+	                    <div className="text-xs text-gray-500 mb-1">
+	                      {msg.date ? new Date(msg.date).toLocaleString('de-DE') : '-'} • {msg.from || '-'}
+	                    </div>
+	                    <div className="text-sm text-gray-800">
+	                      {msg.body || ''}
+	                    </div>
                     {msg.body && (
                       <div className="text-sm text-gray-700 mt-2 p-2 bg-white rounded border border-gray-200">
                         {msg.body}

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Customer, GoogleOAuthSettings, MailTransportSettings } from '../types';
-import { syncCustomerToGoogle, deleteGoogleContact, isAuthenticated } from '../services/googleContactsService';
+import { syncCustomerToGoogle, deleteGoogleContact } from '../services/googleContactsService';
 import { getDatabaseStats } from '../services/indexedDBService';
 import CustomerEmailHistoryModal from './CustomerEmailHistoryModal';
 import CustomerDocumentsModal from './CustomerDocumentsModal';
@@ -598,7 +598,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-lg font-bold text-purple-900">
-                          {backup.description || backup.date}
+                          {backup.name}
                         </span>
                         {backup.id.includes('auto') && (
                           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-300">
@@ -999,7 +999,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
                     />
                     {photos.length > 1 && (
                       <div className="flex flex-wrap gap-2">
-                        {photos.map((url, idx) => (
+                        {photos.map((url: string, idx: number) => (
                           <button
                             key={idx}
                             className={[

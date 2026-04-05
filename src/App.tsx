@@ -11,7 +11,7 @@ import { generateRentalId } from './services/rentalIdService';
 import { fetchAllRentalRequests } from './services/rentalService';
 import { InvoiceList } from './components/InvoiceList';
 import { InvoiceEditor } from './components/InvoiceEditor';
-import { createFollowUpInvoiceFromInvoice, fetchInvoiceById, reissueInvoice, removeInvoice, saveInvoice } from './services/invoiceService';
+import { createFollowUpInvoiceFromInvoice, fetchAllInvoices, fetchInvoiceById, reissueInvoice, removeInvoice, saveInvoice } from './services/invoiceService';
 import SettingsPanel from './components/SettingsPanel';
 import { testZAiConnection } from './services/zAiService';
 import { findActiveResourcesForType } from './services/resourceService';
@@ -142,11 +142,11 @@ export default function App() {
     [dashboardRentals]
   );
   const draftInvoicesCount = useMemo(
-    () => dashboardInvoices.filter((i) => i.status === 'Entwurf').length,
+    () => dashboardInvoices.filter((i) => i.state === 'entwurf').length,
     [dashboardInvoices]
   );
   const pendingInvoicesCount = useMemo(
-    () => dashboardInvoices.filter((i) => i.status === 'Gesendet').length,
+    () => dashboardInvoices.filter((i) => i.state === 'gesendet').length,
     [dashboardInvoices]
   );
   const today = useMemo(() => {
@@ -614,6 +614,9 @@ export default function App() {
                     customer = patch;
                   }
                 }
+                if (!customer) {
+                  throw new Error('Kunde konnte nicht ermittelt werden.');
+                }
 
                 // 1b) Auto-import attachments (PDFs as customer documents; first image as roof-rail photo if missing).
                 const attachmentStats = {
@@ -680,7 +683,7 @@ export default function App() {
                         await addCustomerDocumentBlob(
                           {
                             id,
-                            customerId: customer.id,
+		                    customerId: customer!.id,
                             filename: a.filename?.trim() || `dokument_${Date.now()}.pdf`,
                             mimeType: a.mimeType || 'application/pdf',
                             sizeBytes: typeof a.sizeBytes === 'number' ? a.sizeBytes : sizeBytes,
@@ -840,7 +843,7 @@ export default function App() {
                   await onRentalRequestCreate({
                     id: targetRentalId,
                     createdAt,
-	                    customerId: customer.id,
+	                  customerId: customer!.id,
                     productType: data.productType,
                     rentalStart: start,
                     rentalEnd: end,
@@ -884,7 +887,7 @@ export default function App() {
                 // 3) Store original message for traceability.
                 await createMessage({
                   id: `msg_${Date.now()}`,
-                  customerId: customer.id,
+	                  customerId: customer!.id,
                   rentalRequestId: targetRentalId || undefined,
                   gmailThreadId: data.gmailThreadId || undefined,
                   message: data.rawText,

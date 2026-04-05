@@ -47,7 +47,6 @@ const mockCustomers: Customer[] = [
     lastName: 'Schmidt',
     email: 's.schmidt@example.de',
     phone: '+49 6300 234567',
-    company: 'Auto Schmidt GmbH',
     address: {
       street: 'Saarbrücker Straße 15',
       city: 'Saarbrücken',
@@ -489,6 +488,6 @@ export async function clearSeedData(verbose: boolean = true): Promise<void> {
 // Import helper für getJson
 async function getJson<T>(key: string, defaultValue: T): Promise<T> {
   // Import from _storage to avoid circular dependency
-  const { getJson: _getJson } = await import('../services/_storage');
-  return _getJson(key, defaultValue);
+  const { loadJson } = await import('../services/_storage');
+  return loadJson(key, defaultValue);
 }

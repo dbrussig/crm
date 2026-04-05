@@ -31,7 +31,7 @@ import {
   transitionStatus,
 } from '../services/rentalService';
 import { fetchAllInvoices } from '../services/invoiceService';
-import { announceToScreenreader } from '../utils/accessibility.tsx';
+import { announceToScreenreader } from '../utils/accessibility';
 
 interface KanbanBoardProps {
   customers: Customer[];
@@ -201,7 +201,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ customers, onCardClick
 
   // Handle drag start
   const handleDragStart = (event: DragStartEvent) => {
-    const activeId = event.activeId as string;
+    const activeId = String(event.active.id);
     setActiveId(activeId);
 
     // Screenreader-Announcement

@@ -16,7 +16,7 @@ export interface BridgeResponse<TResult = unknown> {
 const pending = new Map<
   string,
   {
-    resolve: (value: unknown) => void;
+    resolve: (value: any) => void;
     reject: (error: Error) => void;
   }
 >();

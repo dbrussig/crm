@@ -3,7 +3,7 @@ import { executeQuery } from '../services/sqliteService';
 
 const SQLDebugPanel: React.FC = () => {
   const [query, setQuery] = useState('SELECT * FROM customers');
-  const [results, setResults] = useState<any[] | null>(null);
+  const [results, setResults] = useState<Record<string, unknown>[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -14,7 +14,10 @@ const SQLDebugPanel: React.FC = () => {
 
     try {
       const queryResults = await executeQuery(query);
-      setResults(queryResults);
+      const rows = Array.isArray(queryResults.result)
+        ? (queryResults.result as Record<string, unknown>[])
+        : [];
+      setResults(rows);
     } catch (err) {
       setError((err as Error).message);
     } finally {
