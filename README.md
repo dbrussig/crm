@@ -54,3 +54,11 @@ Hinweis:
 
 - Fuer echte In-App-Updates muss der Update-Endpunkt fuer Clients erreichbar sein.
 - Bei privaten GitLab-Projekten ist ein zusaetzliches Konzept fuer authentifizierten Download noetig.
+
+## Doku-Pflicht fuer Features/Fixes
+
+Ab sofort gilt verbindlich:
+
+- Jede Feature- oder Fix-Aenderung am produktiven Code muss `README.md` und `CHANGELOG.md` mit aktualisieren.
+- GitLab CI prueft das automatisch ueber `scripts/ci/check-doc-sync.sh`.
+- Ohne diese beiden Doku-Updates faellt die Pipeline im `verify`-Stage.

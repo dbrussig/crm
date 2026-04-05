@@ -1,5 +1,18 @@
 stages:
+  - verify
   - release
+
+verify_docs_sync:
+  stage: verify
+  image: node:20
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+  before_script:
+    - apt-get update >/dev/null && apt-get install -y --no-install-recommends git bash >/dev/null
+    - git fetch origin "${CI_DEFAULT_BRANCH:-main}" >/dev/null 2>&1 || true
+  script:
+    - bash scripts/ci/check-doc-sync.sh
 
 release_latest_macos:
   stage: release
