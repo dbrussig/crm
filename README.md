@@ -54,6 +54,7 @@ Hinweis:
 
 - Fuer echte In-App-Updates muss der Update-Endpunkt fuer Clients erreichbar sein.
 - Bei privaten GitLab-Projekten ist ein zusaetzliches Konzept fuer authentifizierten Download noetig.
+- Release-Uploads in GitLab Generic Packages sind robust gegen Duplikate (bestehende Dateien fuehren nicht mehr zu hartem Job-Abbruch).
 
 ## Doku-Pflicht fuer Features/Fixes
 

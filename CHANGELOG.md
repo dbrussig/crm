@@ -14,4 +14,4 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 
 ### Fixed
 - Repository-Hygiene verbessert: lokale DB- und nicht-projektbezogene Artefakte bleiben ausserhalb von GitLab.
-
+- GitLab macOS Release-Job gehaertet: Package-Uploads loggen HTTP-Status sauber und brechen bei bereits vorhandenen Dateien nicht mehr mit Exit 1 ab.

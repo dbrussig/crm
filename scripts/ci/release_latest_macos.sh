@@ -1,6 +1,39 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+upload_file() {
+  local source_file="$1"
+  local target_url="$2"
+  local response_file
+  response_file="$(mktemp)"
+  local status
+
+  status="$(curl -sS -o "$response_file" -w "%{http_code}" \
+    --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+    --upload-file "$source_file" \
+    "$target_url" || true)"
+
+  if [ "$status" = "200" ] || [ "$status" = "201" ]; then
+    rm -f "$response_file"
+    return 0
+  fi
+
+  # GitLab Generic Packages can reject duplicate uploads for same version/path.
+  # If the file already exists, keep pipeline green and continue.
+  if [ "$status" = "409" ] || [ "$status" = "400" ]; then
+    if grep -Eiq "already exists|duplicate|has already been taken" "$response_file"; then
+      echo "Upload skipped (already exists): $target_url"
+      rm -f "$response_file"
+      return 0
+    fi
+  fi
+
+  echo "Upload failed ($status): $target_url"
+  cat "$response_file"
+  rm -f "$response_file"
+  return 1
+}
+
 : "${TAURI_UPDATER_PUBLIC_KEY:?Missing CI var TAURI_UPDATER_PUBLIC_KEY}"
 : "${TAURI_SIGNING_PRIVATE_KEY:?Missing CI var TAURI_SIGNING_PRIVATE_KEY}"
 
@@ -65,10 +98,10 @@ cat > latest.json <<JSON
 }
 JSON
 
-curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "$APP_ARCHIVE" "${PACKAGE_BASE}/${ARCHIVE_NAME}"
-curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "$APP_SIG" "${PACKAGE_BASE}/${SIG_NAME}"
-curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file latest.json "${PACKAGE_BASE}/latest.json"
+upload_file "$APP_ARCHIVE" "${PACKAGE_BASE}/${ARCHIVE_NAME}"
+upload_file "$APP_SIG" "${PACKAGE_BASE}/${SIG_NAME}"
+upload_file latest.json "${PACKAGE_BASE}/latest.json"
 
 if [ -n "${DMG_FILE}" ] && [ -f "${DMG_FILE}" ]; then
-  curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "${DMG_FILE}" "${PACKAGE_BASE}/$(basename "${DMG_FILE}")"
+  upload_file "${DMG_FILE}" "${PACKAGE_BASE}/$(basename "${DMG_FILE}")"
 fi
