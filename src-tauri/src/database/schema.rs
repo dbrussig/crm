@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS payments (
     id TEXT PRIMARY KEY,
     rental_request_id TEXT NOT NULL,
+    invoice_id TEXT,
     customer_id TEXT,
     kind TEXT NOT NULL,
     method TEXT NOT NULL,
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS payments (
     created_at INTEGER NOT NULL,
     raw_json TEXT NOT NULL,
     FOREIGN KEY (rental_request_id) REFERENCES rental_requests(id),
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id),
     FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
 

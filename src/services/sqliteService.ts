@@ -446,13 +446,24 @@ export async function addPayment(payment: Payment): Promise<void> {
     return;
   }
   const payments = await loadPayments();
-  payments.push(payment);
+  const idx = payments.findIndex((p) => p.id === payment.id);
+  if (idx >= 0) {
+    payments[idx] = { ...payments[idx], ...payment };
+  } else {
+    payments.push(payment);
+  }
   await savePayments(payments);
 }
 
 export async function getPaymentsByRental(rentalRequestId: string): Promise<Payment[]> {
   return (await loadPayments())
     .filter((p) => p.rentalRequestId === rentalRequestId)
+    .sort((a, b) => (b.receivedAt || b.createdAt || 0) - (a.receivedAt || a.createdAt || 0));
+}
+
+export async function getPaymentsByInvoice(invoiceId: string): Promise<Payment[]> {
+  return (await loadPayments())
+    .filter((p) => String(p.invoiceId || '') === String(invoiceId || ''))
     .sort((a, b) => (b.receivedAt || b.createdAt || 0) - (a.receivedAt || a.createdAt || 0));
 }
 
@@ -464,6 +475,16 @@ export async function getPaymentsByCustomer(customerId: string): Promise<Payment
 
 export async function getAllPayments(): Promise<Payment[]> {
   return (await loadPayments()).sort((a, b) => (b.receivedAt || b.createdAt || 0) - (a.receivedAt || a.createdAt || 0));
+}
+
+export async function assignPaymentToInvoice(paymentId: string, invoiceId?: string): Promise<void> {
+  const all = await loadPayments();
+  const current = all.find((p) => p.id === paymentId);
+  if (!current) throw new Error('Zahlung nicht gefunden');
+  await addPayment({
+    ...current,
+    invoiceId: invoiceId || undefined,
+  });
 }
 
 export async function deletePayment(id: string): Promise<void> {

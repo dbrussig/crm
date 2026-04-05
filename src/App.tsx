@@ -1027,12 +1027,30 @@ export default function App() {
                 })();
               }}
               onConvertToOrder={async (invoiceId) => {
+                const source = await fetchInvoiceById(invoiceId);
                 const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, 'Auftrag');
+                if (source?.invoice?.rentalRequestId) {
+                  try {
+                    await transitionStatus(source.invoice.rentalRequestId, 'angenommen');
+                    setKanbanKey((k) => k + 1);
+                  } catch (e) {
+                    console.error('Status sync failed after Angebot -> Auftrag:', e);
+                  }
+                }
                 setInvoiceListKey((k) => k + 1);
                 await openInvoiceEditorById(nextId);
               }}
               onConvertToInvoice={async (invoiceId) => {
+                const source = await fetchInvoiceById(invoiceId);
                 const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, 'Rechnung');
+                if (source?.invoice?.rentalRequestId) {
+                  try {
+                    await transitionStatus(source.invoice.rentalRequestId, 'abgeschlossen');
+                    setKanbanKey((k) => k + 1);
+                  } catch (e) {
+                    console.error('Status sync failed after Auftrag -> Rechnung:', e);
+                  }
+                }
                 setInvoiceListKey((k) => k + 1);
                 await openInvoiceEditorById(nextId);
               }}

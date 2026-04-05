@@ -24,7 +24,7 @@ import { fetchAllInvoices } from '../services/invoiceService';
 import { generateTemplate } from '../services/templateService';
 import { getInvoiceItems, updateRentalRequest } from '../services/sqliteService';
 import { calculateWebsitePrice } from '../services/pricingService';
-import { getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer } from '../services/sqliteService';
+import { assignPaymentToInvoice, getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer } from '../services/sqliteService';
 import { findActiveResourcesForType } from '../services/resourceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
@@ -86,6 +86,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   // Availability check result
   const [availabilityResult, setAvailabilityResult] = useState<any>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentAssignBusyId, setPaymentAssignBusyId] = useState<string | null>(null);
   const [linkedInvoices, setLinkedInvoices] = useState<Invoice[]>([]);
   const [invoiceAmountById, setInvoiceAmountById] = useState<Record<string, number>>({});
 
@@ -1654,6 +1655,36 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                           {p.receivedAt ? new Date(p.receivedAt).toLocaleString('de-DE') : ''}
                           {p.payerName ? ` · ${p.payerName}` : ''}
                         </div>
+                        <div className="mt-2">
+                          <label className="text-xs text-gray-600">Rechnung zuordnen</label>
+                          <select
+                            className="mt-1 w-full px-2 py-1.5 rounded border border-gray-200 text-xs bg-white"
+                            value={p.invoiceId || ''}
+                            onChange={async (e) => {
+                              const nextInvoiceId = e.target.value || undefined;
+                              setPaymentAssignBusyId(p.id);
+                              try {
+                                await assignPaymentToInvoice(p.id, nextInvoiceId);
+                                setPayments((prev) =>
+                                  prev.map((x) => (x.id === p.id ? { ...x, invoiceId: nextInvoiceId } : x))
+                                );
+                              } catch (error) {
+                                alert('Konnte Rechnungszuordnung nicht speichern: ' + (error instanceof Error ? error.message : String(error)));
+                              } finally {
+                                setPaymentAssignBusyId(null);
+                              }
+                            }}
+                            disabled={paymentAssignBusyId === p.id || actionLoading}
+                            aria-label="Rechnung zuordnen"
+                          >
+                            <option value="">Keine Rechnung zugeordnet</option>
+                            {linkedInvoices.map((inv) => (
+                              <option key={inv.id} value={inv.id}>
+                                {inv.invoiceNo} · {inv.invoiceType} · {inv.state}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         {p.note && <div className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">{p.note}</div>}
                       </div>
                       <button
@@ -1668,6 +1699,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                             alert('Konnte Zahlung nicht löschen: ' + (e instanceof Error ? e.message : String(e)));
                           }
                         }}
+                        disabled={paymentAssignBusyId === p.id}
                       >
                         Löschen
                       </button>

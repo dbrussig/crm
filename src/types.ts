@@ -198,6 +198,7 @@ export type PaymentKind = 'Anzahlung' | 'Zahlung' | 'Kaution';
 export interface Payment {
   id: string;
   rentalRequestId: string;
+  invoiceId?: string;
   customerId?: string;
   kind: PaymentKind;
   method: PaymentMethod;

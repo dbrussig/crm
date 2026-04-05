@@ -291,6 +291,7 @@ pub fn upsert_payment(app: &AppHandle, payment: &Value) -> Result<(), String> {
     let connection = open_connection(app)?;
     let id = required_string(payment, "id")?;
     let rental_request_id = required_string(payment, "rentalRequestId")?;
+    let invoice_id = string_field_optional(payment, "invoiceId");
     let customer_id = string_field_optional(payment, "customerId");
     let kind = required_string(payment, "kind")?;
     let method = required_string(payment, "method")?;
@@ -303,10 +304,11 @@ pub fn upsert_payment(app: &AppHandle, payment: &Value) -> Result<(), String> {
     connection
         .execute(
             "INSERT INTO payments (
-               id, rental_request_id, customer_id, kind, method, amount, currency, received_at, created_at, raw_json
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+               id, rental_request_id, invoice_id, customer_id, kind, method, amount, currency, received_at, created_at, raw_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(id) DO UPDATE SET
                rental_request_id = excluded.rental_request_id,
+               invoice_id = excluded.invoice_id,
                customer_id = excluded.customer_id,
                kind = excluded.kind,
                method = excluded.method,
@@ -317,6 +319,7 @@ pub fn upsert_payment(app: &AppHandle, payment: &Value) -> Result<(), String> {
             params![
                 id,
                 rental_request_id,
+                invoice_id,
                 customer_id,
                 kind,
                 method,
