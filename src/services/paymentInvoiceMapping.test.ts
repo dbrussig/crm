@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Payment } from '../types';
+import type { Invoice, Payment } from '../types';
+import { buildThreadPaymentAssignments } from './inboxPaymentMappingService';
 
 const storage = vi.hoisted(() => new Map<string, unknown>());
 
@@ -29,7 +30,10 @@ vi.mock('../platform/runtime', () => ({
 
 import {
   addPayment,
+  addInvoice,
   assignPaymentToInvoice,
+  getAllInvoices,
+  getAllPayments,
   getPaymentsByInvoice,
   getPaymentsByRental,
 } from './sqliteService';
@@ -46,6 +50,24 @@ function makePayment(overrides: Partial<Payment> = {}): Payment {
     receivedAt: Date.now(),
     source: 'manual',
     createdAt: Date.now(),
+    ...overrides,
+  };
+}
+
+function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
+  const now = Date.now();
+  return {
+    id: `inv_${Math.random().toString(16).slice(2)}`,
+    invoiceType: 'Rechnung',
+    invoiceNo: 'RE-001',
+    invoiceDate: now,
+    state: 'gesendet',
+    currency: 'EUR',
+    companyId: 'cust_1',
+    buyerName: 'Test Kunde',
+    buyerAddress: 'Musterstr. 1',
+    createdAt: now,
+    updatedAt: now,
     ...overrides,
   };
 }
@@ -108,5 +130,26 @@ describe('payment -> invoice mapping', () => {
 
   it('throws for assigning unknown payment id', async () => {
     await expect(assignPaymentToInvoice('missing_payment', 'inv_x')).rejects.toThrow('Zahlung nicht gefunden');
+  });
+
+  it('covers inbox flow: persisted payment+invoice maps back to thread assignment', async () => {
+    const invoice = makeInvoice({ id: 'inv_flow', invoiceNo: 'RE-FLOW-1' });
+    await addInvoice(invoice, []);
+    await addPayment(
+      makePayment({
+        id: 'pay_flow',
+        rentalRequestId: 'vrg_flow',
+        invoiceId: 'inv_flow',
+        gmailThreadId: 'thr_flow',
+        amount: 199.5,
+      })
+    );
+
+    const [payments, invoices] = await Promise.all([getAllPayments(), getAllInvoices()]);
+    const map = buildThreadPaymentAssignments(payments, invoices, ['thr_flow']);
+
+    expect(map.thr_flow).toBeTruthy();
+    expect(map.thr_flow.amount).toBe(199.5);
+    expect(map.thr_flow.invoiceNo).toBe('RE-FLOW-1');
   });
 });

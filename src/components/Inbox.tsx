@@ -3,7 +3,8 @@ import type { AISettings, Customer, GmailAttachmentSummary, InboxImportResult, P
 import { getThread, listInboxThreadSummaries, markThreadProcessedWithClientId, type GmailThreadSummary } from '../services/googleGmailService';
 import { detectDachboxRejectionReason, extractCustomerInfo, extractRentalInfo, generateReplySuggestion, suggestProductFromMessage } from '../services/messageService';
 import { deleteKey, loadJson, saveJson } from '../services/_storage';
-import { addPayment, getAllInvoices, getAllRentalRequests } from '../services/sqliteService';
+import { addPayment, getAllInvoices, getAllPayments, getAllRentalRequests } from '../services/sqliteService';
+import { buildThreadPaymentAssignments, pickSuggestedInvoiceForPayment, type ThreadPaymentAssignment } from '../services/inboxPaymentMappingService';
 import { generateConciergeReply, isAIAvailable } from '../services/aiService';
 import { formatDisplayRef } from '../utils/displayId';
 
@@ -221,24 +222,6 @@ function stripQuotedText(text: string): string {
     out.push(line);
   }
   return out.join('\n').trim();
-}
-
-function pickSuggestedInvoice(invoices: Invoice[]): Invoice | null {
-  if (!Array.isArray(invoices) || invoices.length === 0) return null;
-  const typeRank: Record<Invoice['invoiceType'], number> = {
-    Rechnung: 0,
-    Auftrag: 1,
-    Angebot: 2,
-  };
-  const stateRank = (state: Invoice['state']) => (state === 'storniert' || state === 'archiviert' ? 1 : 0);
-  const sorted = [...invoices].sort((a, b) => {
-    const stateDiff = stateRank(a.state) - stateRank(b.state);
-    if (stateDiff !== 0) return stateDiff;
-    const typeDiff = (typeRank[a.invoiceType] ?? 9) - (typeRank[b.invoiceType] ?? 9);
-    if (typeDiff !== 0) return typeDiff;
-    return (b.invoiceDate || b.createdAt || 0) - (a.invoiceDate || a.createdAt || 0);
-  });
-  return sorted[0] || null;
 }
 
 type InboxCacheV1 = {
@@ -469,6 +452,7 @@ export default function Inbox(props: {
   const [paymentReceivedAt, setPaymentReceivedAt] = useState<number>(Date.now());
   const [paymentSuggestedRentalId, setPaymentSuggestedRentalId] = useState<string>('');
   const [paymentSuggestedInvoiceId, setPaymentSuggestedInvoiceId] = useState<string>('');
+  const [paymentAssignmentByThreadId, setPaymentAssignmentByThreadId] = useState<Record<string, ThreadPaymentAssignment>>({});
   const [paymentReviewedByThreadId, setPaymentReviewedByThreadId] = useState<Record<string, boolean>>(() => {
     try {
       const raw = localStorage.getItem(PAYMENT_REVIEW_KEY);
@@ -543,6 +527,30 @@ export default function Inbox(props: {
     () => (paymentRentalId ? (paymentInvoicesByRentalId[paymentRentalId] || []) : []),
     [paymentInvoicesByRentalId, paymentRentalId]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const threadIds = new Set((threads || []).map((t) => String(t.id || '')).filter(Boolean));
+    if (threadIds.size === 0) {
+      setPaymentAssignmentByThreadId({});
+      return () => {
+        cancelled = true;
+      };
+    }
+    (async () => {
+      try {
+        const [payments, invoices] = await Promise.all([getAllPayments(), getAllInvoices()]);
+        if (cancelled) return;
+        const assignments = buildThreadPaymentAssignments(payments, invoices, threadIds);
+        setPaymentAssignmentByThreadId(assignments);
+      } catch {
+        if (!cancelled) setPaymentAssignmentByThreadId({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [threads]);
 
   const applyRejectReplyDraft = () => {
     setReplyDraft(relingRejectTemplate());
@@ -1158,7 +1166,7 @@ export default function Inbox(props: {
             const autoRentalId = openForCustomer[0].id;
             setPaymentSuggestedRentalId(autoRentalId);
             setPaymentRentalId(autoRentalId);
-            const suggestion = pickSuggestedInvoice(invoicesByRental[autoRentalId] || []);
+            const suggestion = pickSuggestedInvoiceForPayment(invoicesByRental[autoRentalId] || []);
             setPaymentSuggestedInvoiceId(suggestion?.id || '');
             setPaymentInvoiceId(suggestion?.id || '');
             setSendChecklist((prev) => ({ ...prev, mapping: true }));
@@ -1655,7 +1663,7 @@ export default function Inbox(props: {
 	                  onChange={(e) => {
                       const nextRentalId = e.target.value;
                       setPaymentRentalId(nextRentalId);
-                      const suggestion = pickSuggestedInvoice(paymentInvoicesByRentalId[nextRentalId] || []);
+                      const suggestion = pickSuggestedInvoiceForPayment(paymentInvoicesByRentalId[nextRentalId] || []);
                       setPaymentSuggestedInvoiceId(suggestion?.id || '');
                       setPaymentInvoiceId(suggestion?.id || '');
                       setSendChecklist((prev) => ({ ...prev, mapping: Boolean(nextRentalId), paymentMarked: false }));
@@ -1775,6 +1783,18 @@ export default function Inbox(props: {
 	                      providerTransactionId: paymentProviderTx?.trim() || undefined,
 	                      createdAt: Date.now(),
 	                    });
+                      if (selectedThreadId) {
+                        setPaymentAssignmentByThreadId((prev) => ({
+                          ...prev,
+                          [selectedThreadId]: {
+                            amount: Number(paymentAmount),
+                            currency: (paymentCurrency || 'EUR').trim() || 'EUR',
+                            invoiceId: paymentInvoiceId || undefined,
+                            invoiceNo: selectedInvoice?.invoiceNo,
+                            receivedAt: paymentReceivedAt || Date.now(),
+                          },
+                        }));
+                      }
 	                    setPaymentFeedback(
                         `Zahlung gespeichert und Vorgang ${formatDisplayRef(paymentRentalId)} zugeordnet.` +
                         (selectedInvoice ? ` Beleg: ${selectedInvoice.invoiceNo}.` : '')
@@ -2139,6 +2159,7 @@ export default function Inbox(props: {
                   d.rentalStart && d.rentalEnd
                     ? `${new Date(d.rentalStart).toLocaleDateString('de-DE')}–${new Date(d.rentalEnd).toLocaleDateString('de-DE')}`
                     : null;
+                const paymentAssignment = paymentAssignmentByThreadId[t.id];
 
                 return (
                   <>
@@ -2206,6 +2227,11 @@ export default function Inbox(props: {
                           {d.paymentReviewed ? 'Zahlung geprüft' : 'Zahlung offen'}
                         </span>
                       )}
+                      {paymentAssignment?.invoiceNo && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full border bg-emerald-50 border-emerald-200 text-emerald-700">
+                          Zugeordnet: {paymentAssignment.invoiceNo}
+                        </span>
+                      )}
                       {period && (
                         <span className="text-[11px] px-2 py-0.5 rounded-full border bg-slate-50 border-slate-200 text-slate-700">
                           {period}
@@ -2219,6 +2245,12 @@ export default function Inbox(props: {
                     </div>
 
                     <div className="text-xs text-slate-700 mt-2 line-clamp-2">{t.snippet}</div>
+                    {paymentAssignment ? (
+                      <div className="mt-1 text-[11px] text-emerald-800">
+                        Zahlung: {paymentAssignment.amount.toFixed(2)} {paymentAssignment.currency}
+                        {paymentAssignment.invoiceNo ? ` • Beleg ${paymentAssignment.invoiceNo}` : ''}
+                      </div>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-[11px] text-slate-500">Nächste Aktion:</span>
                       <button
