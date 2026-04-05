@@ -32,4 +32,5 @@ release_latest_macos:
     expire_in: 7 days
     paths:
       - src-tauri/target/release/bundle/macos/
+      - src-tauri/target/release/bundle/dmg/
       - latest.json
