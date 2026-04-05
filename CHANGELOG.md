@@ -21,3 +21,4 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - PDF-Duplikat-Schutz eingefuehrt: identische Inhalte (SHA-256) werden pro Kunde nicht mehrfach gespeichert.
 - PDF-Dateinamen vereinheitlicht auf `{Belegtyp}_{Belegnummer}_{YYYY-MM-DD}.pdf`.
 - PDF-Rendering fuer Speicherung auf layoutnahe HTML->PDF-Generierung umgestellt (mehrseitig), damit gespeicherte Datei der Vorschau entspricht.
+- PDF-Seitenumbrueche gehaertet: Umbrueche werden auf visuell ruhige Linien verschoben, um abgeschnittene Tabellenzeilen/Text zu reduzieren.

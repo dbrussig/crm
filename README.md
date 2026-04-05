@@ -73,3 +73,4 @@ Ab sofort gilt verbindlich:
   - `{Belegtyp}_{Belegnummer}_{YYYY-MM-DD}.pdf`
 - Duplikat-Schutz aktiv: identische PDFs (SHA-256) werden pro Kunde nur einmal gespeichert.
 - PDF-Inhalt wird layoutnah aus derselben Beleg-HTML gerendert (mehrseitig), damit Vorschau und gespeicherte Datei visuell uebereinstimmen.
+- Seitenumbrueche werden beim Rendern automatisch an visuell ruhige Zeilen gelegt, um harte Schnitte in Tabellen/Text zu minimieren.

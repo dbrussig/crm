@@ -696,10 +696,61 @@ async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Prom
     const sourceHeight = canvas.height;
     const pageHeightInSourcePx = Math.max(1, Math.floor((pageHeight * sourceWidth) / pageWidth));
 
+    const chooseCutY = (fromY: number, idealCutY: number): number => {
+      // Try to move page breaks to visually "quiet" lines to avoid cutting through text/rows.
+      const minY = Math.max(fromY + Math.floor(pageHeightInSourcePx * 0.7), fromY + 120);
+      const maxY = Math.min(sourceHeight, fromY + Math.floor(pageHeightInSourcePx * 1.08));
+      let bestY = Math.min(idealCutY, maxY);
+      let bestScore = Number.POSITIVE_INFINITY;
+      const step = 2;
+      const sampleColumns = 96;
+
+      const scanStart = Math.max(minY, idealCutY - 180);
+      const scanEnd = Math.min(maxY, idealCutY + 180);
+      if (scanEnd <= scanStart) return bestY;
+
+      const pixels = ctxMain.getImageData(0, scanStart, sourceWidth, scanEnd - scanStart).data;
+      const lines = scanEnd - scanStart;
+
+      for (let line = 0; line < lines; line += step) {
+        const y = scanStart + line;
+        let darkSamples = 0;
+        for (let s = 0; s < sampleColumns; s++) {
+          const x = Math.floor((s * (sourceWidth - 1)) / (sampleColumns - 1));
+          const idx = (line * sourceWidth + x) * 4;
+          const r = pixels[idx];
+          const g = pixels[idx + 1];
+          const b = pixels[idx + 2];
+          // non-white-ish pixel
+          if (r < 242 || g < 242 || b < 242) darkSamples += 1;
+        }
+
+        const darkRatio = darkSamples / sampleColumns;
+        const distancePenalty = Math.abs(y - idealCutY) / 260;
+        const score = darkRatio + distancePenalty;
+        if (score < bestScore) {
+          bestScore = score;
+          bestY = y;
+        }
+      }
+
+      return Math.max(minY, Math.min(bestY, maxY));
+    };
+
+    const ctxMain = canvas.getContext('2d');
+    if (!ctxMain) throw new Error('2D context unavailable for source canvas');
+
     let offset = 0;
     let page = 0;
     while (offset < sourceHeight) {
-      const sliceHeight = Math.min(pageHeightInSourcePx, sourceHeight - offset);
+      const remaining = sourceHeight - offset;
+      let sliceHeight = Math.min(pageHeightInSourcePx, remaining);
+      if (remaining > pageHeightInSourcePx) {
+        const idealCutY = offset + sliceHeight;
+        const adjustedCutY = chooseCutY(offset, idealCutY);
+        sliceHeight = Math.max(1, adjustedCutY - offset);
+      }
+
       const pageCanvas = document.createElement('canvas');
       pageCanvas.width = sourceWidth;
       pageCanvas.height = sliceHeight;
