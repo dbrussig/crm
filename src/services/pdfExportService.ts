@@ -1,8 +1,8 @@
-import type { Invoice, InvoiceItem, InvoiceTemplate } from '../types';
+import type { CustomerDocument, Invoice, InvoiceItem, InvoiceTemplate } from '../types';
 import { getCompanyProfile } from '../config/companyProfile';
 import { getInvoiceLayout } from '../config/invoiceLayouts';
 import { fetchInvoiceTemplate } from './invoiceService';
-import { getInvoiceItems } from './sqliteService';
+import { addCustomerDocumentBlob, getInvoiceItems } from './sqliteService';
 import QRCode from 'qrcode';
 import { getActiveSubTotalInvoiceTypeProfile } from './subtotalInvoiceTypeProfileService';
 
@@ -339,8 +339,9 @@ async function renderMietparkHtml(opts: {
   const depositPercent = typeof invoice.depositPercent === 'number' ? invoice.depositPercent : d.depositPercent || 0;
   const depositTextRaw = invoice.depositText || d.depositText || c.depositNote || '';
   const depositText = resolvePlaceholders(depositTextRaw, ctx).trim();
+  const depositEnabled = Boolean(invoice.depositEnabled) && (invoice.invoiceType === 'Angebot' || invoice.invoiceType === 'Auftrag');
   const depositAmount =
-    invoice.invoiceType === 'Angebot' && depositPercent > 0 ? Math.round((totals.total * (depositPercent / 100)) * 100) / 100 : 0;
+    depositEnabled && depositPercent > 0 ? Math.round((totals.total * (depositPercent / 100)) * 100) / 100 : 0;
 
   const showQty = profile?.show?.quantity === true ? true : false;
   const showUnit = profile?.show?.unit === true ? true : false;
@@ -390,7 +391,7 @@ async function renderMietparkHtml(opts: {
     .join('');
 
   const depositRow =
-    invoice.invoiceType === 'Angebot' && depositText && depositAmount > 0
+    depositEnabled && depositText && depositAmount > 0
       ? `<tr class="deposit">
           <td class="desc"><div class="name">${esc(depositText)}</div></td>
           ${showQty ? `<td class="num"></td>` : ''}
@@ -610,6 +611,27 @@ async function resolveItems(invoice: Invoice, items?: InvoiceItem[] | null): Pro
   }
 }
 
+async function persistGeneratedInvoiceDocument(invoice: Invoice, html: string): Promise<void> {
+  const customerId = String(invoice.companyId || '').trim();
+  if (!customerId) return;
+
+  const now = Date.now();
+  const timestamp = new Date(now).toISOString().replace(/[:.]/g, '-');
+  const filename = `${invoice.invoiceNo || 'beleg'}_${timestamp}.html`;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const doc: CustomerDocument = {
+    id: `doc_invoice_${now}_${Math.random().toString(16).slice(2)}`,
+    customerId,
+    filename,
+    mimeType: 'text/html',
+    sizeBytes: blob.size,
+    category: invoice.invoiceType,
+    source: 'manual',
+    createdAt: now,
+  };
+  await addCustomerDocumentBlob(doc, blob);
+}
+
 export async function downloadInvoicePDF(invoice: Invoice, items?: InvoiceItem[], template?: InvoiceTemplate | null): Promise<void> {
   const tpl = await resolveTemplate(invoice, template);
   const its = await resolveItems(invoice, items);
@@ -665,6 +687,12 @@ export async function saveInvoicePdfViaPrintDialog(invoice: Invoice, items?: Inv
   const tpl = await resolveTemplate(invoice, template);
   const its = await resolveItems(invoice, items);
   const html = await renderInvoiceHtml({ invoice, items: its, template: tpl, autoPrint: true });
+  // Persist generated print source in customer documents for audit/history.
+  try {
+    await persistGeneratedInvoiceDocument(invoice, html);
+  } catch (error) {
+    console.warn('Generated document could not be persisted:', error);
+  }
 
   try {
     win.document.open();

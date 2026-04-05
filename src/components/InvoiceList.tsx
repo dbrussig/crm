@@ -142,6 +142,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
       gesendet: 'bg-blue-100 text-blue-800',
       angenommen: 'bg-green-100 text-green-800',
       storniert: 'bg-red-100 text-red-800',
+      archiviert: 'bg-slate-200 text-slate-800',
     };
 
     const labels = {
@@ -149,6 +150,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
       gesendet: 'Gesendet',
       angenommen: 'Angenommen',
       storniert: 'Storniert',
+      archiviert: 'Archiviert',
     };
 
     return (
@@ -189,8 +191,9 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
     const d = layout.defaultsByType[invoice.invoiceType];
     const depositPercent = typeof invoice.depositPercent === 'number' ? invoice.depositPercent : (d.depositPercent || 0);
     const depositText = String(invoice.depositText || '').trim();
+    const depositEnabled = Boolean(invoice.depositEnabled) && (invoice.invoiceType === 'Angebot' || invoice.invoiceType === 'Auftrag');
     const depositAmount =
-      invoice.invoiceType === 'Angebot' && depositText && depositPercent > 0
+      depositEnabled && depositText && depositPercent > 0
         ? Math.round((total * (depositPercent / 100)) * 100) / 100
         : 0;
 
@@ -332,6 +335,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
             <option value="gesendet">Gesendet</option>
             <option value="angenommen">Angenommen</option>
             <option value="storniert">Storniert</option>
+            <option value="archiviert">Archiviert</option>
           </select>
         </div>
 

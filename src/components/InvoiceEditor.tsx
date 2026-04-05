@@ -84,6 +84,15 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     typeof (initialInvoice as any)?.depositPercent === 'number' ? (initialInvoice as any).depositPercent : 0
   );
   const [depositText, setDepositText] = useState<string>((initialInvoice as any)?.depositText || '');
+  const [depositEnabled, setDepositEnabled] = useState<boolean>(() => {
+    const explicit = (initialInvoice as any)?.depositEnabled;
+    if (typeof explicit === 'boolean') return explicit;
+    const hasLegacyDeposit =
+      typeof (initialInvoice as any)?.depositPercent === 'number' &&
+      Number((initialInvoice as any)?.depositPercent) > 0 &&
+      Boolean(String((initialInvoice as any)?.depositText || '').trim());
+    return Boolean(initialInvoice?.id && hasLegacyDeposit);
+  });
   const [depositReceivedEnabled, setDepositReceivedEnabled] = useState<boolean>(
     Boolean((initialInvoice as any)?.depositReceivedEnabled)
   );
@@ -181,6 +190,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       servicePeriodEnd,
       depositPercent,
       depositText,
+      depositEnabled,
       depositReceivedEnabled,
       depositReceivedAmount,
       paymentTerms,
@@ -223,8 +233,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   };
 
   const totals = calculateTotals();
+  const isDepositSupportedType = invoiceType === 'Angebot' || invoiceType === 'Auftrag';
   const depositAmountPreview =
-    invoiceType === 'Angebot' && depositPercent > 0
+    isDepositSupportedType && depositEnabled && depositPercent > 0
       ? Math.round((totals.total * (depositPercent / 100)) * 100) / 100
       : 0;
   const grandTotalPreview = Math.round((totals.total + (depositText && depositAmountPreview > 0 ? depositAmountPreview : 0)) * 100) / 100;
@@ -260,10 +271,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         if (!(initialInvoice as any)?.agbLink) {
           setAgbLink(tpl.defaultAgbLink);
         }
-        if (typeof (initialInvoice as any)?.depositPercent !== 'number') {
+        if (typeof (initialInvoice as any)?.depositPercent !== 'number' && (invoiceType === 'Angebot' || invoiceType === 'Auftrag')) {
           setDepositPercent(typeof tpl.defaultDepositPercent === 'number' ? tpl.defaultDepositPercent : 0);
         }
-        if (!(initialInvoice as any)?.depositText) {
+        if (!(initialInvoice as any)?.depositText && (invoiceType === 'Angebot' || invoiceType === 'Auftrag')) {
           setDepositText(resolvePlaceholders(tpl.defaultDepositText || company.depositNote || ''));
         }
         if (!initialInvoice?.dueDate) {
@@ -312,6 +323,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     servicePeriodEnd,
     depositPercent,
     depositText,
+    depositEnabled,
     depositReceivedEnabled,
     depositReceivedAmount,
     paymentTerms,
@@ -403,6 +415,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       servicePeriodEnd: servicePeriodEnd ? new Date(servicePeriodEnd).getTime() : undefined,
       depositPercent,
       depositText,
+      depositEnabled,
       depositReceivedEnabled,
       depositReceivedAmount,
       paymentTerms,
@@ -439,6 +452,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       servicePeriodEnd: servicePeriodEnd ? new Date(servicePeriodEnd).getTime() : undefined,
       depositPercent,
       depositText,
+      depositEnabled,
       depositReceivedEnabled,
       depositReceivedAmount,
       paymentTerms,
@@ -523,6 +537,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       gesendet: 'bg-blue-100 text-blue-800',
       angenommen: 'bg-green-100 text-green-800',
       storniert: 'bg-red-100 text-red-800',
+      archiviert: 'bg-slate-200 text-slate-800',
     };
 
     return (
@@ -880,7 +895,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               <span className="font-medium">{totals.tax.toFixed(2)} €</span>
             </div>
 
-            {invoiceType === 'Angebot' && depositText && depositAmountPreview > 0 && (
+            {isDepositSupportedType && depositEnabled && depositText && depositAmountPreview > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Anzahlung ({depositPercent || 0}%):</span>
                 <span className="font-medium">{depositAmountPreview.toFixed(2)} €</span>
@@ -894,10 +909,37 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         </div>
 
-        {/* Anzahlung (nur Angebot) */}
-        {invoiceType === 'Angebot' && layout.editorBlocks.includes('deposit') && (
+        {/* Anzahlung (optional fuer Angebot/Auftrag) */}
+        {isDepositSupportedType && layout.editorBlocks.includes('deposit') && (
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Anzahlung (Angebot)</h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Anzahlung ({invoiceType})</h3>
+            <div className="mb-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDepositEnabled((v) => {
+                    const next = !v;
+                    if (next) {
+                      if (!(Number(depositPercent) > 0)) {
+                        const d = layout.defaultsByType[invoiceType];
+                        setDepositPercent(typeof d.depositPercent === 'number' ? d.depositPercent : 50);
+                      }
+                      if (!String(depositText || '').trim()) {
+                        const d = layout.defaultsByType[invoiceType];
+                        setDepositText(resolvePlaceholders(d.depositText || company.depositNote || 'Anzahlung'));
+                      }
+                    }
+                    return next;
+                  });
+                }}
+                className={`px-3 py-1.5 rounded-md text-sm border ${
+                  depositEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-800'
+                }`}
+                aria-pressed={depositEnabled}
+              >
+                {depositEnabled ? 'Anzahlung aktiv' : 'Anzahlung aktivieren'}
+              </button>
+            </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-deposit-percent">Prozent</label>
@@ -909,6 +951,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   step="1"
                   value={depositPercent}
                   onChange={(e) => setDepositPercent(Number(e.target.value))}
+                  disabled={!depositEnabled}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -919,13 +962,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   type="text"
                   value={depositText}
                   onChange={(e) => setDepositText(e.target.value)}
+                  disabled={!depositEnabled}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                   placeholder="Anzahlung 50 % nach Angebotsannahme"
                 />
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              Wird im PDF als zusätzliche Zeile in der Tabelle angezeigt (Betrag = Gesamt * Prozent).
+              Optional: Wird im PDF als zusätzliche Zeile in der Tabelle angezeigt (Betrag = Gesamt * Prozent).
             </p>
           </div>
         )}

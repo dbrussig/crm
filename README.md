@@ -63,3 +63,9 @@ Ab sofort gilt verbindlich:
 - Jede Feature- oder Fix-Aenderung am produktiven Code muss `README.md` und `CHANGELOG.md` mit aktualisieren.
 - GitLab CI prueft das automatisch ueber `scripts/ci/check-doc-sync.sh`.
 - Ohne diese beiden Doku-Updates faellt die Pipeline im `verify`-Stage.
+
+## Beleg-Workflow (Anzahlung / Archiv / Dokumentablage)
+
+- Anzahlung ist optional und kann in Angebot **und** Auftrag im Editor aktiv/deaktiviert werden.
+- Bei `Auftrag -> Rechnung` wird der bestehende Auftrag automatisch auf Status `archiviert` gesetzt (Belegnummer bleibt unveraendert).
+- Beim Klick auf `PDF speichern` wird die generierte Druckvorlage automatisch als Kundendokument abgelegt (Kategorie nach Belegtyp).

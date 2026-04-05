@@ -378,7 +378,7 @@ export interface InboxImportResult {
 
 // Invoices
 export type InvoiceType = 'Angebot' | 'Auftrag' | 'Rechnung';
-export type InvoiceState = 'entwurf' | 'gesendet' | 'angenommen' | 'storniert';
+export type InvoiceState = 'entwurf' | 'gesendet' | 'angenommen' | 'storniert' | 'archiviert';
 
 // SubTotal-derived invoice type profiles (labels + column visibility per invoice type).
 export type SubTotalInvoiceTypeProfile = {
@@ -444,6 +444,7 @@ export interface Invoice {
 
   depositPercent?: number; // e.g. 50 (used mainly for Angebot)
   depositText?: string; // e.g. "Anzahlung 50 % nach Angebotsannahme"
+  depositEnabled?: boolean; // optional toggle for Angebot/Auftrag
 
   // Rechnung: optionaler Hinweis, dass eine Kaution dankend erhalten wurde.
   depositReceivedEnabled?: boolean;

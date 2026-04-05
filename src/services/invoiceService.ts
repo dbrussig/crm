@@ -138,8 +138,20 @@ export async function createFollowUpInvoiceFromInvoice(
     taxNote: tpl?.defaultTaxNote ?? d.taxNote,
     agbText: tpl?.defaultAgbText ?? d.agbText,
     agbLink: tpl?.defaultAgbLink ?? src.invoice.agbLink,
-    depositPercent: targetType === 'Angebot' ? (tpl?.defaultDepositPercent ?? d.depositPercent) : undefined,
-    depositText: targetType === 'Angebot' ? (tpl?.defaultDepositText ?? d.depositText) : undefined,
+    depositEnabled:
+      targetType !== 'Rechnung'
+        ? Boolean(src.invoice.depositEnabled)
+        : undefined,
+    depositPercent:
+      targetType !== 'Rechnung'
+        ? (typeof src.invoice.depositPercent === 'number'
+            ? src.invoice.depositPercent
+            : (tpl?.defaultDepositPercent ?? d.depositPercent))
+        : undefined,
+    depositText:
+      targetType !== 'Rechnung'
+        ? (src.invoice.depositText ?? tpl?.defaultDepositText ?? d.depositText)
+        : undefined,
     depositReceivedEnabled: targetType === 'Rechnung' ? Boolean(src.invoice.depositReceivedEnabled) : undefined,
     depositReceivedAmount: targetType === 'Rechnung' ? (src.invoice.depositReceivedAmount ?? undefined) : undefined,
     reissuedFromInvoiceId: undefined,
@@ -157,7 +169,11 @@ export async function createFollowUpInvoiceFromInvoice(
 
   await addInvoice(next, nextItems);
   // Best-effort: store backlink on source invoice (for navigation/audit).
-  await updateInvoice(sourceInvoiceId, { replacesInvoiceId: newId });
+  const sourceUpdates: Partial<Invoice> =
+    src.invoice.invoiceType === 'Auftrag' && targetType === 'Rechnung'
+      ? { replacesInvoiceId: newId, state: 'archiviert' }
+      : { replacesInvoiceId: newId };
+  await updateInvoice(sourceInvoiceId, sourceUpdates);
   return newId;
 }
 
@@ -264,6 +280,7 @@ export async function createInvoiceFromRental(
     agbLink: tpl?.defaultAgbLink,
     depositPercent: tpl?.defaultDepositPercent,
     depositText: tpl?.defaultDepositText,
+    depositEnabled: invoiceType !== 'Rechnung' ? false : undefined,
     createdAt: now,
     updatedAt: now,
   };
@@ -313,6 +330,7 @@ export async function saveInvoice(invoice: Partial<Invoice>, items: InvoiceItem[
       agbLink: invoice.agbLink ?? tpl?.defaultAgbLink,
       depositPercent: invoice.depositPercent ?? tpl?.defaultDepositPercent,
       depositText: invoice.depositText ?? tpl?.defaultDepositText,
+      depositEnabled: (invoice.invoiceType || 'Angebot') !== 'Rechnung' ? (invoice.depositEnabled ?? false) : undefined,
       createdAt: now,
       updatedAt: now,
     };
