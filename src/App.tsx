@@ -23,6 +23,7 @@ import { checkAvailabilityWithClientId } from './services/googleCalendarService'
 import { calculateWebsitePrice } from './services/pricingService';
 import CalendarPanel from './components/CalendarPanel';
 import Vermietungszubehoer from './components/Vermietungszubehoer';
+import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
 
 type View =
   | 'dashboard'
@@ -190,6 +191,10 @@ export default function App() {
       console.warn('Dashboard-Daten konnten nicht geladen werden:', e);
     }
   }
+
+  useEffect(() => {
+    void runDesktopAutoUpdate();
+  }, []);
 
   useEffect(() => {
     loadCustomers();

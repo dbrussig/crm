@@ -35,3 +35,22 @@ Dieses Repository ist das neue Desktop-Projekt. Die bestehende Web-App bleibt se
 2. Tauri IPC und SQLite-Grundschicht fertig verdrahten
 3. OAuth- und Google-Services implementieren
 4. Backup-System aufbauen
+
+## Auto-Update (GitLab + .app)
+
+Das Projekt ist fuer automatische Desktop-Updates vorbereitet:
+
+- Tauri Updater Plugin ist eingebunden (Rust + Frontend).
+- Beim App-Start wird im Desktop-Build regelmaessig auf Updates geprueft.
+- GitLab CI (`.gitlab-ci.yml`) baut auf `main` und publiziert `latest.json` + `.app.tar.gz` + `.sig` in GitLab Generic Packages.
+
+Pflicht-Variablen in GitLab CI/CD:
+
+- `TAURI_UPDATER_PUBLIC_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY`
+- optional: `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+Hinweis:
+
+- Fuer echte In-App-Updates muss der Update-Endpunkt fuer Clients erreichbar sein.
+- Bei privaten GitLab-Projekten ist ein zusaetzliches Konzept fuer authentifizierten Download noetig.

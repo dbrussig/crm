@@ -30,5 +30,15 @@
     "macOS": {
       "signingIdentity": null
     }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://gitlab.com/api/v4/projects/Serverraum247%2Fmietpark-crm-desktop/packages/generic/mietpark-crm-desktop/latest/latest.json"
+      ],
+      "dialog": false,
+      "pubkey": "CHANGE_ME_TAURI_UPDATER_PUBLIC_KEY"
+    }
   }
 }
