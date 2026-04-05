@@ -72,3 +72,4 @@ Ab sofort gilt verbindlich:
 - PDF-Ablage verwendet echte `application/pdf` Dateien (nicht mehr HTML) mit Standardname:
   - `{Belegtyp}_{Belegnummer}_{YYYY-MM-DD}.pdf`
 - Duplikat-Schutz aktiv: identische PDFs (SHA-256) werden pro Kunde nur einmal gespeichert.
+- PDF-Inhalt wird layoutnah aus derselben Beleg-HTML gerendert (mehrseitig), damit Vorschau und gespeicherte Datei visuell uebereinstimmen.

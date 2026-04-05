@@ -633,68 +633,100 @@ async function hashBlobSha256(blob: Blob): Promise<string> {
     .join('');
 }
 
-async function buildInvoicePdfBlob(invoice: Invoice, items: InvoiceItem[]): Promise<Blob> {
-  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
-  const totals = calcTotals(items);
-  const pdf = await PDFDocument.create();
-  const page = pdf.addPage([595.28, 841.89]); // A4
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const black = rgb(0.11, 0.14, 0.18);
-  const gray = rgb(0.39, 0.43, 0.48);
-
-  let y = 800;
-  page.drawText(`${invoice.invoiceType} ${invoice.invoiceNo}`, { x: 40, y, size: 18, font: fontBold, color: black });
-  y -= 26;
-  page.drawText(`Datum: ${fmtDateDE(invoice.invoiceDate)}   Kunde: ${invoice.buyerName || '-'}`, { x: 40, y, size: 10, font, color: gray });
-  y -= 16;
-  page.drawText(invoice.buyerAddress || '-', { x: 40, y, size: 10, font, color: gray, maxWidth: 510, lineHeight: 12 });
-  y -= 40;
-
-  page.drawText('Positionen', { x: 40, y, size: 11, font: fontBold, color: black });
-  y -= 16;
-  page.drawText('Beschreibung', { x: 40, y, size: 9, font: fontBold, color: gray });
-  page.drawText('Menge', { x: 380, y, size: 9, font: fontBold, color: gray });
-  page.drawText('EP', { x: 440, y, size: 9, font: fontBold, color: gray });
-  page.drawText('Betrag', { x: 500, y, size: 9, font: fontBold, color: gray });
-  y -= 12;
-
-  for (const it of items) {
-    if (y < 90) break;
-    const qty = Number(it.quantity) || 0;
-    const up = Number(it.unitPrice) || 0;
-    const amount = qty * up;
-    page.drawText((it.name || '-').replace(/\n/g, ' '), { x: 40, y, size: 9, font, color: black, maxWidth: 320 });
-    page.drawText(String(qty.toLocaleString('de-DE')), { x: 380, y, size: 9, font, color: black });
-    page.drawText(euro(up), { x: 440, y, size: 9, font, color: black });
-    page.drawText(euro(amount), { x: 500, y, size: 9, font, color: black });
-    y -= 14;
-  }
-
-  let depositAmount = 0;
-  if (Boolean(invoice.depositEnabled) && (invoice.invoiceType === 'Angebot' || invoice.invoiceType === 'Auftrag')) {
-    const percent = Number(invoice.depositPercent) || 0;
-    const text = String(invoice.depositText || '').trim();
-    if (percent > 0 && text) {
-      depositAmount = Math.round((totals.total * (percent / 100)) * 100) / 100;
-      page.drawText(`Anzahlung (${percent}%): ${text}`, { x: 40, y: y - 8, size: 9, font, color: black, maxWidth: 420 });
-      page.drawText(euro(depositAmount), { x: 500, y: y - 8, size: 9, font: fontBold, color: black });
-      y -= 24;
-    }
-  }
-
-  const grand = Math.round((totals.total + depositAmount) * 100) / 100;
-  page.drawText(`Gesamtbetrag: ${euro(grand)}`, { x: 380, y: Math.max(60, y - 10), size: 12, font: fontBold, color: black });
-
-  const bytes = await pdf.save();
-  return new Blob([bytes], { type: 'application/pdf' });
+async function buildFallbackPdfBlob(invoice: Invoice): Promise<Blob> {
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4', compress: true });
+  pdf.setFontSize(16);
+  pdf.text(`${invoice.invoiceType} ${invoice.invoiceNo}`, 40, 50);
+  pdf.setFontSize(10);
+  pdf.text(`Datum: ${fmtDateDE(invoice.invoiceDate)}`, 40, 72);
+  pdf.text(`Kunde: ${invoice.buyerName || '-'}`, 40, 88);
+  return pdf.output('blob');
 }
 
-async function persistGeneratedInvoiceDocument(invoice: Invoice, items: InvoiceItem[]): Promise<void> {
+async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Promise<Blob> {
+  if (typeof document === 'undefined') return buildFallbackPdfBlob(invoice);
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
+
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-10000px';
+  iframe.style.top = '0';
+  iframe.style.width = '1200px';
+  iframe.style.height = '2200px';
+  iframe.style.opacity = '0';
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.srcdoc = html;
+  document.body.appendChild(iframe);
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const done = () => resolve();
+      const fail = () => reject(new Error('HTML iframe could not be loaded for PDF rendering'));
+      iframe.addEventListener('load', done, { once: true });
+      iframe.addEventListener('error', fail, { once: true });
+      setTimeout(() => resolve(), 800);
+    });
+
+    const doc = iframe.contentDocument;
+    if (!doc) throw new Error('No iframe document for PDF rendering');
+
+    if (doc.fonts?.ready) {
+      try {
+        await doc.fonts.ready;
+      } catch {
+        // ignore font loading failures
+      }
+    }
+
+    doc.querySelectorAll('.no-print').forEach((el) => el.remove());
+    const target = (doc.querySelector('.page') as HTMLElement | null) || doc.body;
+    const canvas = await html2canvas(target, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      windowWidth: Math.max(target.scrollWidth, 1200),
+      windowHeight: Math.max(target.scrollHeight, 1800),
+    });
+
+    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4', compress: true });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const sourceWidth = canvas.width;
+    const sourceHeight = canvas.height;
+    const pageHeightInSourcePx = Math.max(1, Math.floor((pageHeight * sourceWidth) / pageWidth));
+
+    let offset = 0;
+    let page = 0;
+    while (offset < sourceHeight) {
+      const sliceHeight = Math.min(pageHeightInSourcePx, sourceHeight - offset);
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = sourceWidth;
+      pageCanvas.height = sliceHeight;
+      const ctx = pageCanvas.getContext('2d');
+      if (!ctx) throw new Error('2D context unavailable for PDF page rendering');
+      ctx.drawImage(canvas, 0, offset, sourceWidth, sliceHeight, 0, 0, sourceWidth, sliceHeight);
+
+      const image = pageCanvas.toDataURL('image/png');
+      const renderedHeight = (sliceHeight * pageWidth) / sourceWidth;
+      if (page > 0) pdf.addPage();
+      pdf.addImage(image, 'PNG', 0, 0, pageWidth, renderedHeight, undefined, 'FAST');
+
+      offset += sliceHeight;
+      page += 1;
+    }
+
+    return pdf.output('blob');
+  } finally {
+    iframe.remove();
+  }
+}
+
+async function persistGeneratedInvoiceDocument(invoice: Invoice, html: string): Promise<void> {
   const customerId = String(invoice.companyId || '').trim();
   if (!customerId) return;
 
-  const blob = await buildInvoicePdfBlob(invoice, items);
+  const blob = await buildInvoicePdfBlobFromHtml(invoice, html);
   const contentHash = await hashBlobSha256(blob);
   const existing = await getDocumentsByCustomer(customerId);
   const duplicate = existing.find((doc) => doc.mimeType === 'application/pdf' && doc.contentHash === contentHash);
@@ -777,7 +809,7 @@ export async function saveInvoicePdfViaPrintDialog(invoice: Invoice, items?: Inv
   const html = await renderInvoiceHtml({ invoice, items: its, template: tpl, autoPrint: true });
   // Persist generated PDF in customer documents (with dedupe via content hash).
   try {
-    await persistGeneratedInvoiceDocument(invoice, its);
+    await persistGeneratedInvoiceDocument(invoice, html);
   } catch (error) {
     console.warn('Generated document could not be persisted:', error);
   }
