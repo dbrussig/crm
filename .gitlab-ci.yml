@@ -5,11 +5,12 @@ stages:
 verify_docs_sync:
   stage: verify
   image: node:20
+  variables:
+    GIT_DEPTH: "0"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'
   before_script:
-    - apt-get update >/dev/null && apt-get install -y --no-install-recommends git bash >/dev/null
     - git fetch origin "${CI_DEFAULT_BRANCH:-main}" >/dev/null 2>&1 || true
   script:
     - bash scripts/ci/check-doc-sync.sh
@@ -20,23 +21,20 @@ release_latest_macos:
     - macos
     - tauri
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main" && $TAURI_UPDATER_PUBLIC_KEY && $TAURI_SIGNING_PRIVATE_KEY'
+    - when: never
   before_script:
     - npm ci
   script:
-    - ': "${TAURI_UPDATER_PUBLIC_KEY:?Missing CI var TAURI_UPDATER_PUBLIC_KEY}"'
-    - ': "${TAURI_SIGNING_PRIVATE_KEY:?Missing CI var TAURI_SIGNING_PRIVATE_KEY}"'
-    - |
-      python3 - <<'PY'
-      import json
-      import os
-      from pathlib import Path
-      cfg_path = Path("src-tauri/tauri.conf.json")
-      cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-      cfg.setdefault("plugins", {}).setdefault("updater", {})["pubkey"] = os.environ["TAURI_UPDATER_PUBLIC_KEY"]
-      cfg_path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
-      print("Updated tauri.conf.json updater pubkey from CI variable.")
-      PY
+    - >
+      node -e "const fs=require('fs');
+      const p='src-tauri/tauri.conf.json';
+      const c=JSON.parse(fs.readFileSync(p,'utf8'));
+      c.plugins=c.plugins||{};
+      c.plugins.updater=c.plugins.updater||{};
+      c.plugins.updater.pubkey=process.env.TAURI_UPDATER_PUBLIC_KEY;
+      fs.writeFileSync(p, JSON.stringify(c,null,2)+'\n');
+      console.log('Updated tauri.conf.json updater pubkey from CI variable.');"
     - npm run tauri:build
     - VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
     - BUNDLE_DIR="src-tauri/target/release/bundle/macos"
