@@ -69,3 +69,6 @@ Ab sofort gilt verbindlich:
 - Anzahlung ist optional und kann in Angebot **und** Auftrag im Editor aktiv/deaktiviert werden.
 - Bei `Auftrag -> Rechnung` wird der bestehende Auftrag automatisch auf Status `archiviert` gesetzt (Belegnummer bleibt unveraendert).
 - Beim Klick auf `PDF speichern` wird die generierte Druckvorlage automatisch als Kundendokument abgelegt (Kategorie nach Belegtyp).
+- PDF-Ablage verwendet echte `application/pdf` Dateien (nicht mehr HTML) mit Standardname:
+  - `{Belegtyp}_{Belegnummer}_{YYYY-MM-DD}.pdf`
+- Duplikat-Schutz aktiv: identische PDFs (SHA-256) werden pro Kunde nur einmal gespeichert.

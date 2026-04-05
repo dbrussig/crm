@@ -2,7 +2,7 @@ import type { CustomerDocument, Invoice, InvoiceItem, InvoiceTemplate } from '..
 import { getCompanyProfile } from '../config/companyProfile';
 import { getInvoiceLayout } from '../config/invoiceLayouts';
 import { fetchInvoiceTemplate } from './invoiceService';
-import { addCustomerDocumentBlob, getInvoiceItems } from './sqliteService';
+import { addCustomerDocumentBlob, getDocumentsByCustomer, getInvoiceItems } from './sqliteService';
 import QRCode from 'qrcode';
 import { getActiveSubTotalInvoiceTypeProfile } from './subtotalInvoiceTypeProfileService';
 
@@ -611,21 +611,109 @@ async function resolveItems(invoice: Invoice, items?: InvoiceItem[] | null): Pro
   }
 }
 
-async function persistGeneratedInvoiceDocument(invoice: Invoice, html: string): Promise<void> {
+function slugifyFilePart(input: string): string {
+  return String(input || '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w.-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/-+/g, '-');
+}
+
+function toIsoDate(ms?: number): string {
+  const d = ms ? new Date(ms) : new Date();
+  return d.toISOString().slice(0, 10);
+}
+
+async function hashBlobSha256(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function buildInvoicePdfBlob(invoice: Invoice, items: InvoiceItem[]): Promise<Blob> {
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+  const totals = calcTotals(items);
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([595.28, 841.89]); // A4
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const black = rgb(0.11, 0.14, 0.18);
+  const gray = rgb(0.39, 0.43, 0.48);
+
+  let y = 800;
+  page.drawText(`${invoice.invoiceType} ${invoice.invoiceNo}`, { x: 40, y, size: 18, font: fontBold, color: black });
+  y -= 26;
+  page.drawText(`Datum: ${fmtDateDE(invoice.invoiceDate)}   Kunde: ${invoice.buyerName || '-'}`, { x: 40, y, size: 10, font, color: gray });
+  y -= 16;
+  page.drawText(invoice.buyerAddress || '-', { x: 40, y, size: 10, font, color: gray, maxWidth: 510, lineHeight: 12 });
+  y -= 40;
+
+  page.drawText('Positionen', { x: 40, y, size: 11, font: fontBold, color: black });
+  y -= 16;
+  page.drawText('Beschreibung', { x: 40, y, size: 9, font: fontBold, color: gray });
+  page.drawText('Menge', { x: 380, y, size: 9, font: fontBold, color: gray });
+  page.drawText('EP', { x: 440, y, size: 9, font: fontBold, color: gray });
+  page.drawText('Betrag', { x: 500, y, size: 9, font: fontBold, color: gray });
+  y -= 12;
+
+  for (const it of items) {
+    if (y < 90) break;
+    const qty = Number(it.quantity) || 0;
+    const up = Number(it.unitPrice) || 0;
+    const amount = qty * up;
+    page.drawText((it.name || '-').replace(/\n/g, ' '), { x: 40, y, size: 9, font, color: black, maxWidth: 320 });
+    page.drawText(String(qty.toLocaleString('de-DE')), { x: 380, y, size: 9, font, color: black });
+    page.drawText(euro(up), { x: 440, y, size: 9, font, color: black });
+    page.drawText(euro(amount), { x: 500, y, size: 9, font, color: black });
+    y -= 14;
+  }
+
+  let depositAmount = 0;
+  if (Boolean(invoice.depositEnabled) && (invoice.invoiceType === 'Angebot' || invoice.invoiceType === 'Auftrag')) {
+    const percent = Number(invoice.depositPercent) || 0;
+    const text = String(invoice.depositText || '').trim();
+    if (percent > 0 && text) {
+      depositAmount = Math.round((totals.total * (percent / 100)) * 100) / 100;
+      page.drawText(`Anzahlung (${percent}%): ${text}`, { x: 40, y: y - 8, size: 9, font, color: black, maxWidth: 420 });
+      page.drawText(euro(depositAmount), { x: 500, y: y - 8, size: 9, font: fontBold, color: black });
+      y -= 24;
+    }
+  }
+
+  const grand = Math.round((totals.total + depositAmount) * 100) / 100;
+  page.drawText(`Gesamtbetrag: ${euro(grand)}`, { x: 380, y: Math.max(60, y - 10), size: 12, font: fontBold, color: black });
+
+  const bytes = await pdf.save();
+  return new Blob([bytes], { type: 'application/pdf' });
+}
+
+async function persistGeneratedInvoiceDocument(invoice: Invoice, items: InvoiceItem[]): Promise<void> {
   const customerId = String(invoice.companyId || '').trim();
   if (!customerId) return;
 
+  const blob = await buildInvoicePdfBlob(invoice, items);
+  const contentHash = await hashBlobSha256(blob);
+  const existing = await getDocumentsByCustomer(customerId);
+  const duplicate = existing.find((doc) => doc.mimeType === 'application/pdf' && doc.contentHash === contentHash);
+  if (duplicate) return;
+
   const now = Date.now();
-  const timestamp = new Date(now).toISOString().replace(/[:.]/g, '-');
-  const filename = `${invoice.invoiceNo || 'beleg'}_${timestamp}.html`;
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const typePart = slugifyFilePart(invoice.invoiceType || 'Beleg');
+  const noPart = slugifyFilePart(invoice.invoiceNo || 'ohne-nummer');
+  const datePart = toIsoDate(invoice.invoiceDate || now);
+  const filename = `${typePart}_${noPart}_${datePart}.pdf`;
   const doc: CustomerDocument = {
     id: `doc_invoice_${now}_${Math.random().toString(16).slice(2)}`,
     customerId,
     filename,
-    mimeType: 'text/html',
+    mimeType: 'application/pdf',
     sizeBytes: blob.size,
     category: invoice.invoiceType,
+    contentHash,
+    sourceRef: invoice.invoiceNo,
     source: 'manual',
     createdAt: now,
   };
@@ -687,9 +775,9 @@ export async function saveInvoicePdfViaPrintDialog(invoice: Invoice, items?: Inv
   const tpl = await resolveTemplate(invoice, template);
   const its = await resolveItems(invoice, items);
   const html = await renderInvoiceHtml({ invoice, items: its, template: tpl, autoPrint: true });
-  // Persist generated print source in customer documents for audit/history.
+  // Persist generated PDF in customer documents (with dedupe via content hash).
   try {
-    await persistGeneratedInvoiceDocument(invoice, html);
+    await persistGeneratedInvoiceDocument(invoice, its);
   } catch (error) {
     console.warn('Generated document could not be persisted:', error);
   }

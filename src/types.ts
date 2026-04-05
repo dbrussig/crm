@@ -115,6 +115,8 @@ export interface CustomerDocument {
   mimeType: string;
   sizeBytes?: number;
   category?: DocumentCategory;
+  contentHash?: string;
+  sourceRef?: string;
   // Provenance
   source: 'gmail' | 'manual';
   gmailThreadId?: string;
