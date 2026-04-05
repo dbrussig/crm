@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { AccessoryCategory, RentalAccessory, RelingType, RentalRequest } from '../types';
 import { createAccessory, fetchAllAccessories, modifyAccessory, removeAccessory } from '../services/accessoryService';
 import { getAllRentalRequests, updateRentalRequest } from '../services/sqliteService';
+import { formatDisplayRef } from '../utils/displayId';
 
 const CATEGORY_OPTIONS: AccessoryCategory[] = ['Bundle', 'Dachträger', 'Fußsatz', 'Querträger', 'Kit', 'Sonstiges'];
 const RELING_OPTIONS: RelingType[] = ['offen', 'geschlossen', 'keine', 'unklar'];
@@ -416,7 +417,7 @@ export default function Vermietungszubehoer() {
                       {linkedRentals.map((r) => (
                         <div key={r.id} className="flex items-center justify-between text-xs text-slate-700 mb-1">
                           <span>
-                            {r.id} · {r.productType} · {formatDate(r.rentalStart)} - {formatDate(r.rentalEnd)}
+                            {formatDisplayRef(r.id)} · {r.productType} · {formatDate(r.rentalStart)} - {formatDate(r.rentalEnd)}
                           </span>
                           <button
                             type="button"
@@ -442,7 +443,7 @@ export default function Vermietungszubehoer() {
                       <option value="">Vorgang wählen für Verknüpfung...</option>
                       {openRentals.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.id} · {r.productType} · {formatDate(r.rentalStart)} - {formatDate(r.rentalEnd)}
+                          {formatDisplayRef(r.id)} · {r.productType} · {formatDate(r.rentalStart)} - {formatDate(r.rentalEnd)}
                         </option>
                       ))}
                     </select>
@@ -607,4 +608,3 @@ export default function Vermietungszubehoer() {
     </div>
   );
 }
-

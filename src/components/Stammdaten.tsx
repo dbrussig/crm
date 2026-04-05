@@ -337,7 +337,7 @@ export const Stammdaten: React.FC = () => {
         <div className="mt-3 flex items-center gap-2">
           <input
             className="flex-1 px-3 py-2 rounded-md border border-slate-200 text-sm"
-            placeholder="Suchen (Name, Typ, Kalender-ID)…"
+            placeholder="Suchen (Name, Typ, Kalender-Referenz)…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Vermietungsgegenstände suchen"
@@ -404,7 +404,7 @@ export const Stammdaten: React.FC = () => {
                           </span>
                         )}
                         {r.googleCalendarId?.trim() ? (
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-slate-600" title="Kalender-ID gesetzt">
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-slate-600" title="Kalender-Referenz gesetzt">
                             📅
                           </span>
                         ) : null}
@@ -572,7 +572,7 @@ export const Stammdaten: React.FC = () => {
                 <summary className="cursor-pointer text-sm text-slate-700 select-none">Erweitert</summary>
                 <div className="mt-3">
                   <label className="text-sm block">
-                    <div className="text-xs font-medium text-slate-700 mb-1">Google Calendar ID (optional)</div>
+                    <div className="text-xs font-medium text-slate-700 mb-1">Kalender-Referenz (optional)</div>
                     <input
                       className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm font-mono"
                       value={form.googleCalendarId}

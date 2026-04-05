@@ -5,6 +5,7 @@ import { detectDachboxRejectionReason, extractCustomerInfo, extractRentalInfo, g
 import { deleteKey, loadJson, saveJson } from '../services/_storage';
 import { addPayment, getAllRentalRequests } from '../services/sqliteService';
 import { generateConciergeReply, isAIAvailable } from '../services/aiService';
+import { formatDisplayRef } from '../utils/displayId';
 
 const CACHE_KEY = 'mietpark_crm_inbox_cache_v1';
 const CACHE_VERSION = 1 as const;
@@ -1476,7 +1477,7 @@ export default function Inbox(props: {
 	            )}
 	            {!paymentFeedback && paymentSuggestedRentalId && (
 	              <div className="text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg p-3">
-	                Vorschlag: Vorgang <span className="font-mono">{paymentSuggestedRentalId}</span> wurde vorausgewählt (1:1 Match über Zahler-Name).
+	                Vorschlag: Vorgang <span>{formatDisplayRef(paymentSuggestedRentalId)}</span> wurde vorausgewählt (1:1 Match über Zahler-Name).
 	              </div>
 	            )}
 
@@ -1583,7 +1584,7 @@ export default function Inbox(props: {
 	              <div className="mt-2 flex items-center gap-2">
 	                <input
 	                  className="flex-1 px-3 py-2 rounded-md border border-slate-200 text-sm"
-	                  placeholder="Suchen (Kunde, Produkt, Zeitraum, ID)…"
+	                  placeholder="Suchen (Kunde, Produkt, Zeitraum, Referenz)…"
 	                  value={paymentSearch}
 	                  onChange={(e) => setPaymentSearch(e.target.value)}
 	                  disabled={paymentBusy}
@@ -1624,7 +1625,7 @@ export default function Inbox(props: {
 	                    const period = `${new Date(r.rentalStart).toLocaleDateString('de-DE')}–${new Date(r.rentalEnd).toLocaleDateString('de-DE')}`;
 	                    return (
 	                      <option key={r.id} value={r.id}>
-	                        {r.id} | {custName} | {r.productType} | {period} | {r.status}
+	                        {formatDisplayRef(r.id)} | {custName} | {r.productType} | {period} | {r.status}
 	                      </option>
 	                    );
 	                  })}
@@ -1687,7 +1688,7 @@ export default function Inbox(props: {
 	                      providerTransactionId: paymentProviderTx?.trim() || undefined,
 	                      createdAt: Date.now(),
 	                    });
-	                    setPaymentFeedback(`Zahlung gespeichert und Vorgang ${paymentRentalId} zugeordnet.`);
+	                    setPaymentFeedback(`Zahlung gespeichert und Vorgang ${formatDisplayRef(paymentRentalId)} zugeordnet.`);
                       markPaymentReviewed(selectedThreadId, true);
                       setSendChecklist((prev) => ({
                         ...prev,
@@ -1866,7 +1867,7 @@ export default function Inbox(props: {
               <div>
                 Vorgang: <strong>{importSummary.rentalAction === 'created' ? 'neu angelegt' : 'vorhanden aktualisiert/zugeordnet'}</strong>
                 {importSummary.rentalId ? (
-                  <span className="ml-2 text-xs text-slate-500">(ID: {importSummary.rentalId})</span>
+                  <span className="ml-2 text-xs text-slate-500">(Ref: {formatDisplayRef(importSummary.rentalId)})</span>
                 ) : null}
               </div>
               {importSummary.usedFallbackDates ? (

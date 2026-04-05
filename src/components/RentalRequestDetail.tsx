@@ -28,6 +28,7 @@ import { getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer } f
 import { findActiveResourcesForType } from '../services/resourceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
+import { formatDisplayRef } from '../utils/displayId';
 
 interface RentalRequestDetailProps {
   rentalId: string;
@@ -416,7 +417,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
           .filter((id) => Boolean(String(id || '').trim()));
 
         if (candidates.length === 0) {
-          alert('Kein Kalender für dieses Produkt konfiguriert. Bitte im Menü "Kalender" eine Kalender-ID zur Ressource zuordnen.');
+          alert('Kein Kalender für dieses Produkt konfiguriert. Bitte im Menü "Kalender" eine Kalender-Referenz zur Ressource zuordnen.');
           return;
         }
 
@@ -436,7 +437,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       }
 
       if (!calendarId) {
-        alert('Google Calendar ID ist nicht gesetzt. Bitte im Menue "Kalender" eine Kalender-ID zur Ressource zuordnen.');
+        alert('Kalender-Referenz ist nicht gesetzt. Bitte im Menü "Kalender" eine Kalender-Referenz zur Ressource zuordnen.');
         return;
       }
 
@@ -923,7 +924,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
               <h2 className="text-xl font-semibold text-gray-900">{headerTitle}</h2>
               <p className="text-sm text-gray-500 mt-1">{headerSubtitle}</p>
               <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
-                <span title="Interne Vorgangs-ID">ID: {rental.id}</span>
+                <span title="Interne Vorgangs-ID">Referenz: {formatDisplayRef(rental.id)}</span>
                 <button
                   type="button"
                   className="underline hover:text-gray-600"

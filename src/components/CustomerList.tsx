@@ -21,6 +21,7 @@ import {
 } from '../services/backupService';
 import CustomerForm from './CustomerForm';
 import { openGenericCompose } from '../services/invoiceEmailService';
+import { formatDisplayRef } from '../utils/displayId';
 
 interface CustomerListProps {
   customers: Customer[];
@@ -371,7 +372,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
     if (customer.googleContactResourceId) {
       alert(
         `Dieser Kunde wurde bereits zu Google Kontakten hinzugefügt.\n\n` +
-        `Google Resource ID: ${customer.googleContactResourceId}\n\n` +
+        `Google-Kontakt-Ref: ${formatDisplayRef(customer.googleContactResourceId, 'GCT')}\n\n` +
         `Wenn Sie den Kontakt aktualisieren möchten, öffnen Sie ihn bitte direkt in Google Kontakten.`
       );
       return;
@@ -389,7 +390,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
         alert(
           `✅ Erfolg!\n\n` +
           `Der Kunde "${customer.firstName} ${customer.lastName}" wurde erfolgreich zu Google Kontakten hinzugefügt.\n\n` +
-          `Resource ID: ${result.resourceName}`
+          `Kontakt-Ref: ${formatDisplayRef(result.resourceName, 'GCT')}`
         );
       } else {
         alert(

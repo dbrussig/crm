@@ -24,6 +24,7 @@ import { calculateWebsitePrice } from './services/pricingService';
 import CalendarPanel from './components/CalendarPanel';
 import Vermietungszubehoer from './components/Vermietungszubehoer';
 import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
+import { formatDisplayRef } from './utils/displayId';
 
 type View =
   | 'dashboard'
@@ -509,7 +510,7 @@ export default function App() {
                         <div className="text-xs text-slate-600 mt-0.5">
                           {new Date(r.rentalStart).toLocaleDateString('de-DE')} bis {new Date(r.rentalEnd).toLocaleDateString('de-DE')} · {r.status}
                         </div>
-                        <div className="text-[11px] font-mono text-slate-500 mt-1">{r.id}</div>
+                        <div className="text-[11px] text-slate-500 mt-1">{formatDisplayRef(r.id)}</div>
                       </button>
                     ))
                   )}

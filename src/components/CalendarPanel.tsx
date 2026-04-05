@@ -165,7 +165,7 @@ export default function CalendarPanel(props: { clientId: string; enabled: boolea
               </button>
             ))}
             {resources.filter((r) => r.isActive && r.googleCalendarId).length === 0 && (
-              <div className="text-sm text-slate-600">Keine Ressourcen mit Kalender-ID konfiguriert (siehe Vermietungsgegenstände).</div>
+              <div className="text-sm text-slate-600">Keine Ressourcen mit Kalender-Referenz konfiguriert (siehe Vermietungsgegenstände).</div>
             )}
           </div>
         </div>

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Customer } from '../types';
+import { formatDisplayRef } from '../utils/displayId';
 
 interface CustomerFormProps {
   customer?: Customer;
@@ -100,7 +101,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
         c => c.firstName.toLowerCase() === trimmedFirst && c.lastName.toLowerCase() === trimmedLast && c.id !== customer?.id
       );
       if (duplicate) {
-        newErrors.lastName = `Ein Kunde mit diesem Namen existiert bereits (ID: ${duplicate.id})`;
+        newErrors.lastName = `Ein Kunde mit diesem Namen existiert bereits (Ref: ${formatDisplayRef(duplicate.id, 'KND')})`;
       }
     }
 
