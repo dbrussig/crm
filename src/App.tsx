@@ -593,7 +593,7 @@ export default function App() {
                           {row.invoice.invoiceNo} · {row.invoice.buyerName}
                         </div>
                         <div className="text-xs text-rose-800 mt-0.5">
-                          Fällig: {row.invoice.dueDate ? new Date(row.invoice.dueDate).toLocaleDateString('de-DE') : '-'} · Offen: {formatCurrency(row.offenBetrag)}
+                          Fällig: {row.invoice.dueDate ? new Date(row.invoice.dueDate).toLocaleDateString('de-DE') : '-'} · {row.daysOverdue} Tag(e) überfällig · Offen: {formatCurrency(row.offenBetrag)}
                         </div>
                       </button>
                     ))

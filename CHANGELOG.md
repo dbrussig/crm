@@ -18,6 +18,7 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Folgebeleg-Logik angepasst: Bei `Auftrag -> Rechnung` wird der Ausgangsauftrag archiviert, die Auftragsnummer bleibt unveraendert.
 - Build-Chunks fuer Desktop gezielt aufgeteilt (`Inbox`, `Belege-Workflow`, `PDF-Service`, Vendor-Segmente), um den Main-Chunk deutlich zu verkleinern.
 - Dashboard-Datenfluss erweitert: `loadDashboardData()` lädt zusätzlich Finanzkennzahlen über `getDashboardFinancials()`.
+- Überfällige Rechnungen im Dashboard zeigen jetzt zusätzlich die Anzahl Tage überfällig (`daysOverdue`) pro Eintrag.
 
 ### Fixed
 - Repository-Hygiene verbessert: lokale DB- und nicht-projektbezogene Artefakte bleiben ausserhalb von GitLab.
@@ -33,3 +34,4 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - `RentalRequestDetail`: `Angebot überarbeiten` auch im Status `angebot_gesendet`; Preisfreigabe basiert auf echter Rechnungs-Existenz statt Statusannahme.
 - Seed-Daten bereinigt: veraltete localStorage-Belegzaehler entfernt.
 - Mail-Bridge-Fallback verbessert: wenn Attachment-Payload nicht unterstuetzt wird, erfolgt automatischer Retry ohne Anhaenge mit klarer Meldung.
+- Finanz-Dashboard regressionssicher gemacht: neue Unit-Tests für Bruttopreis, Zahlungsabzug, Monatsumsatz, Overdue-Filter und `daysOverdue`-Berechnung.

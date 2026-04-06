@@ -6,6 +6,7 @@ export type UeberfaelligeRechnung = {
   invoice: Invoice;
   offenBetrag: number;
   gesamtBetrag: number;
+  daysOverdue: number;
 };
 
 export type DashboardFinancials = {
@@ -53,10 +54,12 @@ export async function getDashboardFinancials(): Promise<DashboardFinancials> {
 
     const dueDate = Number(inv.dueDate || 0);
     if (dueDate > 0 && dueDate < todayDayStart && open > 0) {
+      const daysOverdue = Math.max(1, Math.floor((todayDayStart - dueDate) / 86_400_000));
       ueberfaelligeRechnungen.push({
         invoice: inv,
         offenBetrag: open,
         gesamtBetrag: gross,
+        daysOverdue,
       });
     }
   }

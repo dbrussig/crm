@@ -99,8 +99,10 @@ Ab sofort gilt verbindlich:
   - `Monatsumsatz €` (Zahlungseingaenge im laufenden Monat)
 - Neue Liste `Überfällige Rechnungen`:
   - Kriterien: `dueDate < heute` und `offener Betrag > 0`
+  - Zeigt zusätzlich `X Tag(e) überfällig` je Rechnung
   - Klick oeffnet den zugehoerigen Beleg direkt im Editor
   - Leerzustand: `Keine überfälligen Rechnungen ✓`
 - Technischer Einstiegspunkt:
   - `src/services/dashboardService.ts` (`getDashboardFinancials()`)
+  - Unit-Tests in `src/services/dashboardService.test.ts` (Brutto, Payments, Monatsumsatz, Overdue inkl. `daysOverdue`)
   - Verwendung in `loadDashboardData()` in `src/App.tsx`
