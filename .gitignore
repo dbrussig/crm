@@ -15,4 +15,4 @@ mietpark.db-wal
 .tmp/
 node_modules_bak/
 
-.local_archive/
+.claude/
