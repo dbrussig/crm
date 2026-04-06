@@ -13,6 +13,7 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Finanz-Dashboard (Option A): KPIs `Offene Forderungen €` und `Monatsumsatz €` sowie Liste `Überfällige Rechnungen` mit Direkt-Öffnen des Belegs.
 - iCloud-Backup-Provider im Tauri-Backend inkl. Commands `create_icloud_backup` und `list_icloud_backups`.
 - macOS Entitlements-Datei für iCloud-Container (`src-tauri/Entitlements.plist`) und Einbindung in `tauri.conf.json`.
+- Backup-UI erweitert: in der Kunden-Backup-Verwaltung kann nun zusätzlich ein iCloud-Backup erstellt und die iCloud-Backupliste angezeigt/aktualisiert werden (Desktop).
 
 ### Changed
 - Projektregeln verschaerft: Feature-/Fix-PRs muessen `README.md` und `CHANGELOG.md` aktualisieren (CI-Guard).
@@ -41,3 +42,5 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Mail-Bridge-Fallback verbessert: wenn Attachment-Payload nicht unterstuetzt wird, erfolgt automatischer Retry ohne Anhaenge mit klarer Meldung.
 - Finanz-Dashboard regressionssicher gemacht: neue Unit-Tests für Bruttopreis, Zahlungsabzug, Monatsumsatz, Overdue-Filter und `daysOverdue`-Berechnung.
 - Backup-Snapshot/Restore nutzt jetzt die SQLite-Service-Schicht statt Legacy-IndexedDB-Keys.
+- Restore-Härtung: Dokument-Metadaten werden beim Restore wieder angelegt; Web-Fallback vermeidet doppelte Nachrichten anhand `id`.
+- CI-Release-Signing ist robust konfigurierbar: `APPLE_SIGNING_IDENTITY` wird bei gesetzter Variable automatisch in `tauri.conf.json` injiziert.

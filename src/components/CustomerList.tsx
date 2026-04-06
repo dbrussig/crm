@@ -19,6 +19,12 @@ import {
   formatBackupDate,
   BackupMetadata
 } from '../services/backupService';
+import {
+  createICloudBackup,
+  isICloudBackupSupported,
+  listICloudBackups,
+  type ICloudBackupInfo,
+} from '../services/icloudBackupService';
 import CustomerForm from './CustomerForm';
 import { openGenericCompose } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
@@ -54,6 +60,8 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const [showBackups, setShowBackups] = useState(false);
   const [isLoadingBackup, setIsLoadingBackup] = useState(false);
   const [bundleBusy, setBundleBusy] = useState(false);
+  const [iCloudBackups, setICloudBackups] = useState<ICloudBackupInfo[]>([]);
+  const [iCloudBusy, setICloudBusy] = useState(false);
   const bundleInputRef = React.useRef<HTMLInputElement | null>(null);
   const [emailHistoryCustomer, setEmailHistoryCustomer] = useState<Customer | null>(null);
   const [photoCustomer, setPhotoCustomer] = useState<Customer | null>(null);
@@ -83,6 +91,20 @@ const CustomerList: React.FC<CustomerListProps> = ({
     setBackups(allBackups);
   };
 
+  const loadICloudBackups = async () => {
+    if (!isICloudBackupSupported()) {
+      setICloudBackups([]);
+      return;
+    }
+    try {
+      const list = await listICloudBackups();
+      setICloudBackups(list);
+    } catch (error) {
+      console.error('Failed to load iCloud backups:', error);
+      setICloudBackups([]);
+    }
+  };
+
   // Load backups on mount
   useEffect(() => {
     void loadBackups();
@@ -92,6 +114,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
   useEffect(() => {
     if (showBackups) {
       void loadBackups();
+      void loadICloudBackups();
     }
   }, [showBackups]);
 
@@ -352,6 +375,23 @@ const CustomerList: React.FC<CustomerListProps> = ({
     }
   };
 
+  const handleCreateICloudBackup = async () => {
+    if (!isICloudBackupSupported()) {
+      alert('iCloud-Backups sind nur in der Desktop-App verfügbar.');
+      return;
+    }
+    setICloudBusy(true);
+    try {
+      const backupId = await createICloudBackup();
+      await loadICloudBackups();
+      alert(`✅ iCloud-Backup erstellt: ${backupId}`);
+    } catch (error) {
+      alert('❌ iCloud-Backup fehlgeschlagen: ' + ((error as Error).message || String(error)));
+    } finally {
+      setICloudBusy(false);
+    }
+  };
+
   // Sync customer to Google Contacts
   const handleSyncToGoogle = async (customer: Customer) => {
     // Check if Google OAuth is configured
@@ -578,6 +618,45 @@ const CustomerList: React.FC<CustomerListProps> = ({
               </span>
             )}
           </div>
+
+          {isICloudBackupSupported() && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleCreateICloudBackup}
+                  disabled={iCloudBusy}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors shadow-sm"
+                >
+                  {iCloudBusy ? 'Erstelle iCloud-Backup...' : 'iCloud-Backup erstellen'}
+                </button>
+                <button
+                  onClick={() => void loadICloudBackups()}
+                  disabled={iCloudBusy}
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-blue-300 bg-white hover:bg-blue-100 disabled:bg-slate-100 disabled:cursor-not-allowed text-blue-800 font-medium rounded-lg transition-colors shadow-sm"
+                >
+                  iCloud-Liste aktualisieren
+                </button>
+                <span className="text-xs text-blue-800">
+                  Dateien liegen im iCloud-Container unter <code>Documents/backups</code>.
+                </span>
+              </div>
+
+              <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
+                {iCloudBackups.length === 0 ? (
+                  <div className="text-sm text-blue-800">Noch keine iCloud-Backups gefunden.</div>
+                ) : (
+                  iCloudBackups.slice(0, 12).map((item) => (
+                    <div key={item.id} className="flex items-center justify-between rounded border border-blue-200 bg-white px-2 py-1.5 text-sm">
+                      <span className="font-medium text-blue-900">{item.id}</span>
+                      <span className="text-blue-700">
+                        {formatBackupDate(item.createdAt * 1000)} · {formatFileSize(item.sizeBytes)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Backup List */}
           {backups.length === 0 ? (

@@ -235,6 +235,18 @@ export async function updateCustomerDocumentMeta(docId: string, patch: Partial<C
   await saveCustomerDocs(docs);
 }
 
+export async function upsertCustomerDocumentMeta(doc: CustomerDocument): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_customer_document', { doc });
+    return;
+  }
+  const docs = await loadCustomerDocs();
+  const idx = docs.findIndex((item) => item.id === doc.id);
+  if (idx >= 0) docs[idx] = { ...docs[idx], ...doc };
+  else docs.push(doc);
+  await saveCustomerDocs(docs);
+}
+
 export async function deleteAllCustomerDocuments(): Promise<void> {
   if (isDesktopApp()) {
     await invokeDesktopCommand('delete_all_customer_documents');

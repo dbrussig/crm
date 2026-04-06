@@ -23,7 +23,9 @@ import {
   updateInvoice,
   updateRentalRequest,
   updateResource,
+  upsertCustomerDocumentMeta,
 } from './sqliteService';
+import { isDesktopApp } from '../platform/runtime';
 
 const KEY_BACKUPS = 'mietpark_crm_backups_v1';
 
@@ -67,6 +69,7 @@ async function snapshot(): Promise<BackupPayload> {
 }
 
 async function restore(payload: BackupPayload) {
+  const desktop = isDesktopApp();
   const [existingCustomers, existingRentals, existingMessages, existingResources, existingInvoices] =
     await Promise.all([
       getAllCustomers(),
@@ -90,12 +93,8 @@ async function restore(payload: BackupPayload) {
 
   const messageById = new Map(existingMessages.map((item) => [item.id, item]));
   for (const message of payload.messages || []) {
-    if (messageById.has(message.id)) {
-      // Desktop path performs upsert via command; web fallback skips duplicates.
-      await createMessage(message);
-    } else {
-      await createMessage(message);
-    }
+    if (!desktop && messageById.has(message.id)) continue;
+    await createMessage(message);
   }
 
   for (const payment of payload.payments || []) {
@@ -125,7 +124,10 @@ async function restore(payload: BackupPayload) {
     }
   }
 
-  // Customer document metadata is restored via per-document payload import in ZIP flow.
+  // Restore document metadata first. Payload bytes are imported separately in ZIP flow.
+  for (const doc of payload.customerDocs || []) {
+    await upsertCustomerDocumentMeta(doc);
+  }
 }
 
 export async function getAllBackups(): Promise<BackupMetadata[]> {

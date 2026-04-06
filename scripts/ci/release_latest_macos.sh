@@ -43,6 +43,14 @@ const c=JSON.parse(fs.readFileSync(p,'utf8'));
 c.plugins=c.plugins||{};
 c.plugins.updater=c.plugins.updater||{};
 c.plugins.updater.pubkey=process.env.TAURI_UPDATER_PUBLIC_KEY;
+if (process.env.APPLE_SIGNING_IDENTITY && String(process.env.APPLE_SIGNING_IDENTITY).trim()) {
+  c.bundle=c.bundle||{};
+  c.bundle.macOS=c.bundle.macOS||{};
+  c.bundle.macOS.signingIdentity=String(process.env.APPLE_SIGNING_IDENTITY).trim();
+  console.log('Updated tauri.conf.json macOS signingIdentity from CI variable APPLE_SIGNING_IDENTITY.');
+} else {
+  console.log('APPLE_SIGNING_IDENTITY not set - keeping existing macOS signingIdentity.');
+}
 fs.writeFileSync(p, JSON.stringify(c,null,2)+'\n');
 console.log('Updated tauri.conf.json updater pubkey from CI variable.');"
 

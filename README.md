@@ -74,6 +74,8 @@ Hinweis:
 - Für echte iCloud-Container-Synchronisierung muss die App mit Apple Developer Zertifikat signiert werden.
 - `src-tauri/Entitlements.plist` ist hinterlegt und in `tauri.conf.json` unter `bundle.macOS.entitlements` eingetragen.
 - `bundle.macOS.signingIdentity` bleibt bis zur Zertifikat-Konfiguration auf `null`.
+- Für CI-Releases kann die Signatur-Identität über `APPLE_SIGNING_IDENTITY` gesetzt werden
+  (wird im Release-Script automatisch in `tauri.conf.json` übernommen).
 
 ### iCloud Backups (Dateibasiert)
 
@@ -82,6 +84,16 @@ Hinweis:
 - Verfügbare Tauri-Commands:
   - `create_icloud_backup`
   - `list_icloud_backups`
+- UI-Anbindung vorhanden:
+  - `Kundenverwaltung -> Backups` zeigt Desktop-seitig iCloud-Aktionen
+  - Button `iCloud-Backup erstellen`
+  - Liste der gefundenen iCloud-Backups inkl. Zeitstempel/Größe
+
+## Backup Restore (SQLite-first)
+
+- `snapshot()` und `restore()` arbeiten auf SQLite-Service-Funktionen statt Legacy-IndexedDB-Keys.
+- Restore legt Dokument-Metadaten wieder an; Dokument-Payloads werden wie bisher im ZIP-Importpfad eingespielt.
+- Web-Fallback vermeidet doppelte Nachrichten beim Restore über `message.id`.
 
 ## Doku-Pflicht fuer Features/Fixes
 
