@@ -1038,6 +1038,14 @@ export default function App() {
                     setKanbanKey((k) => k + 1);
                   } catch (e) {
                     console.error('Status sync failed after Angebot -> Auftrag:', e);
+                    try {
+                      await removeInvoice(nextId);
+                    } catch (rollbackError) {
+                      console.error('Rollback failed after status sync error:', rollbackError);
+                    }
+                    alert('Status konnte nicht aktualisiert werden. Der neu erstellte Auftrag wurde zur Konsistenz wieder entfernt.');
+                    setInvoiceListKey((k) => k + 1);
+                    return;
                   }
                 }
                 setInvoiceListKey((k) => k + 1);
@@ -1052,6 +1060,14 @@ export default function App() {
                     setKanbanKey((k) => k + 1);
                   } catch (e) {
                     console.error('Status sync failed after Auftrag -> Rechnung:', e);
+                    try {
+                      await removeInvoice(nextId);
+                    } catch (rollbackError) {
+                      console.error('Rollback failed after status sync error:', rollbackError);
+                    }
+                    alert('Status konnte nicht aktualisiert werden. Die neu erstellte Rechnung wurde zur Konsistenz wieder entfernt.');
+                    setInvoiceListKey((k) => k + 1);
+                    return;
                   }
                 }
                 setInvoiceListKey((k) => k + 1);
@@ -1209,6 +1225,14 @@ export default function App() {
                       setKanbanKey((k) => k + 1);
                     } catch (e) {
                       console.error('Status sync failed after Angebot -> Auftrag:', e);
+                      try {
+                        await removeInvoice(nextId);
+                      } catch (rollbackError) {
+                        console.error('Rollback failed after status sync error:', rollbackError);
+                      }
+                      alert('Status konnte nicht aktualisiert werden. Der neu erstellte Auftrag wurde zur Konsistenz wieder entfernt.');
+                      setInvoiceListKey((k) => k + 1);
+                      return;
                     }
                   }
                   setInvoiceListKey((k) => k + 1);
@@ -1223,6 +1247,14 @@ export default function App() {
                       setKanbanKey((k) => k + 1);
                     } catch (e) {
                       console.error('Status sync failed after Auftrag -> Rechnung:', e);
+                      try {
+                        await removeInvoice(nextId);
+                      } catch (rollbackError) {
+                        console.error('Rollback failed after status sync error:', rollbackError);
+                      }
+                      alert('Status konnte nicht aktualisiert werden. Die neu erstellte Rechnung wurde zur Konsistenz wieder entfernt.');
+                      setInvoiceListKey((k) => k + 1);
+                      return;
                     }
                   }
                   setInvoiceListKey((k) => k + 1);

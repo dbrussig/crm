@@ -181,7 +181,8 @@ export async function createFollowUpInvoiceFromInvoice(
   await addInvoice(next, nextItems);
   // Best-effort: store backlink on source invoice (for navigation/audit).
   const sourceUpdates: Partial<Invoice> =
-    src.invoice.invoiceType === 'Auftrag' && targetType === 'Rechnung'
+    (src.invoice.invoiceType === 'Auftrag' && targetType === 'Rechnung') ||
+    (src.invoice.invoiceType === 'Angebot' && targetType === 'Auftrag')
       ? { replacesInvoiceId: newId, state: 'archiviert' }
       : { replacesInvoiceId: newId };
   await updateInvoice(sourceInvoiceId, sourceUpdates);

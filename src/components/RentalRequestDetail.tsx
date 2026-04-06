@@ -365,10 +365,19 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
 
   // Helper: Check if price can be overridden
   const canOverridePrice = (): boolean => {
-    // Preis darf nicht geändert werden wenn Rechnung geschrieben wurde
-    // Das status 'abgeschlossen' bedeutet Rechnung wurde erstellt
-    const hasInvoice = rental.status === 'abgeschlossen' || rental.status === 'archiviert';
-    return !hasInvoice;
+    // Preis darf nicht geändert werden, sobald eine Rechnung existiert (außer Storno).
+    const hasActiveInvoice = linkedInvoices.some(
+      (inv) => inv.invoiceType === 'Rechnung' && inv.state !== 'storniert'
+    );
+    return !hasActiveInvoice;
+  };
+
+  const getAvailabilityLabel = (status?: string): string => {
+    if (!status) return '';
+    if (status === 'frei') return 'Frei';
+    if (status === 'belegt') return 'Belegt';
+    if (status === 'unklar') return 'Unklar';
+    return status;
   };
 
   // Helper: Format price override info
@@ -1248,7 +1257,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
               </span>
               {rental.availabilityStatus && (
                 <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
-                  {rental.availabilityStatus}
+                  {getAvailabilityLabel(rental.availabilityStatus)}
                 </span>
               )}
             </div>
@@ -1947,6 +1956,12 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
               {/* Accept (if offered) */}
               {rental.status === 'angebot_gesendet' && (
                 <>
+                  <button
+                    onClick={() => handlePrepareDocumentDraft('Angebot')}
+                    className="px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 text-sm font-medium col-span-2"
+                  >
+                    🛠 Angebot überarbeiten
+                  </button>
                   <button
                     onClick={async () => {
                       await handleTransitionAction('angenommen', (ts) => {

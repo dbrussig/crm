@@ -433,13 +433,6 @@ export async function seedTestData(options: {
     if (verbose) console.log('  🚚 Seeding resources...');
     await saveJson('mietpark_crm_resources_v1', mockResources);
 
-    // LocalStorage Werte für Beleg-Nummernfolge initialisieren
-    const currentYear = new Date().getFullYear();
-    // New numbering: AB/AU/RE + YYYY + 2-digit sequence (per type + year)
-    localStorage.setItem(`mietpark_invoice_seq_AB_${currentYear}`, '1');
-    localStorage.setItem(`mietpark_invoice_seq_AU_${currentYear}`, '1');
-    localStorage.setItem(`mietpark_invoice_seq_RE_${currentYear}`, '1');
-
     if (verbose) {
       console.log('');
       console.log('✅ Testdaten erfolgreich geladen!');
