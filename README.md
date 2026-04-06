@@ -91,3 +91,16 @@ Ab sofort gilt verbindlich:
 
 - Vite-Build ist in funktionsbezogene Chunks aufgeteilt (`inbox`, `belege-workflow`, `pdf-service`, dedizierte Vendor-Chunks fuer PDF/React/DnD/Date).
 - Dadurch ist der Main-Entry-Chunk deutlich kleiner und Releases laden stabiler in Desktop-Umgebungen.
+
+## Finanz-Dashboard (Option A)
+
+- Dashboard zeigt zusaetzlich zwei finanzielle Kernkennzahlen:
+  - `Offene Forderungen €` (gesendete/angenommene Rechnungen minus erfasste Zahlungen)
+  - `Monatsumsatz €` (Zahlungseingaenge im laufenden Monat)
+- Neue Liste `Überfällige Rechnungen`:
+  - Kriterien: `dueDate < heute` und `offener Betrag > 0`
+  - Klick oeffnet den zugehoerigen Beleg direkt im Editor
+  - Leerzustand: `Keine überfälligen Rechnungen ✓`
+- Technischer Einstiegspunkt:
+  - `src/services/dashboardService.ts` (`getDashboardFinancials()`)
+  - Verwendung in `loadDashboardData()` in `src/App.tsx`

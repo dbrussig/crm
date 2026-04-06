@@ -24,6 +24,7 @@ import CalendarPanel from './components/CalendarPanel';
 import Vermietungszubehoer from './components/Vermietungszubehoer';
 import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
 import { formatDisplayRef } from './utils/displayId';
+import { getDashboardFinancials, type DashboardFinancials } from './services/dashboardService';
 
 type View =
   | 'dashboard'
@@ -56,6 +57,11 @@ export default function App() {
   const [dashboardRentals, setDashboardRentals] = useState<RentalRequest[]>([]);
   const [dashboardInvoices, setDashboardInvoices] = useState<Invoice[]>([]);
   const [dashboardResourceTotal, setDashboardResourceTotal] = useState(0);
+  const [dashboardFinancials, setDashboardFinancials] = useState<DashboardFinancials>({
+    offeneForderungen: 0,
+    monatsumsatz: 0,
+    ueberfaelligeRechnungen: [],
+  });
 
   const [aiSettings, setAiSettings] = useState<AISettings>({ provider: 'perplexica', enableWebSearch: true });
   const [googleOAuthSettings, setGoogleOAuthSettings] = useState<GoogleOAuthSettings>(() => {
@@ -188,6 +194,8 @@ export default function App() {
     () => ['Kommunikation', 'Vorgänge', 'Stammdaten', 'Abrechnung', 'System'] as const,
     []
   );
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
 
   async function loadCustomers() {
     const loaded = await getAllCustomers();
@@ -196,14 +204,16 @@ export default function App() {
 
   async function loadDashboardData() {
     try {
-      const [rentals, invoices, resources] = await Promise.all([
+      const [rentals, invoices, resources, financials] = await Promise.all([
         fetchAllRentalRequests(),
         fetchAllInvoices(),
         getAllResources(),
+        getDashboardFinancials(),
       ]);
       setDashboardRentals(rentals);
       setDashboardInvoices(invoices);
       setDashboardResourceTotal(resources.filter((r) => r.isActive).length);
+      setDashboardFinancials(financials);
     } catch (e) {
       console.warn('Dashboard-Daten konnten nicht geladen werden:', e);
     }
@@ -498,7 +508,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="mt-4 grid grid-cols-2 lg:grid-cols-6 gap-3">
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="text-xs text-amber-700">Offene Vorgänge</div>
                 <div className="text-2xl font-semibold text-amber-900">{openRentalsCount}</div>
@@ -514,6 +524,25 @@ export default function App() {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                 <div className="text-xs text-emerald-700">Aktiv ausgegeben</div>
                 <div className="text-2xl font-semibold text-emerald-900">{activeIssuedCount}</div>
+              </div>
+              <div
+                className={[
+                  'rounded-xl border p-4',
+                  dashboardFinancials.offeneForderungen > 0
+                    ? 'border-rose-200 bg-rose-50'
+                    : 'border-emerald-200 bg-emerald-50',
+                ].join(' ')}
+              >
+                <div className={dashboardFinancials.offeneForderungen > 0 ? 'text-xs text-rose-700' : 'text-xs text-emerald-700'}>
+                  Offene Forderungen €
+                </div>
+                <div className={dashboardFinancials.offeneForderungen > 0 ? 'text-2xl font-semibold text-rose-900' : 'text-2xl font-semibold text-emerald-900'}>
+                  {formatCurrency(dashboardFinancials.offeneForderungen)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-xs text-emerald-700">Monatsumsatz €</div>
+                <div className="text-2xl font-semibold text-emerald-900">{formatCurrency(dashboardFinancials.monatsumsatz)}</div>
               </div>
             </div>
 
@@ -545,11 +574,41 @@ export default function App() {
                 </div>
               </div>
               <div className="bg-white border border-slate-200 rounded-xl p-4">
+                <div className="text-sm font-semibold text-slate-900">Überfällige Rechnungen</div>
+                <div className="text-xs text-slate-500 mt-1">Rechnungen mit Fälligkeit vor heute und offenem Betrag.</div>
+                <div className="mt-3 space-y-2">
+                  {dashboardFinancials.ueberfaelligeRechnungen.length === 0 ? (
+                    <div className="text-sm text-emerald-700">Keine überfälligen Rechnungen ✓</div>
+                  ) : (
+                    dashboardFinancials.ueberfaelligeRechnungen.slice(0, 8).map((row) => (
+                      <button
+                        key={row.invoice.id}
+                        onClick={async () => {
+                          setActiveView('belege');
+                          await openInvoiceEditorById(row.invoice.id);
+                        }}
+                        className="w-full text-left rounded-lg border border-rose-200 bg-rose-50 p-3 hover:bg-rose-100"
+                      >
+                        <div className="text-sm font-medium text-rose-900">
+                          {row.invoice.invoiceNo} · {row.invoice.buyerName}
+                        </div>
+                        <div className="text-xs text-rose-800 mt-0.5">
+                          Fällig: {row.invoice.dueDate ? new Date(row.invoice.dueDate).toLocaleDateString('de-DE') : '-'} · Offen: {formatCurrency(row.offenBetrag)}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-1 gap-4">
+              <div className="bg-white border border-slate-200 rounded-xl p-4">
                 <div className="text-sm font-semibold text-slate-900">Heute im Fokus</div>
                 <ul className="mt-2 text-sm text-slate-700 space-y-2">
                   <li>• {openRentalsCount} Vorgänge aktiv bearbeiten</li>
                   <li>• {pendingInvoicesCount} gesendete Belege nachfassen</li>
                   <li>• {draftInvoicesCount} Entwürfe finalisieren</li>
+                  <li>• Offene Forderungen: {formatCurrency(dashboardFinancials.offeneForderungen)}</li>
                   <li>• {activeIssuedCount} Ressource(n) aktuell im Einsatz</li>
                   <li>• {resourceAvailableCount} / {dashboardResourceTotal} heute verfügbar</li>
                 </ul>

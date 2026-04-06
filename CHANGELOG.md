@@ -10,12 +10,14 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Lokaler Update-Check beim App-Start fuer Desktop-Builds.
 - Inbox-Composer erweitert: Direktversand (SMTP/App-Passwort), Vorlagen, lokale Anhaenge und optionales `Verarbeitet` nach Versand.
 - Einstellungen erweitert: `Anhaenge-Test senden` prueft die lokale Mail-Bridge inkl. Attachment-Payload.
+- Finanz-Dashboard (Option A): KPIs `Offene Forderungen €` und `Monatsumsatz €` sowie Liste `Überfällige Rechnungen` mit Direkt-Öffnen des Belegs.
 
 ### Changed
 - Projektregeln verschaerft: Feature-/Fix-PRs muessen `README.md` und `CHANGELOG.md` aktualisieren (CI-Guard).
 - Belegeditor erweitert: Anzahlung ist jetzt in Angebot und Auftrag optional aktivierbar (persistentes Toggle `depositEnabled`).
 - Folgebeleg-Logik angepasst: Bei `Auftrag -> Rechnung` wird der Ausgangsauftrag archiviert, die Auftragsnummer bleibt unveraendert.
 - Build-Chunks fuer Desktop gezielt aufgeteilt (`Inbox`, `Belege-Workflow`, `PDF-Service`, Vendor-Segmente), um den Main-Chunk deutlich zu verkleinern.
+- Dashboard-Datenfluss erweitert: `loadDashboardData()` lädt zusätzlich Finanzkennzahlen über `getDashboardFinancials()`.
 
 ### Fixed
 - Repository-Hygiene verbessert: lokale DB- und nicht-projektbezogene Artefakte bleiben ausserhalb von GitLab.
