@@ -14,8 +14,22 @@ function downloadBlob(blob: Blob, filename: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function openBlobPreview(blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!win) {
+    URL.revokeObjectURL(url);
+    throw new Error('Vorschau wurde vom Browser blockiert. Bitte Pop-ups erlauben.');
+  }
+  // Keep URL alive for the opened tab long enough.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export default function CustomerDocumentsModal(props: { customer: Customer; onClose: () => void }) {
@@ -125,10 +139,47 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
                     <button
+                      className="px-3 py-2 rounded-md border border-blue-200 text-blue-700 text-sm hover:bg-blue-50 disabled:opacity-60"
+                      disabled={busyId === d.id}
+                      onClick={async () => {
+                        setBusyId(d.id);
+                        setError(null);
+                        try {
+                          const payload = await getCustomerDocumentPayload(d.id);
+                          if (!payload) throw new Error('Payload nicht gefunden');
+
+                          const mime = d.mimeType || 'application/octet-stream';
+                          const blob =
+                            payload instanceof Blob
+                              ? payload
+                              : typeof payload === 'string'
+                              ? base64ToBlob(payload, mime)
+                              : null;
+                          if (!blob) throw new Error('Unbekanntes Payload-Format');
+
+                          const isPreviewable =
+                            mime.startsWith('application/pdf') ||
+                            mime.startsWith('image/');
+                          if (isPreviewable) {
+                            openBlobPreview(blob);
+                          } else {
+                            downloadBlob(blob, d.filename || 'dokument.bin');
+                          }
+                        } catch (e: any) {
+                          setError(e?.message || String(e));
+                        } finally {
+                          setBusyId(null);
+                        }
+                      }}
+                    >
+                      Oeffnen
+                    </button>
+                    <button
                       className="px-3 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800 disabled:opacity-60"
                       disabled={busyId === d.id}
                       onClick={async () => {
                         setBusyId(d.id);
+                        setError(null);
                         try {
                           const payload = await getCustomerDocumentPayload(d.id);
                           if (!payload) throw new Error('Payload nicht gefunden');

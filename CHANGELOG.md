@@ -44,3 +44,5 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Backup-Snapshot/Restore nutzt jetzt die SQLite-Service-Schicht statt Legacy-IndexedDB-Keys.
 - Restore-Härtung: Dokument-Metadaten werden beim Restore wieder angelegt; Web-Fallback vermeidet doppelte Nachrichten anhand `id`.
 - CI-Release-Signing ist robust konfigurierbar: `APPLE_SIGNING_IDENTITY` wird bei gesetzter Variable automatisch in `tauri.conf.json` injiziert.
+- Dokumentenarchiv verbessert: PDF/Bild-Dateien können jetzt über `Öffnen` direkt als Vorschau im neuen Tab angezeigt werden; Download-Trigger ist browser-kompatibler.
+- Legacy-Dachträger-Schlüssel bereinigt: Werte im Muster `FIREBASE-*` werden als ungültige Altimporte behandelt und nicht mehr als aktive Dachträger-Zuordnung verwendet.

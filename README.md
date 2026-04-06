@@ -95,6 +95,21 @@ Hinweis:
 - Restore legt Dokument-Metadaten wieder an; Dokument-Payloads werden wie bisher im ZIP-Importpfad eingespielt.
 - Web-Fallback vermeidet doppelte Nachrichten beim Restore über `message.id`.
 
+## Dokumentenarchiv (Kunden)
+
+- Im Dokumentenarchiv gibt es jetzt neben `Download` auch `Oeffnen`:
+  - PDF- und Bilddateien werden als Vorschau in einem neuen Tab geöffnet.
+  - Nicht-vorschaufähige Formate werden weiterhin direkt heruntergeladen.
+- Download wurde browser-robuster umgesetzt (Anchor wird korrekt in den DOM gehängt).
+
+## Dachträger-Zuordnung (Legacy-Bereinigung)
+
+- Legacy-Werte aus alten Firebase-Importen (`FIREBASE-*`) werden nicht mehr als echte Dachträger-Zuordnung akzeptiert.
+- Die Bereinigung greift für:
+  - `assignedRoofRackInventoryKey` im Kundenprofil
+  - `roofRackInventoryKey` im Vorgang
+- Dadurch erscheinen diese Altwerte nicht mehr als aktive Zuordnung in Workflow/Angebot.
+
 ## Doku-Pflicht fuer Features/Fixes
 
 Ab sofort gilt verbindlich:

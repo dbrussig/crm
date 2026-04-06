@@ -21,6 +21,13 @@ const KEY_INVOICE_ITEMS = 'mietpark_crm_invoice_items_v1';
 const KEY_CUSTOMER_DOCS = 'mietpark_crm_customer_docs_v1';
 const KEY_CUSTOMER_DOC_PAYLOAD_PREFIX = 'mietpark_crm_customer_doc_payload_v1:';
 
+function normalizeRoofRackInventoryKey(raw?: string): string | undefined {
+  const v = String(raw || '').trim();
+  if (!v) return undefined;
+  if (/^FIREBASE-[A-Z0-9]+$/i.test(v)) return undefined;
+  return v;
+}
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const buffer = await blob.arrayBuffer();
   let binary = '';
@@ -50,6 +57,7 @@ async function loadCustomers(): Promise<Customer[]> {
       ...c,
       roofRailPhotoDataUrls: nextUrls.length ? nextUrls : undefined,
       roofRailPhotoDataUrl: primary,
+      assignedRoofRackInventoryKey: normalizeRoofRackInventoryKey((c as any).assignedRoofRackInventoryKey),
     } as Customer;
   });
 }
@@ -88,6 +96,7 @@ async function loadRentals(): Promise<RentalRequest[]> {
     return {
       ...r,
       deposit: needsDefaultDeposit ? 150 : r.deposit,
+      roofRackInventoryKey: normalizeRoofRackInventoryKey((r as any).roofRackInventoryKey),
     } as RentalRequest;
   });
 }

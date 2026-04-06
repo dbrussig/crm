@@ -22,10 +22,13 @@ function requiresRoofRackBundle(rental: RentalRequest): boolean {
 }
 
 function normalizeRoofRackKey(raw: string | undefined): string {
-  return String(raw || '')
+  const normalized = String(raw || '')
     .trim()
     .replace(/\s+/g, ' ')
     .toUpperCase();
+  // Legacy Firebase import marker must never be used as real inventory assignment.
+  if (/^FIREBASE-[A-Z0-9]+$/.test(normalized)) return '';
+  return normalized;
 }
 
 function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {

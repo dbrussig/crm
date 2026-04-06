@@ -101,7 +101,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
           setRental(loaded);
           setInternalComment(loaded.description || '');
           setCommentDirty(false);
-          setRoofRackKey((loaded as any).roofRackInventoryKey || '');
+          setRoofRackKey(sanitizeRoofRackKey((loaded as any).roofRackInventoryKey || ''));
           setRoofRackDirty(false);
           setVehicleWidthInput(
             Number((loaded as any).vehicleWidthMm || 0) > 0 ? String((loaded as any).vehicleWidthMm) : ''
@@ -815,7 +815,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       const nextHsn = String(customer.assignedHsn || '').trim().toUpperCase();
       const nextTsn = String(customer.assignedTsn || '').trim().toUpperCase();
       const nextRelingType = (customer.assignedRelingType || undefined) as RentalRequest['relingType'];
-      let nextRoofRackKey = String(customer.assignedRoofRackInventoryKey || '').trim();
+      let nextRoofRackKey = sanitizeRoofRackKey(String(customer.assignedRoofRackInventoryKey || '').trim());
       let skippedRoofRack = false;
 
       if (nextRoofRackKey) {
@@ -2047,3 +2047,9 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
     </div>
   );
 };
+function sanitizeRoofRackKey(raw?: string): string {
+  const normalized = String(raw || '').trim();
+  if (!normalized) return '';
+  if (/^FIREBASE-[A-Z0-9]+$/i.test(normalized)) return '';
+  return normalized;
+}
