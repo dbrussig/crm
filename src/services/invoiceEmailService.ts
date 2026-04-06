@@ -76,6 +76,40 @@ function isSmtpReady(settings?: MailTransportSettings | null): settings is MailT
   );
 }
 
+export async function runMailBridgeAttachmentSelfTest(settings: MailTransportSettings): Promise<void> {
+  if (!isSmtpReady(settings)) {
+    throw new Error('SMTP-Konfiguration unvollständig (Host/User/App-Passwort/From E-Mail prüfen).');
+  }
+  const probeFile = new File(
+    ['mietpark-mail-bridge-attachment-selftest'],
+    'mietpark-attachment-selftest.txt',
+    { type: 'text/plain' }
+  );
+  const timestamp = new Date().toLocaleString('de-DE');
+  const subject = `Mietpark Mail-Bridge Anhänge-Test (${timestamp})`;
+  const body =
+    'Dies ist eine automatische Testmail aus den Einstellungen.\n' +
+    'Wenn diese Mail mit Anhang ankommt, unterstützt die lokale Bridge Attachment-Payload.';
+  try {
+    await sendViaLocalBridge({
+      settings,
+      toEmail: String(settings.fromEmail || '').trim(),
+      subject,
+      body,
+      attachments: [probeFile],
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (looksLikeAttachmentUnsupportedError(msg)) {
+      throw new Error(
+        'Bridge erreichbar, aber Attachment-Payload wird nicht unterstützt. ' +
+        'Bitte Bridge-Version aktualisieren oder Anhänge über Gmail senden.'
+      );
+    }
+    throw new Error(`Mail-Bridge Test fehlgeschlagen: ${msg}`);
+  }
+}
+
 async function sendViaLocalBridge(opts: {
   settings: MailTransportSettings;
   toEmail: string;

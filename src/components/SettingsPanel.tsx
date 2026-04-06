@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AISettings, GoogleOAuthSettings, MailTransportSettings } from '../types';
 import { getGLMModels } from '../services/zAiService';
+import { runMailBridgeAttachmentSelfTest } from '../services/invoiceEmailService';
 import { getCompanyProfile, saveCompanyProfile, type CompanyProfile } from '../config/companyProfile';
 import SubTotalImportPanel from './SubTotalImportPanel';
 import SubTotalInvoiceTypeProfilePanel from './SubTotalInvoiceTypeProfilePanel';
@@ -45,6 +46,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(() => getCompanyProfile());
   const [companyDirty, setCompanyDirty] = useState(false);
   const [mailBridgeTestStatus, setMailBridgeTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [mailBridgeAttachmentTestStatus, setMailBridgeAttachmentTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [mailBridgeAttachmentTestMsg, setMailBridgeAttachmentTestMsg] = useState<string>('');
 
   const handleChange = (key: keyof AISettings, value: string | boolean | number) => {
     onSettingsChange({
@@ -621,6 +624,48 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   Starte lokal: <code>python3 tools/mail_bridge.py --host 127.0.0.1 --port 8787</code>
                 </span>
               </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={`px-3 py-2 rounded-md text-sm ${
+                    mailBridgeAttachmentTestStatus === 'success'
+                      ? 'bg-emerald-600 text-white'
+                      : mailBridgeAttachmentTestStatus === 'error'
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-slate-900 text-white'
+                  }`}
+                  onClick={async () => {
+                    if (!mailTransportSettings) return;
+                    setMailBridgeAttachmentTestStatus('testing');
+                    setMailBridgeAttachmentTestMsg('');
+                    try {
+                      await runMailBridgeAttachmentSelfTest(mailTransportSettings);
+                      setMailBridgeAttachmentTestStatus('success');
+                      setMailBridgeAttachmentTestMsg('Testmail mit Anhang wurde an From E-Mail gesendet.');
+                    } catch (e) {
+                      setMailBridgeAttachmentTestStatus('error');
+                      setMailBridgeAttachmentTestMsg(e instanceof Error ? e.message : String(e));
+                    }
+                  }}
+                >
+                  {mailBridgeAttachmentTestStatus === 'testing' ? 'Sende Test…' : 'Anhänge-Test senden'}
+                </button>
+                <span className="text-xs text-slate-600">
+                  Sendet eine Testmail mit Mini-Anhang an <code>{mailTransportSettings?.fromEmail || 'From E-Mail'}</code>.
+                </span>
+              </div>
+              {mailBridgeAttachmentTestMsg ? (
+                <div
+                  className={`text-xs rounded-md border px-2 py-1.5 ${
+                    mailBridgeAttachmentTestStatus === 'success'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-rose-200 bg-rose-50 text-rose-800'
+                  }`}
+                >
+                  {mailBridgeAttachmentTestMsg}
+                </div>
+              ) : null}
             </div>
           )}
 
