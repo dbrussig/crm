@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AISettings, Customer, GmailAttachmentSummary, InboxImportResult, ProductType, RentalRequest, PaymentKind, PaymentMethod, Invoice } from '../types';
 import { getThread, listInboxThreadSummaries, markThreadProcessedWithClientId, type GmailThreadSummary } from '../services/googleGmailService';
 import { detectDachboxRejectionReason, extractCustomerInfo, extractRentalInfo, generateReplySuggestion, suggestProductFromMessage } from '../services/messageService';
@@ -13,6 +13,8 @@ const CACHE_VERSION = 1 as const;
 const PAYMENT_REVIEW_KEY = 'mietpark_crm_payment_review_v1';
 const PRIORITY_FILTER_KEY = 'mietpark_crm_inbox_priority_filter_v1';
 const QUICK_ACTION_PREFS_KEY = 'mietpark_crm_inbox_quick_actions_v1';
+const INBOX_AUTO_REFRESH_KEY = 'mietpark_crm_inbox_auto_refresh_v1';
+const INBOX_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 function getConfidenceAmpel(confidence?: number) {
   const c = typeof confidence === 'number' ? confidence : 0;
@@ -400,6 +402,14 @@ export default function Inbox(props: {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState<string>('');
   const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(INBOX_AUTO_REFRESH_KEY);
+      return raw === null ? true : raw === 'true';
+    } catch {
+      return true;
+    }
+  });
   const [prioritizeNeedsReply, setPrioritizeNeedsReply] = useState<boolean>(true);
   const [onlyNeedsReply, setOnlyNeedsReply] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -453,6 +463,7 @@ export default function Inbox(props: {
   const [paymentSuggestedRentalId, setPaymentSuggestedRentalId] = useState<string>('');
   const [paymentSuggestedInvoiceId, setPaymentSuggestedInvoiceId] = useState<string>('');
   const [paymentAssignmentByThreadId, setPaymentAssignmentByThreadId] = useState<Record<string, ThreadPaymentAssignment>>({});
+  const pollInFlightRef = useRef(false);
   const [paymentReviewedByThreadId, setPaymentReviewedByThreadId] = useState<Record<string, boolean>>(() => {
     try {
       const raw = localStorage.getItem(PAYMENT_REVIEW_KEY);
@@ -826,10 +837,26 @@ export default function Inbox(props: {
     });
   }
 
-  async function loadInbox(more = false) {
+  function persistAutoRefresh(next: boolean) {
+    setAutoRefreshEnabled(next);
+    try {
+      localStorage.setItem(INBOX_AUTO_REFRESH_KEY, String(next));
+    } catch {
+      // ignore
+    }
+  }
+
+  async function loadInbox(
+    more = false,
+    opts?: { silent?: boolean; mergeExisting?: boolean }
+  ) {
     if (!canUse) return;
-    setError(null);
-    setLoading(true);
+    const silent = Boolean(opts?.silent);
+    const mergeExisting = Boolean(opts?.mergeExisting);
+    if (!silent) {
+      setError(null);
+      setLoading(true);
+    }
     try {
       const resp = await listInboxThreadSummaries({
         clientId: props.clientId,
@@ -837,23 +864,65 @@ export default function Inbox(props: {
         pageToken: more ? nextPageToken : undefined,
       });
       setThreads((prev) => {
-        const next = more ? [...prev, ...resp.threads] : resp.threads;
+        const next = more
+          ? [...prev, ...resp.threads]
+          : (mergeExisting ? [...resp.threads, ...prev] : resp.threads);
         // De-dup by id (can happen when paging / cache merges).
         const seen = new Set<string>();
-        return next.filter((t) => {
+        const deduped = next.filter((t) => {
           if (!t?.id) return false;
           if (seen.has(t.id)) return false;
           seen.add(t.id);
           return true;
         });
+        // Keep inbox order stable: newest thread first.
+        const toMs = (t: any) => {
+          const d = (t as any)?.lastDate || t?.date;
+          if (!d) return 0;
+          if (typeof d === 'number') return d;
+          const ts = Date.parse(String(d));
+          return Number.isFinite(ts) ? ts : 0;
+        };
+        deduped.sort((a: any, b: any) => toMs(b) - toMs(a));
+        return deduped;
       });
       setNextPageToken(resp.nextPageToken);
     } catch (e: any) {
-      setError(e?.message || String(e));
+      if (!silent) setError(e?.message || String(e));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!canUse || !autoRefreshEnabled) return;
+    const tick = async () => {
+      if (document.hidden) return;
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
+      try {
+        await loadInbox(false, { silent: true, mergeExisting: true });
+      } finally {
+        pollInFlightRef.current = false;
+      }
+    };
+    const onVisible = () => {
+      if (!document.hidden) void tick();
+    };
+    const onFocus = () => {
+      void tick();
+    };
+    const id = window.setInterval(() => {
+      void tick();
+    }, INBOX_AUTO_REFRESH_INTERVAL_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [canUse, autoRefreshEnabled, props.clientId]);
 
   async function openThread(threadId: string) {
     if (!canUse) return;
@@ -1938,6 +2007,19 @@ export default function Inbox(props: {
               disabled={!canUse || loading}
             >
               Aktualisieren
+            </button>
+            <button
+              className={[
+                'px-3 py-2 rounded-md border text-sm',
+                autoRefreshEnabled
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+              ].join(' ')}
+              onClick={() => persistAutoRefresh(!autoRefreshEnabled)}
+              disabled={!canUse}
+              title="Lädt das Postfach automatisch alle 30 Sekunden im Hintergrund nach"
+            >
+              Auto-Refresh {autoRefreshEnabled ? 'AN' : 'AUS'}
             </button>
             <button
               className="px-3 py-2 rounded-md border border-slate-200 text-slate-700 text-sm hover:bg-slate-50"
