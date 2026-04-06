@@ -129,6 +129,17 @@ async function sendViaLocalBridge(opts: {
   }
 }
 
+function looksLikeAttachmentUnsupportedError(msg: string): boolean {
+  const v = String(msg || '').toLowerCase();
+  return (
+    v.includes('attachment') ||
+    v.includes('unknown field') ||
+    v.includes('unexpected field') ||
+    v.includes('invalid payload') ||
+    v.includes('schema')
+  );
+}
+
 export function getGenericComposeLinks(opts: {
   toEmail: string;
   subject: string;
@@ -162,15 +173,36 @@ export async function openGenericCompose(opts: {
 
   if (isSmtpReady(settings)) {
     try {
-      await sendViaLocalBridge({
-        settings,
-        toEmail: opts.toEmail,
-        subject: opts.subject,
-        body: opts.body,
-        attachments: opts.attachments,
-      });
-      alert(`E-Mail wurde über App-Passwort (SMTP) gesendet.${opts.attachments?.length ? ` Anhänge: ${opts.attachments.length}` : ''}`);
-      return;
+      const wantedAttachments = Array.isArray(opts.attachments) ? opts.attachments : [];
+      try {
+        await sendViaLocalBridge({
+          settings,
+          toEmail: opts.toEmail,
+          subject: opts.subject,
+          body: opts.body,
+          attachments: wantedAttachments,
+        });
+        alert(`E-Mail wurde über App-Passwort (SMTP) gesendet.${wantedAttachments.length ? ` Anhänge: ${wantedAttachments.length}` : ''}`);
+        return;
+      } catch (firstErr) {
+        const firstMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+        if (wantedAttachments.length > 0 && looksLikeAttachmentUnsupportedError(firstMsg)) {
+          // Bridge appears to support mail send but not attachment fields yet.
+          await sendViaLocalBridge({
+            settings,
+            toEmail: opts.toEmail,
+            subject: opts.subject,
+            body: opts.body,
+            attachments: [],
+          });
+          alert(
+            'E-Mail wurde gesendet, aber die lokale Mail-Bridge unterstützt noch keine Anhänge. ' +
+            'Bitte Anhänge alternativ über Gmail/Manuell senden.'
+          );
+          return;
+        }
+        throw firstErr;
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const fallback = window.confirm(`SMTP-Versand fehlgeschlagen:\n${msg}\n\nStattdessen Entwurf im Browser öffnen?`);
