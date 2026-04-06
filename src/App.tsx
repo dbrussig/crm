@@ -260,6 +260,35 @@ export default function App() {
     setEditingInvoiceItems(loaded.items);
   };
 
+  const convertInvoiceAndSync = async (
+    invoiceId: string,
+    targetType: 'Auftrag' | 'Rechnung'
+  ) => {
+    const source = await fetchInvoiceById(invoiceId);
+    const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, targetType);
+    if (source?.invoice?.rentalRequestId) {
+      const targetStatus: RentalStatus = targetType === 'Auftrag' ? 'angenommen' : 'abgeschlossen';
+      try {
+        await transitionStatus(source.invoice.rentalRequestId, targetStatus);
+        setKanbanKey((k) => k + 1);
+      } catch (e) {
+        console.error(`Status sync failed after ${source.invoice.invoiceType} -> ${targetType}:`, e);
+        try {
+          await removeInvoice(nextId);
+        } catch (rollbackError) {
+          console.error('Rollback failed after status sync error:', rollbackError);
+        }
+        alert(
+          `Status konnte nicht aktualisiert werden. Der neu erstellte ${targetType === 'Auftrag' ? 'Auftrag' : 'Rechnung'} wurde zur Konsistenz wieder entfernt.`
+        );
+        setInvoiceListKey((k) => k + 1);
+        return;
+      }
+    }
+    setInvoiceListKey((k) => k + 1);
+    await openInvoiceEditorById(nextId);
+  };
+
   const onRentalRequestCreate = async (data: {
     customerId: string;
     productType: string;
@@ -1030,48 +1059,10 @@ export default function App() {
                 })();
               }}
               onConvertToOrder={async (invoiceId) => {
-                const source = await fetchInvoiceById(invoiceId);
-                const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, 'Auftrag');
-                if (source?.invoice?.rentalRequestId) {
-                  try {
-                    await transitionStatus(source.invoice.rentalRequestId, 'angenommen');
-                    setKanbanKey((k) => k + 1);
-                  } catch (e) {
-                    console.error('Status sync failed after Angebot -> Auftrag:', e);
-                    try {
-                      await removeInvoice(nextId);
-                    } catch (rollbackError) {
-                      console.error('Rollback failed after status sync error:', rollbackError);
-                    }
-                    alert('Status konnte nicht aktualisiert werden. Der neu erstellte Auftrag wurde zur Konsistenz wieder entfernt.');
-                    setInvoiceListKey((k) => k + 1);
-                    return;
-                  }
-                }
-                setInvoiceListKey((k) => k + 1);
-                await openInvoiceEditorById(nextId);
+                await convertInvoiceAndSync(invoiceId, 'Auftrag');
               }}
               onConvertToInvoice={async (invoiceId) => {
-                const source = await fetchInvoiceById(invoiceId);
-                const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, 'Rechnung');
-                if (source?.invoice?.rentalRequestId) {
-                  try {
-                    await transitionStatus(source.invoice.rentalRequestId, 'abgeschlossen');
-                    setKanbanKey((k) => k + 1);
-                  } catch (e) {
-                    console.error('Status sync failed after Auftrag -> Rechnung:', e);
-                    try {
-                      await removeInvoice(nextId);
-                    } catch (rollbackError) {
-                      console.error('Rollback failed after status sync error:', rollbackError);
-                    }
-                    alert('Status konnte nicht aktualisiert werden. Die neu erstellte Rechnung wurde zur Konsistenz wieder entfernt.');
-                    setInvoiceListKey((k) => k + 1);
-                    return;
-                  }
-                }
-                setInvoiceListKey((k) => k + 1);
-                await openInvoiceEditorById(nextId);
+                await convertInvoiceAndSync(invoiceId, 'Rechnung');
               }}
             />
           </div>
@@ -1217,48 +1208,10 @@ export default function App() {
                   setEditingInvoice(null);
                 }}
                 onConvertToOrder={async (invoiceId) => {
-                  const source = await fetchInvoiceById(invoiceId);
-                  const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, 'Auftrag');
-                  if (source?.invoice?.rentalRequestId) {
-                    try {
-                      await transitionStatus(source.invoice.rentalRequestId, 'angenommen');
-                      setKanbanKey((k) => k + 1);
-                    } catch (e) {
-                      console.error('Status sync failed after Angebot -> Auftrag:', e);
-                      try {
-                        await removeInvoice(nextId);
-                      } catch (rollbackError) {
-                        console.error('Rollback failed after status sync error:', rollbackError);
-                      }
-                      alert('Status konnte nicht aktualisiert werden. Der neu erstellte Auftrag wurde zur Konsistenz wieder entfernt.');
-                      setInvoiceListKey((k) => k + 1);
-                      return;
-                    }
-                  }
-                  setInvoiceListKey((k) => k + 1);
-                  await openInvoiceEditorById(nextId);
+                  await convertInvoiceAndSync(invoiceId, 'Auftrag');
                 }}
                 onConvertToInvoice={async (invoiceId) => {
-                  const source = await fetchInvoiceById(invoiceId);
-                  const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, 'Rechnung');
-                  if (source?.invoice?.rentalRequestId) {
-                    try {
-                      await transitionStatus(source.invoice.rentalRequestId, 'abgeschlossen');
-                      setKanbanKey((k) => k + 1);
-                    } catch (e) {
-                      console.error('Status sync failed after Auftrag -> Rechnung:', e);
-                      try {
-                        await removeInvoice(nextId);
-                      } catch (rollbackError) {
-                        console.error('Rollback failed after status sync error:', rollbackError);
-                      }
-                      alert('Status konnte nicht aktualisiert werden. Die neu erstellte Rechnung wurde zur Konsistenz wieder entfernt.');
-                      setInvoiceListKey((k) => k + 1);
-                      return;
-                    }
-                  }
-                  setInvoiceListKey((k) => k + 1);
-                  await openInvoiceEditorById(nextId);
+                  await convertInvoiceAndSync(invoiceId, 'Rechnung');
                 }}
                 onReissue={async (invoiceId) => {
                   const nextId = await reissueInvoice(invoiceId);

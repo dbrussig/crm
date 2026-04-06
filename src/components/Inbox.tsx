@@ -1384,6 +1384,11 @@ export default function Inbox(props: {
         preferGmail: false,
         attachments: composerAttachments,
       });
+      setComposerAttachments([]);
+      const markDone = confirm('Nachricht wurde gesendet. Konversation jetzt als verarbeitet markieren?');
+      if (markDone) {
+        await markSelectedProcessed();
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       alert(`Direktversand fehlgeschlagen: ${msg}`);
