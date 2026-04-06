@@ -8,11 +8,14 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Automatischer Desktop-Updatefluss (Tauri Updater + Process Plugin) integriert.
 - GitLab CI Release-Job fuer `latest.json` und macOS Bundle-Artefakte.
 - Lokaler Update-Check beim App-Start fuer Desktop-Builds.
+- Inbox-Composer erweitert: Direktversand (SMTP/App-Passwort), Vorlagen, lokale Anhaenge und optionales `Verarbeitet` nach Versand.
+- Einstellungen erweitert: `Anhaenge-Test senden` prueft die lokale Mail-Bridge inkl. Attachment-Payload.
 
 ### Changed
 - Projektregeln verschaerft: Feature-/Fix-PRs muessen `README.md` und `CHANGELOG.md` aktualisieren (CI-Guard).
 - Belegeditor erweitert: Anzahlung ist jetzt in Angebot und Auftrag optional aktivierbar (persistentes Toggle `depositEnabled`).
 - Folgebeleg-Logik angepasst: Bei `Auftrag -> Rechnung` wird der Ausgangsauftrag archiviert, die Auftragsnummer bleibt unveraendert.
+- Build-Chunks fuer Desktop gezielt aufgeteilt (`Inbox`, `Belege-Workflow`, `PDF-Service`, Vendor-Segmente), um den Main-Chunk deutlich zu verkleinern.
 
 ### Fixed
 - Repository-Hygiene verbessert: lokale DB- und nicht-projektbezogene Artefakte bleiben ausserhalb von GitLab.
@@ -24,3 +27,7 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - PDF-Seitenumbrueche gehaertet: Umbrueche werden auf visuell ruhige Linien verschoben, um abgeschnittene Tabellenzeilen/Text zu reduzieren.
 - Dashboard-Logik fuer `Offene Vorgänge` und `Aktiv ausgegeben` auf tagesbasierte Datumsbewertung umgestellt (robuster bei UTC-Importdaten/Zeitzonen).
 - Release-Version auf `0.1.1` angehoben, damit Desktop-Auto-Update die aktuellen Fixes ausliefert.
+- Workflow-Konvertierung gehaertet: Angebot wird bei `Angebot -> Auftrag` archiviert; Rollback + User-Hinweis bei Status-Sync-Fehlern in allen Konvertierungspfaden.
+- `RentalRequestDetail`: `Angebot überarbeiten` auch im Status `angebot_gesendet`; Preisfreigabe basiert auf echter Rechnungs-Existenz statt Statusannahme.
+- Seed-Daten bereinigt: veraltete localStorage-Belegzaehler entfernt.
+- Mail-Bridge-Fallback verbessert: wenn Attachment-Payload nicht unterstuetzt wird, erfolgt automatischer Retry ohne Anhaenge mit klarer Meldung.

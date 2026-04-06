@@ -76,3 +76,18 @@ Ab sofort gilt verbindlich:
 - PDF-Inhalt wird layoutnah aus derselben Beleg-HTML gerendert (mehrseitig), damit Vorschau und gespeicherte Datei visuell uebereinstimmen.
 - Seitenumbrueche werden beim Rendern automatisch an visuell ruhige Zeilen gelegt, um harte Schnitte in Tabellen/Text zu minimieren.
 - Dashboard-Kennzahlen `Offene Vorgänge` und `Aktiv ausgegeben` bewerten Mietdaten tagesbasiert (lokaler Tagesanfang), um UTC/Zeitzonen-Importe korrekt abzubilden.
+
+## Inbox + Mail-Versand (Desktop)
+
+- Inbox bietet einen zentralen Composer mit:
+  - Vorlagen (Eingangsbestaetigung, Terminabstimmung, Nicht verfuegbar, Reling/Fixpunkte-Ablehnung)
+  - lokalen Anhaengen
+  - Direktversand ueber SMTP/App-Passwort (wenn Mail-Bridge konfiguriert)
+- Nach Direktversand kann eine Konversation direkt als `Verarbeitet` markiert werden.
+- Falls die lokale Mail-Bridge Anhaenge nicht unterstuetzt, wird automatisch ohne Anhaenge erneut gesendet und ein klarer Hinweis angezeigt.
+- In den Einstellungen steht `Anhaenge-Test senden` zur Verfuegung, um die Bridge-Attachment-Unterstuetzung mit einer Testmail zu verifizieren.
+
+## Build-Performance
+
+- Vite-Build ist in funktionsbezogene Chunks aufgeteilt (`inbox`, `belege-workflow`, `pdf-service`, dedizierte Vendor-Chunks fuer PDF/React/DnD/Date).
+- Dadurch ist der Main-Entry-Chunk deutlich kleiner und Releases laden stabiler in Desktop-Umgebungen.
