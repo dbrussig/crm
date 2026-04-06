@@ -42,6 +42,7 @@ function getConfidenceAmpel(confidence?: number) {
 type ThreadPriority = 'sofort' | 'pruefen' | 'info';
 type PriorityFilter = 'all' | 'focus';
 type StatusFilter = 'all' | 'sofort' | 'antwort' | 'zahlung' | 'low_conf';
+type ReplyTemplateId = 'none' | 'ack' | 'appointment' | 'unavailable' | 'reling_reject';
 type QuickActionPrefs = {
   unavailable: boolean;
   payment: boolean;
@@ -285,6 +286,27 @@ function relingRejectTemplate(): string {
   );
 }
 
+function appointmentTemplate(opts: { firstName?: string; rentalStart?: number; rentalEnd?: number }): string {
+  const period =
+    opts.rentalStart && opts.rentalEnd
+      ? `${new Date(opts.rentalStart).toLocaleDateString('de-DE')} bis ${new Date(opts.rentalEnd).toLocaleDateString('de-DE')}`
+      : 'im gewünschten Zeitraum';
+  return (
+    `Hallo ${opts.firstName || ''},\n\n` +
+    `vielen Dank für deine Anfrage. ${period} passt grundsätzlich.\n` +
+    `Bitte bestätige mir kurz den genauen Übergabezeitpunkt, dann plane ich alles verbindlich ein.\n\n` +
+    `Viele Grüße\nDaniel Brußig\nMietpark Saar-Pfalz`
+  );
+}
+
+function ackTemplate(opts: { firstName?: string }): string {
+  return (
+    `Hallo ${opts.firstName || ''},\n\n` +
+    `danke für deine Nachricht. Ich habe alles gesehen und melde mich kurzfristig mit den finalen Details.\n\n` +
+    `Viele Grüße\nDaniel Brußig\nMietpark Saar-Pfalz`
+  );
+}
+
 function sanitizeThreadForCache(thread: any) {
   if (!thread || typeof thread !== 'object') return thread;
   const messages = Array.isArray(thread.messages) ? thread.messages : [];
@@ -477,6 +499,8 @@ export default function Inbox(props: {
   const [lowConfidenceApproved, setLowConfidenceApproved] = useState(false);
   const [conciergeInstruction, setConciergeInstruction] = useState('');
   const [conciergeReply, setConciergeReply] = useState('');
+  const [replyTemplateId, setReplyTemplateId] = useState<ReplyTemplateId>('none');
+  const [composerAttachments, setComposerAttachments] = useState<File[]>([]);
   const [conciergeApproved, setConciergeApproved] = useState(false);
   const [conciergeBusy, setConciergeBusy] = useState(false);
   const [conciergeError, setConciergeError] = useState<string | null>(null);
@@ -532,6 +556,31 @@ export default function Inbox(props: {
     setConciergeReply(next);
     setConciergeApproved(false);
     resetSendChecklist();
+  };
+
+  const applyReplyTemplate = (templateId: ReplyTemplateId) => {
+    if (!analysis) return;
+    let next = '';
+    if (templateId === 'unavailable') {
+      next = unavailableTemplate(shortcutUnavailableProduct);
+    } else if (templateId === 'reling_reject') {
+      next = relingRejectTemplate();
+    } else if (templateId === 'appointment') {
+      next = appointmentTemplate({
+        firstName: analysis.customer.firstName,
+        rentalStart: analysis.rental.rentalStart,
+        rentalEnd: analysis.rental.rentalEnd,
+      });
+    } else if (templateId === 'ack') {
+      next = ackTemplate({ firstName: analysis.customer.firstName });
+    }
+    if (!next) return;
+    if (conciergeReply.trim()) {
+      const ok = confirm('Vorlage anwenden und aktuellen Antworttext ersetzen?');
+      if (!ok) return;
+    }
+    setReplyDraft(next);
+    setReplyTemplateId(templateId);
   };
 
   const paymentInvoicesForSelectedRental = useMemo(
@@ -785,6 +834,8 @@ export default function Inbox(props: {
     if (!selectedThreadId) {
       setConciergeReply('');
       setConciergeInstruction('');
+      setReplyTemplateId('none');
+      setComposerAttachments([]);
       setConciergeApproved(false);
       resetSendChecklist();
       setConciergeError(null);
@@ -798,6 +849,8 @@ export default function Inbox(props: {
     setLowConfidenceApproved(false);
     setConciergeReply(analysis?.reply || '');
     setConciergeApproved(false);
+    setReplyTemplateId('none');
+    setComposerAttachments([]);
     resetSendChecklist();
     setConciergeError(null);
     setShortcutUnavailableProduct((analysis?.suggestion?.productType as ProductType) || 'Dachbox XL');
@@ -2864,6 +2917,30 @@ export default function Inbox(props: {
                     {conciergeMode === 'rework' && 'Überarbeiten: vorhandenen Entwurf gezielt anpassen'}
                   </div>
 
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-medium text-slate-700 mb-2">Vorlage</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
+                        value={replyTemplateId}
+                        onChange={(e) => setReplyTemplateId(e.target.value as ReplyTemplateId)}
+                      >
+                        <option value="none">Keine Vorlage</option>
+                        <option value="ack">Eingang bestätigen</option>
+                        <option value="appointment">Termin abstimmen</option>
+                        <option value="unavailable">Nicht verfügbar</option>
+                        <option value="reling_reject">Ablehnung Reling/Fixpunkte</option>
+                      </select>
+                      <button
+                        className="px-3 py-2 rounded-md border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-60"
+                        onClick={() => applyReplyTemplate(replyTemplateId)}
+                        disabled={replyTemplateId === 'none'}
+                      >
+                        Vorlage anwenden
+                      </button>
+                    </div>
+                  </div>
+
                   <label className="block">
                     <div className="text-xs font-medium text-slate-700 mb-1">Daniel-Anweisung (optional)</div>
                     <input
@@ -2893,6 +2970,49 @@ export default function Inbox(props: {
                       placeholder="Hier steht die generierte Antwort. Du kannst sie direkt anpassen."
                     />
                   </label>
+
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-medium text-slate-700">Anhänge (lokal)</div>
+                      <label className="px-2 py-1 rounded border border-slate-200 bg-white text-xs hover:bg-slate-50 cursor-pointer">
+                        Anhänge hinzufügen
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            if (!files.length) return;
+                            setComposerAttachments((prev) => [...prev, ...files]);
+                            e.currentTarget.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {composerAttachments.length === 0 ? (
+                      <div className="mt-2 text-xs text-slate-500">
+                        Noch keine Anhänge gewählt.
+                      </div>
+                    ) : (
+                      <div className="mt-2 space-y-1">
+                        {composerAttachments.map((f, idx) => (
+                          <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-2 text-xs rounded border border-slate-200 bg-white px-2 py-1">
+                            <span className="truncate">{f.name} ({Math.max(1, Math.round(f.size / 1024))} KB)</span>
+                            <button
+                              type="button"
+                              className="text-rose-700 hover:text-rose-800"
+                              onClick={() => setComposerAttachments((prev) => prev.filter((_, i) => i !== idx))}
+                            >
+                              Entfernen
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-2 text-[11px] text-slate-500">
+                      Hinweis: Bei „In Gmail antworten“ die ausgewählten Dateien im Gmail-Fenster manuell anhängen.
+                    </div>
+                  </div>
 
                   <details className="rounded-md border border-slate-200 bg-slate-50 p-2">
                     <summary className="cursor-pointer text-xs font-medium text-slate-700 select-none">
@@ -2943,6 +3063,10 @@ export default function Inbox(props: {
                       onClick={() => {
                         if (!canApproveAndOpenGmail || !gmailReplyHref || wizardStep < 3) return;
                         setConciergeApproved(true);
+                        if (composerAttachments.length > 0) {
+                          const names = composerAttachments.map((f) => `• ${f.name}`).join('\n');
+                          alert(`Bitte diese Anhänge im Gmail-Entwurf hinzufügen:\n\n${names}`);
+                        }
                         window.open(gmailReplyHref, '_blank', 'noopener,noreferrer');
                       }}
                       title={canApproveAndOpenGmail ? 'Setzt Freigabe und öffnet Gmail-Reply' : step2GateMessage}
@@ -2952,7 +3076,10 @@ export default function Inbox(props: {
                     <button
                       className="px-3 py-2 rounded-md border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-60"
                       onClick={async () => {
-                        await navigator.clipboard.writeText(conciergeReply || '');
+                        const attachmentList = composerAttachments.length
+                          ? `\n\nAnhänge hinzufügen:\n${composerAttachments.map((f) => `- ${f.name}`).join('\n')}`
+                          : '';
+                        await navigator.clipboard.writeText((conciergeReply || '') + attachmentList);
                         alert('Antwort in Zwischenablage kopiert.');
                       }}
                       disabled={!conciergeReply.trim()}
