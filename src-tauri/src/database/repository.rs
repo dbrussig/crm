@@ -446,7 +446,10 @@ pub fn replace_invoice_items(app: &AppHandle, invoice_id: &str, items: &[Value])
 
 fn open_connection(app: &AppHandle) -> Result<Connection, String> {
     let path = database_path(app).map_err(|error| error.to_string())?;
-    Connection::open(path).map_err(|error| error.to_string())
+    let conn = Connection::open(path).map_err(|error| error.to_string())?;
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;")
+        .map_err(|error| error.to_string())?;
+    Ok(conn)
 }
 
 fn fetch_single_json<P>(connection: &Connection, sql: &str, params: P) -> Result<Option<Value>, String>

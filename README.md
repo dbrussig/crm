@@ -57,6 +57,32 @@ Hinweis:
 - Release-Uploads in GitLab Generic Packages sind robust gegen Duplikate (bestehende Dateien fuehren nicht mehr zu hartem Job-Abbruch).
 - Wichtig fuer echte Updates: `src-tauri/tauri.conf.json` Version muss pro Release hochgezaehlt werden (nur hoehere Semver-Versionen werden installiert).
 
+## iCloud Sync (Desktop)
+
+- Desktop-Backend unterstützt jetzt iCloud-Drive-Pfade für DB und Dokumente:
+  - DB: `~/Library/Mobile Documents/iCloud~com~serverraum247~mietparkcrm~desktop/Documents/data/mietpark-crm.db`
+  - Dokumente: `~/Library/Mobile Documents/iCloud~com~serverraum247~mietparkcrm~desktop/Documents/documents/`
+- Fallback bleibt aktiv: wenn iCloud lokal nicht verfügbar ist, wird weiterhin `AppData` genutzt.
+- Beim App-Start läuft eine sichere Einmal-Migration (best effort) von `AppData` nach iCloud:
+  - bestehende Altdaten bleiben als Backup erhalten
+  - nur fehlende Zieldateien werden kopiert
+- SQLite-Verbindungen laufen mit `PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;`.
+- Dokument-Metadaten speichern relative Dateinamen statt absolute Pfade; Legacy absolute Pfade werden weiterhin gelesen.
+
+### iCloud Signing Voraussetzung (macOS)
+
+- Für echte iCloud-Container-Synchronisierung muss die App mit Apple Developer Zertifikat signiert werden.
+- `src-tauri/Entitlements.plist` ist hinterlegt und in `tauri.conf.json` unter `bundle.macOS.entitlements` eingetragen.
+- `bundle.macOS.signingIdentity` bleibt bis zur Zertifikat-Konfiguration auf `null`.
+
+### iCloud Backups (Dateibasiert)
+
+- Neuer Rust-Provider erstellt DB-Backups im iCloud-Container:
+  - Ziel: `.../Documents/backups/mietpark-crm_YYYYMMDD_HHMMSS.db`
+- Verfügbare Tauri-Commands:
+  - `create_icloud_backup`
+  - `list_icloud_backups`
+
 ## Doku-Pflicht fuer Features/Fixes
 
 Ab sofort gilt verbindlich:

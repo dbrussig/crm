@@ -11,6 +11,8 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Inbox-Composer erweitert: Direktversand (SMTP/App-Passwort), Vorlagen, lokale Anhaenge und optionales `Verarbeitet` nach Versand.
 - Einstellungen erweitert: `Anhaenge-Test senden` prueft die lokale Mail-Bridge inkl. Attachment-Payload.
 - Finanz-Dashboard (Option A): KPIs `Offene Forderungen €` und `Monatsumsatz €` sowie Liste `Überfällige Rechnungen` mit Direkt-Öffnen des Belegs.
+- iCloud-Backup-Provider im Tauri-Backend inkl. Commands `create_icloud_backup` und `list_icloud_backups`.
+- macOS Entitlements-Datei für iCloud-Container (`src-tauri/Entitlements.plist`) und Einbindung in `tauri.conf.json`.
 
 ### Changed
 - Projektregeln verschaerft: Feature-/Fix-PRs muessen `README.md` und `CHANGELOG.md` aktualisieren (CI-Guard).
@@ -19,6 +21,9 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Build-Chunks fuer Desktop gezielt aufgeteilt (`Inbox`, `Belege-Workflow`, `PDF-Service`, Vendor-Segmente), um den Main-Chunk deutlich zu verkleinern.
 - Dashboard-Datenfluss erweitert: `loadDashboardData()` lädt zusätzlich Finanzkennzahlen über `getDashboardFinancials()`.
 - Überfällige Rechnungen im Dashboard zeigen jetzt zusätzlich die Anzahl Tage überfällig (`daysOverdue`) pro Eintrag.
+- Datenpfade im Desktop-Backend sind iCloud-fähig: DB und Dokumente nutzen bevorzugt den iCloud-Container, mit Fallback auf `AppData`.
+- Dokumentablage speichert `file_path` jetzt relativ (statt absolut) und löst den absoluten Pfad zur Laufzeit auf (inkl. Legacy-Fallback für Altdaten).
+- SQLite-Verbindungen setzen jetzt WAL + `busy_timeout` global für robustere Dateizugriffe.
 
 ### Fixed
 - Repository-Hygiene verbessert: lokale DB- und nicht-projektbezogene Artefakte bleiben ausserhalb von GitLab.
@@ -35,3 +40,4 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - Seed-Daten bereinigt: veraltete localStorage-Belegzaehler entfernt.
 - Mail-Bridge-Fallback verbessert: wenn Attachment-Payload nicht unterstuetzt wird, erfolgt automatischer Retry ohne Anhaenge mit klarer Meldung.
 - Finanz-Dashboard regressionssicher gemacht: neue Unit-Tests für Bruttopreis, Zahlungsabzug, Monatsumsatz, Overdue-Filter und `daysOverdue`-Berechnung.
+- Backup-Snapshot/Restore nutzt jetzt die SQLite-Service-Schicht statt Legacy-IndexedDB-Keys.

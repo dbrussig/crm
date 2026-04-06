@@ -1,7 +1,29 @@
 import type { Customer, CustomerDocument, Invoice, InvoiceItem, Message, Payment, RentalRequest, Resource } from '../types';
 import { deleteKey, loadJson, saveJson } from './_storage';
 import JSZip from 'jszip';
-import { deleteAllCustomerDocuments, getAllCustomerDocuments, getCustomerDocumentPayload, setCustomerDocumentPayload } from './sqliteService';
+import {
+  addInvoice,
+  addPayment,
+  addRentalRequest,
+  addResource,
+  createCustomer,
+  createMessage,
+  deleteAllCustomerDocuments,
+  getAllCustomerDocuments,
+  getAllCustomers,
+  getAllInvoices,
+  getAllMessages,
+  getAllPayments,
+  getAllRentalRequests,
+  getAllResources,
+  getCustomerDocumentPayload,
+  getInvoiceItems,
+  setCustomerDocumentPayload,
+  updateCustomer,
+  updateInvoice,
+  updateRentalRequest,
+  updateResource,
+} from './sqliteService';
 
 const KEY_BACKUPS = 'mietpark_crm_backups_v1';
 
@@ -25,27 +47,85 @@ interface BackupPayload {
 }
 
 async function snapshot(): Promise<BackupPayload> {
-  return {
-    customers: await loadJson<Customer[]>('mietpark_crm_customers_v1', []),
-    rentals: await loadJson<RentalRequest[]>('mietpark_crm_rentals_v1', []),
-    messages: await loadJson<Message[]>('mietpark_crm_messages_v1', []),
-    payments: await loadJson<Payment[]>('mietpark_crm_payments_v1', []),
-    resources: await loadJson<Resource[]>('mietpark_crm_resources_v1', []),
-    customerDocs: await getAllCustomerDocuments(),
-    invoices: await loadJson<Invoice[]>('mietpark_crm_invoices_v1', []),
-    invoiceItems: await loadJson<InvoiceItem[]>('mietpark_crm_invoice_items_v1', []),
-  };
+  const [customers, rentals, messages, payments, resources, customerDocs, invoices] = await Promise.all([
+    getAllCustomers(),
+    getAllRentalRequests(),
+    getAllMessages(),
+    getAllPayments(),
+    getAllResources(),
+    getAllCustomerDocuments(),
+    getAllInvoices(),
+  ]);
+
+  const invoiceItems: InvoiceItem[] = [];
+  for (const invoice of invoices) {
+    const items = await getInvoiceItems(invoice.id);
+    invoiceItems.push(...items);
+  }
+
+  return { customers, rentals, messages, payments, resources, customerDocs, invoices, invoiceItems };
 }
 
 async function restore(payload: BackupPayload) {
-  await saveJson('mietpark_crm_customers_v1', payload.customers);
-  await saveJson('mietpark_crm_rentals_v1', payload.rentals);
-  await saveJson('mietpark_crm_messages_v1', payload.messages);
-  await saveJson('mietpark_crm_payments_v1', payload.payments || []);
-  await saveJson('mietpark_crm_resources_v1', payload.resources);
-  await saveJson('mietpark_crm_customer_docs_v1', payload.customerDocs || []);
-  await saveJson('mietpark_crm_invoices_v1', payload.invoices);
-  await saveJson('mietpark_crm_invoice_items_v1', payload.invoiceItems);
+  const [existingCustomers, existingRentals, existingMessages, existingResources, existingInvoices] =
+    await Promise.all([
+      getAllCustomers(),
+      getAllRentalRequests(),
+      getAllMessages(),
+      getAllResources(),
+      getAllInvoices(),
+    ]);
+
+  const customerById = new Map(existingCustomers.map((item) => [item.id, item]));
+  for (const customer of payload.customers || []) {
+    if (customerById.has(customer.id)) await updateCustomer(customer);
+    else await createCustomer(customer);
+  }
+
+  const rentalById = new Map(existingRentals.map((item) => [item.id, item]));
+  for (const rental of payload.rentals || []) {
+    if (rentalById.has(rental.id)) await updateRentalRequest(rental.id, rental);
+    else await addRentalRequest(rental);
+  }
+
+  const messageById = new Map(existingMessages.map((item) => [item.id, item]));
+  for (const message of payload.messages || []) {
+    if (messageById.has(message.id)) {
+      // Desktop path performs upsert via command; web fallback skips duplicates.
+      await createMessage(message);
+    } else {
+      await createMessage(message);
+    }
+  }
+
+  for (const payment of payload.payments || []) {
+    await addPayment(payment);
+  }
+
+  const resourceById = new Map(existingResources.map((item) => [item.id, item]));
+  for (const resource of payload.resources || []) {
+    if (resourceById.has(resource.id)) await updateResource(resource.id, resource);
+    else await addResource(resource);
+  }
+
+  const invoiceById = new Map(existingInvoices.map((item) => [item.id, item]));
+  const itemsByInvoice = new Map<string, InvoiceItem[]>();
+  for (const item of payload.invoiceItems || []) {
+    const bucket = itemsByInvoice.get(item.invoiceId) || [];
+    bucket.push(item);
+    itemsByInvoice.set(item.invoiceId, bucket);
+  }
+
+  for (const invoice of payload.invoices || []) {
+    const items = itemsByInvoice.get(invoice.id) || [];
+    if (invoiceById.has(invoice.id)) {
+      await updateInvoice(invoice.id, invoice, items);
+    } else {
+      await addInvoice(invoice, items);
+    }
+  }
+
+  // Customer document metadata is restored via per-document payload import in ZIP flow.
 }
 
 export async function getAllBackups(): Promise<BackupMetadata[]> {

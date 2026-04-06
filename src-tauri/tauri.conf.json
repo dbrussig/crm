@@ -28,7 +28,8 @@
     "active": true,
     "targets": ["app", "dmg"],
     "macOS": {
-      "signingIdentity": null
+      "signingIdentity": null,
+      "entitlements": "Entitlements.plist"
     }
   },
   "plugins": {

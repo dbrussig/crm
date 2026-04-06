@@ -12,6 +12,9 @@ pub fn run() {
         .setup(|app| {
             let app_handle = app.handle();
             database::init::ensure_app_directories(&app_handle)?;
+            if let Err(error) = database::init::migrate_data_to_icloud(&app_handle) {
+                eprintln!("[iCloud] Migration fehlgeschlagen (non-fatal): {}", error);
+            }
             database::init::ensure_database(&app_handle)?;
             Ok(())
         })
@@ -21,6 +24,8 @@ pub fn run() {
             commands::auth::auth_delete_secret,
             commands::health::healthcheck,
             commands::database::database_summary,
+            commands::database::create_icloud_backup,
+            commands::database::list_icloud_backups,
             commands::crm::list_customers,
             commands::crm::get_customer_by_id,
             commands::crm::find_customer_by_email,

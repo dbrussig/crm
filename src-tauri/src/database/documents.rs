@@ -5,9 +5,9 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{path::BaseDirectory, AppHandle, Manager};
+use tauri::AppHandle;
 
-use super::init::database_path;
+use super::init::{database_path, docs_base_dir};
 
 #[derive(Serialize)]
 pub struct DocumentPayloadResponse {
@@ -44,7 +44,8 @@ pub fn upsert_customer_document(
     let mime_type = string_field_optional(doc, "mimeType");
     let size_bytes = optional_number_field(doc, "sizeBytes");
     let created_at = number_field(doc, "createdAt");
-    let file_path = document_path(app, &id, &file_name)?;
+    let relative = relative_doc_filename(&id, &file_name);
+    let file_path = resolve_doc_path(app, &relative)?;
 
     if let Some(payload) = payload_base64 {
         let bytes = STANDARD.decode(payload).map_err(|error| error.to_string())?;
@@ -78,7 +79,7 @@ pub fn upsert_customer_document(
             params![
                 id,
                 customer_id,
-                file_path.to_string_lossy().to_string(),
+                relative.clone(),
                 file_name,
                 mime_type,
                 size_bytes.unwrap_or_else(|| file_size_or_zero(&file_path)),
@@ -116,11 +117,16 @@ pub fn get_customer_document_payload(app: &AppHandle, doc_id: &str) -> Result<Op
         .optional()
         .map_err(|error| error.to_string())?;
 
-    let Some(path) = file_path else {
+    let Some(relative) = file_path else {
         return Ok(None);
     };
 
-    let bytes = fs::read(path).map_err(|error| error.to_string())?;
+    let abs_path = if relative.starts_with('/') {
+        PathBuf::from(&relative)
+    } else {
+        resolve_doc_path(app, &relative)?
+    };
+    let bytes = fs::read(&abs_path).map_err(|error| error.to_string())?;
     Ok(Some(DocumentPayloadResponse {
         data_base64: STANDARD.encode(bytes),
     }))
@@ -141,7 +147,12 @@ pub fn set_customer_document_payload(
         .map_err(|error| error.to_string())?;
 
     let bytes = STANDARD.decode(payload_base64).map_err(|error| error.to_string())?;
-    fs::write(&file_path, &bytes).map_err(|error| error.to_string())?;
+    let abs_path = if file_path.starts_with('/') {
+        PathBuf::from(&file_path)
+    } else {
+        resolve_doc_path(app, &file_path)?
+    };
+    fs::write(&abs_path, &bytes).map_err(|error| error.to_string())?;
 
     let mut payload = serde_json::from_str::<Value>(&raw_json).map_err(|error| error.to_string())?;
     if let Value::Object(map) = &mut payload {
@@ -169,8 +180,13 @@ pub fn delete_customer_document(app: &AppHandle, doc_id: &str) -> Result<(), Str
         .optional()
         .map_err(|error| error.to_string())?;
 
-    if let Some(path) = file_path {
-        let _ = fs::remove_file(path);
+    if let Some(relative) = file_path {
+        let abs = if relative.starts_with('/') {
+            PathBuf::from(&relative)
+        } else {
+            resolve_doc_path(app, &relative).unwrap_or_else(|_| PathBuf::from(&relative))
+        };
+        let _ = fs::remove_file(abs);
     }
 
     connection
@@ -189,13 +205,13 @@ pub fn delete_all_customer_documents(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn document_path(app: &AppHandle, doc_id: &str, file_name: &str) -> Result<PathBuf, String> {
-    let docs_dir = app
-        .path()
-        .resolve("documents", BaseDirectory::AppData)
-        .map_err(|error| error.to_string())?;
-    fs::create_dir_all(&docs_dir).map_err(|error| error.to_string())?;
-    Ok(docs_dir.join(format!("{}_{}", doc_id, sanitize_filename(file_name))))
+fn relative_doc_filename(doc_id: &str, file_name: &str) -> String {
+    format!("{}_{}", doc_id, sanitize_filename(file_name))
+}
+
+fn resolve_doc_path(app: &AppHandle, relative: &str) -> Result<PathBuf, String> {
+    let docs_dir = docs_base_dir(app).map_err(|error| error.to_string())?;
+    Ok(docs_dir.join(relative))
 }
 
 fn sanitize_filename(name: &str) -> String {
@@ -213,7 +229,10 @@ fn file_size_or_zero(path: &Path) -> i64 {
 
 fn open_connection(app: &AppHandle) -> Result<Connection, String> {
     let path = database_path(app).map_err(|error| error.to_string())?;
-    Connection::open(path).map_err(|error| error.to_string())
+    let conn = Connection::open(path).map_err(|error| error.to_string())?;
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;")
+        .map_err(|error| error.to_string())?;
+    Ok(conn)
 }
 
 fn fetch_single_json<P>(connection: &Connection, sql: &str, params: P) -> Result<Option<Value>, String>
