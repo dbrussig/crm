@@ -6,6 +6,7 @@ import { deleteKey, loadJson, saveJson } from '../services/_storage';
 import { addPayment, getAllInvoices, getAllPayments, getAllRentalRequests } from '../services/sqliteService';
 import { buildThreadPaymentAssignments, pickSuggestedInvoiceForPayment, type ThreadPaymentAssignment } from '../services/inboxPaymentMappingService';
 import { generateConciergeReply, isAIAvailable } from '../services/aiService';
+import { openGenericCompose } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
 
 const CACHE_KEY = 'mietpark_crm_inbox_cache_v1';
@@ -501,6 +502,7 @@ export default function Inbox(props: {
   const [conciergeReply, setConciergeReply] = useState('');
   const [replyTemplateId, setReplyTemplateId] = useState<ReplyTemplateId>('none');
   const [composerAttachments, setComposerAttachments] = useState<File[]>([]);
+  const [directSendBusy, setDirectSendBusy] = useState(false);
   const [conciergeApproved, setConciergeApproved] = useState(false);
   const [conciergeBusy, setConciergeBusy] = useState(false);
   const [conciergeError, setConciergeError] = useState<string | null>(null);
@@ -1367,6 +1369,26 @@ export default function Inbox(props: {
       setConciergeError(msg || 'Concierge-Antwort konnte nicht erzeugt werden.');
     } finally {
       setConciergeBusy(false);
+    }
+  }
+
+  async function sendReplyDirect() {
+    if (!analysis?.fromEmail || !conciergeReply.trim()) return;
+    if (!conciergeApproved || !sendChecklistDone || wizardStep < 3) return;
+    setDirectSendBusy(true);
+    try {
+      await openGenericCompose({
+        toEmail: analysis.fromEmail,
+        subject: `Re: ${selectedThread?.subject || ''}`.trim() || 'Re: Nachricht',
+        body: conciergeReply,
+        preferGmail: false,
+        attachments: composerAttachments,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`Direktversand fehlgeschlagen: ${msg}`);
+    } finally {
+      setDirectSendBusy(false);
     }
   }
 
@@ -3057,6 +3079,14 @@ export default function Inbox(props: {
                   )}
 
                   <div className="flex flex-wrap gap-2">
+                    <button
+                      className="px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-60"
+                      disabled={!conciergeReply.trim() || !conciergeApproved || !sendChecklistDone || wizardStep < 3 || directSendBusy}
+                      onClick={sendReplyDirect}
+                      title={sendChecklistDone ? 'Direkt über SMTP/App-Passwort senden (falls konfiguriert)' : step2GateMessage}
+                    >
+                      {directSendBusy ? 'Sende…' : 'Direkt senden'}
+                    </button>
                     <button
                       className="px-3 py-2 rounded-md bg-emerald-700 text-white text-sm hover:bg-emerald-800 disabled:opacity-60"
                       disabled={!canApproveAndOpenGmail || wizardStep < 3}

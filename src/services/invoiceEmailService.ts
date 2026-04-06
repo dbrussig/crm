@@ -81,8 +81,26 @@ async function sendViaLocalBridge(opts: {
   toEmail: string;
   subject: string;
   body: string;
+  attachments?: File[];
 }): Promise<void> {
   const endpoint = String(opts.settings.bridgeUrl || '').trim();
+  const files = Array.isArray(opts.attachments) ? opts.attachments : [];
+  const attachments = await Promise.all(
+    files.map(async (f) => {
+      const buf = await f.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        const chunk = bytes.subarray(i, i + 0x8000);
+        binary += String.fromCharCode(...chunk);
+      }
+      return {
+        filename: String(f.name || 'attachment'),
+        mimeType: String(f.type || 'application/octet-stream'),
+        contentBase64: btoa(binary),
+      };
+    })
+  );
   const payload = {
     smtp: {
       host: opts.settings.smtpHost,
@@ -97,6 +115,7 @@ async function sendViaLocalBridge(opts: {
       to: opts.toEmail,
       subject: opts.subject,
       body: opts.body,
+      attachments,
     },
   };
   const resp = await fetch(endpoint, {
@@ -133,6 +152,7 @@ export async function openGenericCompose(opts: {
   body: string;
   preferGmail?: boolean;
   mailTransportSettings?: MailTransportSettings;
+  attachments?: File[];
 }): Promise<void> {
   const settings = getMailSettings({ mailTransportSettings: opts.mailTransportSettings });
   const approved = window.confirm(
@@ -147,8 +167,9 @@ export async function openGenericCompose(opts: {
         toEmail: opts.toEmail,
         subject: opts.subject,
         body: opts.body,
+        attachments: opts.attachments,
       });
-      alert('E-Mail wurde über App-Passwort (SMTP) gesendet.');
+      alert(`E-Mail wurde über App-Passwort (SMTP) gesendet.${opts.attachments?.length ? ` Anhänge: ${opts.attachments.length}` : ''}`);
       return;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
