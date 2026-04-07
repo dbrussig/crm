@@ -164,6 +164,8 @@ export default function App() {
     () =>
       dashboardRentals.filter((r) => {
         if (!openStatuses.includes(r.status)) return false;
+        // Only count rentals with an actually assigned resource (googleCalendarId as proxy)
+        if (!r.googleCalendarId) return false;
         const startDay = toLocalDayStart(r.rentalStart);
         const endDay = toLocalDayStart(r.rentalEnd);
         return startDay <= today && endDay >= today;
@@ -609,14 +611,63 @@ export default function App() {
             <div className="mt-4 grid grid-cols-1 lg:grid-cols-1 gap-4">
               <div className="bg-white border border-slate-200 rounded-xl p-4">
                 <div className="text-sm font-semibold text-slate-900">Heute im Fokus</div>
-                <ul className="mt-2 text-sm text-slate-700 space-y-2">
-                  <li>• {openRentalsCount} Vorgänge aktiv bearbeiten</li>
-                  <li>• {pendingInvoicesCount} gesendete Belege nachfassen</li>
-                  <li>• {draftInvoicesCount} Entwürfe finalisieren</li>
-                  <li>• Offene Forderungen: {formatCurrency(dashboardFinancials.offeneForderungen)}</li>
-                  <li>• {activeIssuedCount} Ressource(n) aktuell im Einsatz</li>
-                  <li>• {resourceAvailableCount} / {dashboardResourceTotal} heute verfügbar</li>
-                </ul>
+                <div className="mt-3 space-y-2">
+                  {/* Übergaben heute */}
+                  {dashboardRentals
+                    .filter((r) => openStatuses.includes(r.status) && toLocalDayStart(r.rentalStart) === toLocalDayStart(Date.now()))
+                    .map((r) => (
+                      <button
+                        key={`start-${r.id}`}
+                        onClick={() => { setSelectedRentalId(r.id); setActiveView('vorgaenge'); }}
+                        className="w-full text-left rounded-lg border border-teal-200 bg-teal-50 p-3 hover:bg-teal-100"
+                      >
+                        <div className="text-sm font-medium text-teal-900">🚀 Übergabe heute: {r.productType}</div>
+                        <div className="text-xs text-teal-700 mt-0.5">
+                          {(() => { const c = customers.find(cu => cu.id === r.customerId); return c ? `${c.firstName} ${c.lastName}`.trim() : r.id; })()}
+                        </div>
+                      </button>
+                    ))}
+                  {/* Rückgaben heute */}
+                  {dashboardRentals
+                    .filter((r) => openStatuses.includes(r.status) && toLocalDayStart(r.rentalEnd) === toLocalDayStart(Date.now()))
+                    .map((r) => (
+                      <button
+                        key={`end-${r.id}`}
+                        onClick={() => { setSelectedRentalId(r.id); setActiveView('vorgaenge'); }}
+                        className="w-full text-left rounded-lg border border-amber-200 bg-amber-50 p-3 hover:bg-amber-100"
+                      >
+                        <div className="text-sm font-medium text-amber-900">🔙 Rückgabe heute: {r.productType}</div>
+                        <div className="text-xs text-amber-700 mt-0.5">
+                          {(() => { const c = customers.find(cu => cu.id === r.customerId); return c ? `${c.firstName} ${c.lastName}`.trim() : r.id; })()}
+                        </div>
+                      </button>
+                    ))}
+                  {/* Überfällige Rechnungen Kurzinfo */}
+                  {dashboardFinancials.ueberfaelligeRechnungen.length > 0 && (
+                    <button
+                      onClick={() => setActiveView('belege')}
+                      className="w-full text-left rounded-lg border border-rose-200 bg-rose-50 p-3 hover:bg-rose-100"
+                    >
+                      <div className="text-sm font-medium text-rose-900">⚠️ {dashboardFinancials.ueberfaelligeRechnungen.length} überfällige Rechnung{dashboardFinancials.ueberfaelligeRechnungen.length === 1 ? '' : 'en'}</div>
+                      <div className="text-xs text-rose-700 mt-0.5">Gesamt offen: {formatCurrency(dashboardFinancials.offeneForderungen)}</div>
+                    </button>
+                  )}
+                  {/* Entwürfe */}
+                  {draftInvoicesCount > 0 && (
+                    <button
+                      onClick={() => setActiveView('belege')}
+                      className="w-full text-left rounded-lg border border-indigo-200 bg-indigo-50 p-3 hover:bg-indigo-100"
+                    >
+                      <div className="text-sm font-medium text-indigo-900">📝 {draftInvoicesCount} Beleg-Entwurf{draftInvoicesCount === 1 ? '' : 'e'} finalisieren</div>
+                    </button>
+                  )}
+                  {/* Alles erledigt */}
+                  {dashboardRentals.filter((r) => openStatuses.includes(r.status) && (toLocalDayStart(r.rentalStart) === toLocalDayStart(Date.now()) || toLocalDayStart(r.rentalEnd) === toLocalDayStart(Date.now()))).length === 0
+                    && dashboardFinancials.ueberfaelligeRechnungen.length === 0
+                    && draftInvoicesCount === 0 && (
+                    <div className="text-sm text-emerald-700">✓ Keine dringenden Aufgaben für heute.</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -5,6 +5,8 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
   clearScreen: false,
+  // Tauri production bundles need relative asset URLs so app:// loaded index can resolve chunks/css.
+  base: process.env.TAURI_ENV_PLATFORM ? './' : '/',
   plugins: [react()],
   server: {
     port: 5173,

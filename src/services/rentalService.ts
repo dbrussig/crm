@@ -290,12 +290,9 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
   if (newStatus === 'abgeschlossen') updates.completedAt = Date.now();
 
   // Calendar side effects (local-only CRM, uses browser OAuth)
-  if (newStatus === 'angenommen') {
-    // Requirement: always create a calendar entry when the order is confirmed.
-    if (!rental.googleCalendarId) {
-      throw { error: 'Kalender-ID (Ressource) fehlt. Bitte beim Vermietungsgegenstand eine Kalender-ID pflegen.' };
-    }
-  }
+  // Note: missing googleCalendarId is a soft warning only – it is already tracked
+  // in missingInfo via calculateMissingInfo(). We must not block the workflow
+  // when Google OAuth / calendar integration is not configured.
 
   if (newStatus === 'angenommen' && rental.googleCalendarId && !rental.googleEventId) {
     try {

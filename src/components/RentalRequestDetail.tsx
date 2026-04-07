@@ -1846,6 +1846,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                         {onOpenInvoice && (
                           <button
                             onClick={() => onOpenInvoice(inv.id)}
+                            title="Beleg im Editor öffnen"
                             className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
                           >
                             Bearbeiten
@@ -1853,12 +1854,14 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                         )}
                         <button
                           onClick={() => openInvoicePreview(inv)}
+                          title="PDF-Vorschau öffnen"
                           className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
                         >
                           Ansehen
                         </button>
                         <button
                           onClick={() => saveInvoicePdfViaPrintDialog(inv)}
+                          title="PDF speichern oder drucken"
                           className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
                         >
                           PDF speichern
@@ -1878,6 +1881,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                               mailTransportSettings,
                             });
                           }}
+                          title="E-Mail an Kunden vorbereiten"
                           className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
                         >
                           Mail
@@ -1906,6 +1910,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                   setNewEndTime(formatTimeForInput(rental.returnDate || rental.rentalEnd, '18:00'));
                 }}
                 disabled={actionLoading}
+                title="Mietzeitraum mit neuer Übergabe- und Rückgabezeit setzen"
                 className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 text-sm font-medium"
               >
                 📅 Zeitraum ändern
@@ -1915,6 +1920,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 <button
                   onClick={handleCheckAvailability}
                   disabled={actionLoading}
+                  title="Verfügbarkeit im Kalender prüfen"
                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-300 text-sm font-medium"
                 >
                   🔍 Verfügbarkeit prüfen
@@ -1926,6 +1932,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 <>
                   <button
                     onClick={() => handleGenerateTemplate('availability')}
+                    title="E-Mail-Antwort für Verfügbarkeit generieren"
                     className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
                   >
                     📝 Verfügbarkeit Antwort
@@ -1934,6 +1941,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                   {rental.availabilityStatus === 'frei' && (
                     <button
                       onClick={() => handleGenerateTemplate('offer')}
+                      title="Angebotstext für E-Mail generieren"
                       className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
                     >
                       💰 Angebot Text
@@ -1947,6 +1955,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 <button
                   onClick={() => handlePrepareDocumentDraft('Angebot')}
                   disabled={actionLoading}
+                  title="Neues Angebot erstellen und im Editor öffnen"
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 text-sm font-medium col-span-2"
                 >
                   ✅ Angebot vorbereiten
@@ -1958,6 +1967,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 <>
                   <button
                     onClick={() => handlePrepareDocumentDraft('Angebot')}
+                    title="Vorhandenes Angebot öffnen und anpassen"
                     className="px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 text-sm font-medium col-span-2"
                   >
                     🛠 Angebot überarbeiten
@@ -1968,6 +1978,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                         setRental((prev) => (prev ? { ...prev, acceptedAt: ts } : prev));
                       });
                     }}
+                    title="Angebot als angenommen markieren und Workflow fortsetzen"
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
                   >
                     ✅ Angenommen
@@ -1981,6 +1992,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       });
                       alert('Angebot als abgelehnt gespeichert.');
                     }}
+                    title="Angebot als abgelehnt markieren"
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
                   >
                     ❌ Angebot abgelehnt
@@ -1993,6 +2005,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                   onClick={async () => {
                     await handleTransitionAction('uebergabe_rueckgabe');
                   }}
+                  title="In den Status Übergabe/Rückgabe wechseln"
                   className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm font-medium col-span-2"
                 >
                   🚚 Übergabe/Rückgabe starten
@@ -2002,28 +2015,39 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
               {rental.status === 'uebergabe_rueckgabe' && (
                 <button
                   onClick={async () => {
-                    const ok = confirm('Vorgang als abgeschlossen markieren?');
+                    // Prüfen ob verknüpfte Rechnung noch offen (gesendet/angenommen, nicht storniert/archiviert)
+                    const unpaidInvoice = linkedInvoices.find(
+                      (inv) => inv.invoiceType === 'Rechnung' && (inv.state === 'gesendet' || inv.state === 'angenommen')
+                    );
+                    const warningText = unpaidInvoice
+                      ? `\n\n⚠️ Hinweis: Rechnung ${unpaidInvoice.invoiceNo} ist noch nicht als bezahlt markiert (Status: ${unpaidInvoice.state}).`
+                      : '';
+                    const ok = confirm(`Vorgang als abgeschlossen markieren?${warningText}`);
                     if (!ok) return;
                     await handleTransitionAction('abgeschlossen', (ts) => {
                       setRental((prev) => (prev ? { ...prev, completedAt: ts } : prev));
                     });
                   }}
+                  title="Vorgang abschließen"
                   className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium col-span-2"
                 >
                   ✅ Vorgang abschließen
                 </button>
               )}
 
+
               {(rental.status === 'angenommen' || rental.status === 'uebergabe_rueckgabe') && (
                 <>
                   <button
                     onClick={() => handlePrepareDocumentDraft('Auftrag')}
+                    title="Auftrag aus diesem Vorgang erstellen"
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
                   >
                     📄 Auftrag vorbereiten
                   </button>
                   <button
                     onClick={() => handlePrepareDocumentDraft('Rechnung')}
+                    title="Rechnung aus diesem Vorgang erstellen"
                     className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
                   >
                     🧾 Rechnung vorbereiten

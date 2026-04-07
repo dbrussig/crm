@@ -223,6 +223,98 @@ pub fn delete_resource(app: &AppHandle, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn list_accessories(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM accessories ORDER BY updated_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|error| error.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn upsert_accessory(app: &AppHandle, accessory: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(accessory, "id")?;
+    let name = required_string(accessory, "name")?;
+    let category = required_string(accessory, "category")?;
+    let inventory_key = required_string(accessory, "inventoryKey")?;
+    let brand = string_field_optional(accessory, "brand");
+    let model = string_field_optional(accessory, "model");
+    let is_active = if accessory
+        .get("isActive")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(true)
+    {
+        1
+    } else {
+        0
+    };
+    let created_at = number_field(accessory, "createdAt");
+    let updated_at = optional_number_field(accessory, "updatedAt").unwrap_or(created_at);
+    let raw_json = accessory.to_string();
+
+    connection
+        .execute(
+            "INSERT INTO accessories (
+               id, name, category, inventory_key, brand, model, is_active, created_at, updated_at, raw_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               category = excluded.category,
+               inventory_key = excluded.inventory_key,
+               brand = excluded.brand,
+               model = excluded.model,
+               is_active = excluded.is_active,
+               updated_at = excluded.updated_at,
+               raw_json = excluded.raw_json",
+            params![
+                id,
+                name,
+                category,
+                inventory_key,
+                brand,
+                model,
+                is_active,
+                created_at,
+                updated_at,
+                raw_json
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn update_accessory(app: &AppHandle, id: &str, updates: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let existing = fetch_single_json(
+        &connection,
+        "SELECT raw_json FROM accessories WHERE id = ?1",
+        params![id],
+    )?
+    .ok_or_else(|| "Accessory not found".to_string())?;
+
+    let mut merged = existing;
+    merge_json(&mut merged, updates);
+    upsert_accessory(app, &merged)
+}
+
+pub fn delete_accessory(app: &AppHandle, id: &str) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection
+        .execute("DELETE FROM accessories WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 pub fn list_messages(app: &AppHandle) -> Result<Vec<Value>, String> {
     let connection = open_connection(app)?;
     let mut stmt = connection
@@ -391,13 +483,26 @@ pub fn upsert_invoice(app: &AppHandle, invoice: &Value) -> Result<(), String> {
 }
 
 pub fn delete_invoice(app: &AppHandle, id: &str) -> Result<(), String> {
-    let connection = open_connection(app)?;
-    connection
-        .execute("DELETE FROM invoices WHERE id = ?1", params![id])
+    let mut connection = open_connection(app)?;
+    let transaction = connection.transaction().map_err(|error| error.to_string())?;
+
+    // Keep delete robust even when payments are already mapped to this invoice.
+    transaction
+        .execute(
+            "UPDATE payments SET invoice_id = NULL WHERE invoice_id = ?1",
+            params![id],
+        )
         .map_err(|error| error.to_string())?;
-    connection
+
+    // Respect FK order: child rows first, parent invoice last.
+    transaction
         .execute("DELETE FROM invoice_items WHERE invoice_id = ?1", params![id])
         .map_err(|error| error.to_string())?;
+    transaction
+        .execute("DELETE FROM invoices WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+
+    transaction.commit().map_err(|error| error.to_string())?;
     Ok(())
 }
 

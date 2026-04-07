@@ -21,15 +21,13 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function openBlobPreview(blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  const win = window.open(url, '_blank', 'noopener,noreferrer');
-  if (!win) {
-    URL.revokeObjectURL(url);
-    throw new Error('Vorschau wurde vom Browser blockiert. Bitte Pop-ups erlauben.');
-  }
-  // Keep URL alive for the opened tab long enough.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Dokument konnte nicht für die Vorschau gelesen werden.'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsDataURL(blob);
+  });
 }
 
 export default function CustomerDocumentsModal(props: { customer: Customer; onClose: () => void }) {
@@ -37,6 +35,7 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ src: string; mime: string; filename: string } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -84,9 +83,11 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
             </button>
             <button
               className="px-3 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800"
-              onClick={props.onClose}
+              onClick={() => {
+                props.onClose();
+              }}
             >
-              Schliessen
+              Schließen
             </button>
           </div>
         </div>
@@ -161,7 +162,8 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
                             mime.startsWith('application/pdf') ||
                             mime.startsWith('image/');
                           if (isPreviewable) {
-                            openBlobPreview(blob);
+                            const src = await blobToDataUrl(blob);
+                            setPreview({ src, mime, filename: d.filename || 'Dokument' });
                           } else {
                             downloadBlob(blob, d.filename || 'dokument.bin');
                           }
@@ -172,7 +174,7 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
                         }
                       }}
                     >
-                      Oeffnen
+                      Öffnen
                     </button>
                     <button
                       className="px-3 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800 disabled:opacity-60"
@@ -216,7 +218,7 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
                         }
                       }}
                     >
-                      Loeschen
+                      Löschen
                     </button>
                   </div>
                 </div>
@@ -225,6 +227,30 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
           )}
         </div>
       </div>
+      {preview && (
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b border-slate-200">
+              <div className="text-sm font-medium text-slate-800 truncate pr-3">{preview.filename}</div>
+              <button
+                className="px-3 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800"
+                onClick={() => setPreview(null)}
+              >
+                Schließen
+              </button>
+            </div>
+            <div className="flex-1 bg-slate-100">
+              {preview.mime.startsWith('image/') ? (
+                <div className="w-full h-full overflow-auto p-4 flex items-start justify-center">
+                  <img src={preview.src} alt={preview.filename} className="max-w-full h-auto shadow-md rounded" />
+                </div>
+              ) : (
+                <iframe title={preview.filename} src={preview.src} className="w-full h-full border-0" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

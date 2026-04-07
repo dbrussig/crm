@@ -53,27 +53,50 @@ function getInvoicePrefix(type: InvoiceType): string {
   return 'RE';
 }
 
+function deriveFollowUpInvoiceNo(sourceNo: string, targetType: InvoiceType): string | null {
+  const prefix = getInvoicePrefix(targetType);
+  const raw = String(sourceNo || '').trim().toUpperCase();
+  if (!raw) return null;
+
+  // Keep separators if present: AN-2026-034 -> AU-2026-034.
+  const withSeparators = /^(?:AB|AN|AU|RE)([-_])(\d{4})\1(\d{1,6})(?:-\d+)?$/.exec(raw);
+  if (withSeparators?.[1] && withSeparators?.[2] && withSeparators?.[3]) {
+    return `${prefix}${withSeparators[1]}${withSeparators[2]}${withSeparators[1]}${withSeparators[3]}`;
+  }
+
+  // Compact fallback: AN2026034 -> AU2026034.
+  const compact = /^(?:AB|AN|AU|RE)(\d{4})(\d{1,6})(?:-\d+)?$/.exec(raw);
+  if (compact?.[1] && compact?.[2]) {
+    return `${prefix}${compact[1]}${compact[2]}`;
+  }
+
+  return null;
+}
+
 async function genInvoiceNo(type: InvoiceType, now = new Date()): Promise<string> {
-  // Robust format: AB/AU/RE + YYYY + 3-digit running number, derived from persisted invoices.
-  // Avoids localStorage counter reset issues across reinstalls/cache clears.
   const yyyy = now.getFullYear();
   const prefix = getInvoicePrefix(type);
   const all = await getAllInvoices();
-  const re = new RegExp(`^${prefix}${yyyy}(\\d+)$`);
+
+  // Angebote may exist as legacy "AN" prefix; new format is always AB/AU/RE-YYYY-SEQ.
+  const scanPrefixes = type === 'Angebot' ? ['AB', 'AN'] : [prefix];
+  const reList = scanPrefixes.map((p) => new RegExp(`^${p}[-_]?${yyyy}[-_]?(\\d+)$`));
   let maxSeq = 0;
 
   for (const inv of all) {
-    const no = String(inv.invoiceNo || '').trim();
-    const m = re.exec(no);
-    if (!m?.[1]) continue;
-    const seq = Number(m[1]);
-    if (Number.isFinite(seq)) {
-      maxSeq = Math.max(maxSeq, seq);
+    const no = String(inv.invoiceNo || '').trim().toUpperCase();
+    for (const re of reList) {
+      const m = re.exec(no);
+      if (!m?.[1]) continue;
+      const seq = Number(m[1]);
+      if (Number.isFinite(seq)) {
+        maxSeq = Math.max(maxSeq, seq);
+      }
     }
   }
 
   const next = maxSeq + 1;
-  return `${prefix}${yyyy}${String(next).padStart(3, '0')}`;
+  return `${prefix}-${yyyy}-${String(next).padStart(3, '0')}`;
 }
 
 export async function fetchInvoiceTemplate(type: InvoiceType): Promise<InvoiceTemplate | null> {
@@ -131,11 +154,16 @@ export async function createFollowUpInvoiceFromInvoice(
   const invDate = now;
   const due = typeof d.dueDays === 'number' && d.dueDays > 0 ? (invDate + d.dueDays * 24 * 60 * 60 * 1000) : undefined;
 
+  const allExisting = await getAllInvoices();
+  const existingNos = new Set(allExisting.map((i) => String(i.invoiceNo || '').trim().toUpperCase()));
+  const preferredNo = deriveFollowUpInvoiceNo(src.invoice.invoiceNo, targetType);
+  const preferredUnique = preferredNo && !existingNos.has(String(preferredNo).trim().toUpperCase()) ? preferredNo : null;
+
   const next: Invoice = {
     ...src.invoice,
     id: newId,
     invoiceType: targetType,
-    invoiceNo: await genInvoiceNo(targetType, new Date(invDate)),
+    invoiceNo: preferredUnique || (await genInvoiceNo(targetType, new Date(invDate))),
     invoiceDate: invDate,
     dueDate: due,
     state: 'entwurf',

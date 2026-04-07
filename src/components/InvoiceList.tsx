@@ -5,6 +5,7 @@
  */
 
 import { useMemo, useState, useEffect } from 'react';
+import { ArrowRight, Eye, FileText, Mail, Pencil, Send, Trash2 } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, MailTransportSettings } from '../types';
 import {
   fetchAllInvoices,
@@ -16,6 +17,7 @@ import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pd
 import { openInvoiceCompose } from '../services/invoiceEmailService';
 import { getInvoiceItems, getPaymentsByInvoice } from '../services/sqliteService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
+import ConfirmModal from './ConfirmModal';
 
 interface InvoiceListProps {
   customers?: Customer[];
@@ -54,6 +56,8 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   const [sortBy, setSortBy] = useState<'date' | 'number' | 'amount'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'schnell' | 'erweitert'>('schnell');
+  const [busyActionKey, setBusyActionKey] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; no: string } | null>(null);
 
   // Load invoices
   useEffect(() => {
@@ -115,25 +119,28 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
     setFilteredInvoices(filtered);
   }, [invoices, filterType, filterState, searchTerm, sortBy, sortOrder]);
 
-  // Delete invoice
-  const handleDelete = async (invoiceId: string, invoiceNo: string) => {
-    if (!confirm(`Beleg ${invoiceNo} wirklich löschen?`)) {
-      return;
-    }
+  const requestDelete = (invoiceId: string, invoiceNo: string) => {
+    setDeleteConfirm({ id: invoiceId, no: invoiceNo });
+  };
 
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    const { id } = deleteConfirm;
+    setDeleteConfirm(null);
     try {
-      await removeInvoice(invoiceId);
+      await removeInvoice(id);
 
       // Reload
       const loaded = await fetchAllInvoices();
       setInvoices(loaded);
 
       if (onDelete) {
-        onDelete(invoiceId);
+        onDelete(id);
       }
     } catch (error) {
       console.error('Failed to delete invoice:', error);
-      alert('Löschen fehlgeschlagen');
+      const message = error instanceof Error ? error.message : String(error || 'Unbekannter Fehler');
+      alert(`Löschen fehlgeschlagen: ${message}`);
     }
   };
 
@@ -301,6 +308,19 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
     }, 0);
   }, [filteredInvoices, amountByInvoiceId]);
 
+  const actionButtonClass =
+    'inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+
+  const runAction = async (key: string, action: () => Promise<void> | void) => {
+    if (busyActionKey) return;
+    setBusyActionKey(key);
+    try {
+      await Promise.resolve(action());
+    } finally {
+      setBusyActionKey(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -416,9 +436,11 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
         <button
           onClick={handleExportCSV}
-          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+          title="Tabelle als CSV exportieren"
         >
-          📄 Export CSV
+          <FileText size={14} aria-hidden="true" />
+          Export CSV
         </button>
       </div>
 
@@ -516,33 +538,36 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                       <div className="flex items-center justify-end gap-1">
                         {/* Edit */}
                         <button
-                          onClick={() => onEdit(invoice)}
-                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => void runAction(`edit:${invoice.id}`, () => onEdit(invoice))}
+                          className={actionButtonClass}
+                          disabled={Boolean(busyActionKey)}
                           title="Bearbeiten"
                           aria-label={`Beleg ${invoice.invoiceNo} bearbeiten`}
                         >
-                          ✏️
+                          <Pencil size={14} aria-hidden="true" />
                         </button>
 
                         {/* PDF */}
                         <button
-                          onClick={() => openInvoicePreview(invoice)}
-                          className="text-purple-600 hover:text-purple-700"
+                          onClick={() => void runAction(`preview:${invoice.id}`, async () => { await openInvoicePreview(invoice); })}
+                          className={actionButtonClass}
+                          disabled={Boolean(busyActionKey)}
                           title="PDF ansehen"
                           aria-label={`Beleg ${invoice.invoiceNo} PDF ansehen`}
                         >
-                          👁️
+                          <Eye size={14} aria-hidden="true" />
                         </button>
                         <button
-                          onClick={() => saveInvoicePdfViaPrintDialog(invoice)}
-                          className="text-indigo-600 hover:text-indigo-700"
+                          onClick={() => void runAction(`pdf:${invoice.id}`, async () => { await saveInvoicePdfViaPrintDialog(invoice); })}
+                          className={actionButtonClass}
+                          disabled={Boolean(busyActionKey)}
                           title="PDF speichern (Printdialog)"
                           aria-label={`Beleg ${invoice.invoiceNo} PDF speichern`}
                         >
-                          📄
+                          <FileText size={14} aria-hidden="true" />
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={() => void runAction(`mail:${invoice.id}`, () => {
                             const c = customers.find((x) => x.id === invoice.companyId);
                             const toEmail = (c?.email || '').trim();
                             if (!toEmail) {
@@ -556,68 +581,62 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                               preferGmail: true,
                               mailTransportSettings,
                             });
-                          }}
-                          className="text-emerald-600 hover:text-emerald-700"
+                          })}
+                          className={actionButtonClass}
+                          disabled={Boolean(busyActionKey)}
                           title="Mail an Kunde (Gmail Entwurf)"
                           aria-label={`Beleg ${invoice.invoiceNo} per Mail an Kunden senden`}
                         >
-                          ✉️
+                          <Mail size={14} aria-hidden="true" />
                         </button>
 
                         {/* Senden */}
                         {onSend && invoice.state === 'entwurf' && (
                           <button
-                            onClick={() => onSend(invoice.id)}
-                            className="text-emerald-600 hover:text-emerald-700"
+                            onClick={() => void runAction(`send:${invoice.id}`, async () => { await onSend(invoice.id); })}
+                            className={actionButtonClass}
+                            disabled={Boolean(busyActionKey)}
                             title="Senden"
                             aria-label={`Beleg ${invoice.invoiceNo} senden`}
                           >
-                            📧
+                            <Send size={14} aria-hidden="true" />
                           </button>
                         )}
 
                         {/* Konvertieren */}
                         {invoice.invoiceType === 'Angebot' && onConvertToOrder && (
                           <button
-                            onClick={() => onConvertToOrder(invoice.id)}
-                            className="text-indigo-600 hover:text-indigo-700"
+                            onClick={() => void runAction(`toOrder:${invoice.id}`, async () => { await onConvertToOrder(invoice.id); })}
+                            className={actionButtonClass}
+                            disabled={Boolean(busyActionKey)}
                             title="Zu Auftrag konvertieren"
                             aria-label={`Angebot ${invoice.invoiceNo} zu Auftrag konvertieren`}
                           >
-                            ⬆️
-                          </button>
-                        )}
-
-                        {invoice.invoiceType === 'Angebot' && onConvertToInvoice && (
-                          <button
-                            onClick={() => onConvertToInvoice(invoice.id)}
-                            className="text-indigo-600 hover:text-indigo-700"
-                            title="Zu Rechnung konvertieren"
-                            aria-label={`Angebot ${invoice.invoiceNo} zu Rechnung konvertieren`}
-                          >
-                            🧾
+                            <ArrowRight size={14} aria-hidden="true" />
                           </button>
                         )}
 
                         {invoice.invoiceType === 'Auftrag' && onConvertToInvoice && (
                           <button
-                            onClick={() => onConvertToInvoice(invoice.id)}
-                            className="text-indigo-600 hover:text-indigo-700"
+                            onClick={() => void runAction(`orderToInvoice:${invoice.id}`, async () => { await onConvertToInvoice(invoice.id); })}
+                            className={actionButtonClass}
+                            disabled={Boolean(busyActionKey)}
                             title="Zu Rechnung konvertieren"
                             aria-label={`Auftrag ${invoice.invoiceNo} zu Rechnung konvertieren`}
                           >
-                            ⬆️
+                            <ArrowRight size={14} aria-hidden="true" />
                           </button>
                         )}
 
                         {/* Löschen */}
                         <button
-                          onClick={() => handleDelete(invoice.id, invoice.invoiceNo)}
-                          className="text-red-600 hover:text-red-700"
+                          onClick={() => requestDelete(invoice.id, invoice.invoiceNo)}
+                          className={actionButtonClass}
+                          disabled={Boolean(busyActionKey)}
                           title="Löschen"
                           aria-label={`Beleg ${invoice.invoiceNo} loeschen`}
                         >
-                          🗑️
+                          <Trash2 size={14} aria-hidden="true" />
                         </button>
                       </div>
                     </td>
@@ -628,6 +647,15 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
           </table>
         </div>
       </div>
+      {deleteConfirm && (
+        <ConfirmModal
+          title="Beleg löschen"
+          message={`Beleg ${deleteConfirm.no} wirklich unwiderruflich löschen?`}
+          confirmLabel="Endgültig löschen"
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
     </div>
   );
 };

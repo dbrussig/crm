@@ -159,9 +159,18 @@ async function saveResources(resources: Resource[]) {
 }
 
 async function loadAccessories(): Promise<RentalAccessory[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<RentalAccessory[]>('list_accessories');
+  }
   return loadJson<RentalAccessory[]>(KEY_ACCESSORIES, []);
 }
 async function saveAccessories(accessories: RentalAccessory[]) {
+  if (isDesktopApp()) {
+    for (const accessory of accessories) {
+      await invokeDesktopCommand('upsert_accessory', { accessory });
+    }
+    return;
+  }
   await saveJson(KEY_ACCESSORIES, accessories);
 }
 
@@ -557,12 +566,20 @@ export async function getAllAccessories(): Promise<RentalAccessory[]> {
 }
 
 export async function addAccessory(accessory: RentalAccessory): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_accessory', { accessory });
+    return;
+  }
   const accessories = await loadAccessories();
   accessories.push(accessory);
   await saveAccessories(accessories);
 }
 
 export async function updateAccessory(id: string, updates: Partial<RentalAccessory>): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('update_accessory', { id, updates });
+    return;
+  }
   const accessories = await loadAccessories();
   const idx = accessories.findIndex((a) => a.id === id);
   if (idx === -1) throw new Error('Accessory not found');
@@ -571,6 +588,10 @@ export async function updateAccessory(id: string, updates: Partial<RentalAccesso
 }
 
 export async function deleteAccessory(id: string): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_accessory', { id });
+    return;
+  }
   await saveAccessories((await loadAccessories()).filter((a) => a.id !== id));
 }
 

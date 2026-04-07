@@ -68,6 +68,26 @@ pub fn delete_resource(app: tauri::AppHandle, id: String) -> Result<(), String> 
 }
 
 #[tauri::command]
+pub fn list_accessories(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
+    repository::list_accessories(&app)
+}
+
+#[tauri::command]
+pub fn upsert_accessory(app: tauri::AppHandle, accessory: Value) -> Result<(), String> {
+    repository::upsert_accessory(&app, &accessory)
+}
+
+#[tauri::command]
+pub fn update_accessory(app: tauri::AppHandle, id: String, updates: Value) -> Result<(), String> {
+    repository::update_accessory(&app, &id, &updates)
+}
+
+#[tauri::command]
+pub fn delete_accessory(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    repository::delete_accessory(&app, &id)
+}
+
+#[tauri::command]
 pub fn list_messages(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
     repository::list_messages(&app)
 }

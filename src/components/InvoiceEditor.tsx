@@ -5,6 +5,7 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
+import { Download, Eye, FileText, Mail, Save, Send, X } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
 import { downloadInvoicePDF, openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
@@ -13,6 +14,7 @@ import { getCompanyProfile } from '../config/companyProfile';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
 import { getActiveSubTotalInvoiceTypeProfile } from '../services/subtotalInvoiceTypeProfileService';
 import { getPaymentsByInvoice } from '../services/sqliteService';
+import InvoiceWorkflowBar from './InvoiceWorkflowBar';
 
 interface InvoiceEditorProps {
   invoice?: Partial<Invoice>;
@@ -433,6 +435,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       return;
     }
 
+    // Soft-Warnung: Alle Positionen haben Preis 0 (aber Beleg hat Inhalt)
+    const hasNamedItems = items.some((it) => it.name.trim().length > 0);
+    const allZeroPrice = items.every((it) => !it.unitPrice || it.unitPrice === 0);
+    if (hasNamedItems && allZeroPrice) {
+      const ok = confirm('⚠️ Alle Positionen haben den Preis 0,00 €.\n\nTrotzdem speichern?');
+      if (!ok) return;
+    }
+
     const invoiceData: Partial<Invoice> = {
       invoiceType,
       invoiceNo,
@@ -581,6 +591,28 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     );
   };
 
+  const baseButtonClass = 'inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
+  const primaryButtonClass = `${baseButtonClass} bg-slate-900 text-white hover:bg-slate-800`;
+  const secondaryButtonClass = `${baseButtonClass} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`;
+
+  const workflowActionLabel = useMemo(() => {
+    if (!initialInvoice?.id) return undefined;
+    if (invoiceType === 'Angebot' && onConvertToOrder) return 'Als Auftrag fortführen';
+    if (invoiceType === 'Auftrag' && onConvertToInvoice) return 'Als Rechnung fortführen';
+    return undefined;
+  }, [initialInvoice?.id, invoiceType, onConvertToOrder, onConvertToInvoice]);
+
+  const handleWorkflowAdvance = () => {
+    if (!initialInvoice?.id) return;
+    if (invoiceType === 'Angebot' && onConvertToOrder) {
+      onConvertToOrder(initialInvoice.id);
+      return;
+    }
+    if (invoiceType === 'Auftrag' && onConvertToInvoice) {
+      onConvertToInvoice(initialInvoice.id);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
@@ -599,11 +631,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   onClose();
                 }}
                 className="text-gray-400 hover:text-gray-500"
+                title="Editor schließen"
               >
                 <span className="sr-only">Schließen</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-6 w-6" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -840,6 +871,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             <button
               onClick={addPosition}
               className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+              title="Neue Position hinzufügen"
             >
               + Position
             </button>
@@ -977,6 +1009,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             <div className="mb-3">
               <button
                 type="button"
+                title="Anzahlungsblock ein- oder ausblenden"
                 onClick={() => {
                   setDepositEnabled((v) => {
                     const next = !v;
@@ -1137,9 +1170,11 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           <div className="flex gap-2">
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
+              className={primaryButtonClass}
+              title="Beleg speichern"
             >
-              💾 Speichern
+              <Save size={14} aria-hidden="true" />
+              Speichern
             </button>
 
             {invoiceType === 'Rechnung' && (
@@ -1180,71 +1215,55 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
             <button
               onClick={handlePreviewPdf}
-              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium"
+              className={secondaryButtonClass}
+              title="PDF Vorschau öffnen"
             >
-              👁️ PDF ansehen
+              <Eye size={14} aria-hidden="true" />
+              PDF ansehen
             </button>
 
             <button
               onClick={handleSavePdf}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+              className={secondaryButtonClass}
+              title="PDF lokal speichern"
             >
-              📄 PDF speichern
+              <FileText size={14} aria-hidden="true" />
+              PDF speichern
             </button>
 
             <button
               onClick={handleMailCustomer}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 font-medium"
+              className={secondaryButtonClass}
               title="Öffnet Gmail-Entwurf (PDF bitte über 'PDF speichern' erstellen und anhängen)."
             >
-              ✉️ Mail
+              <Mail size={14} aria-hidden="true" />
+              Mail
             </button>
 
             <button
               onClick={handleDownloadHtml}
-              className="px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 font-medium"
+              className={secondaryButtonClass}
               title="Optional: druckbare HTML-Datei herunterladen"
             >
-              ⬇️ HTML
+              <Download size={14} aria-hidden="true" />
+              HTML
             </button>
           </div>
 
-          <div className="flex gap-2">
-            {/* Angebot → Auftrag */}
-            {invoiceType === 'Angebot' && onConvertToOrder && initialInvoice?.id && (
-              <button
-                onClick={() => onConvertToOrder(initialInvoice.id!)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium"
-              >
-                Angebot → Auftrag
-              </button>
-            )}
-
-            {/* Angebot → Rechnung */}
-            {invoiceType === 'Angebot' && onConvertToInvoice && initialInvoice?.id && (
-              <button
-                onClick={() => onConvertToInvoice(initialInvoice.id!)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium"
-              >
-                Angebot → Rechnung
-              </button>
-            )}
-
-            {/* Auftrag → Rechnung */}
-            {invoiceType === 'Auftrag' && onConvertToInvoice && initialInvoice?.id && (
-              <button
-                onClick={() => onConvertToInvoice(initialInvoice.id!)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium"
-              >
-                Auftrag → Rechnung
-              </button>
+          <div className="flex items-center gap-2">
+            {initialInvoice?.id && (
+              <InvoiceWorkflowBar
+                currentType={invoiceType}
+                nextActionLabel={workflowActionLabel}
+                onAdvance={handleWorkflowAdvance}
+              />
             )}
 
             {/* Rechnung neu generieren */}
             {invoiceType === 'Rechnung' && onReissue && initialInvoice?.id && (
               <button
                 onClick={() => onReissue(initialInvoice.id!)}
-                className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 font-medium"
+                className="inline-flex items-center gap-2 rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
                 title="Storniert die alte Rechnung und erstellt einen Folgebeleg mit Suffix -2/-3/..."
               >
                 Rechnung neu generieren
@@ -1255,9 +1274,11 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             {onSend && initialInvoice?.id && state === 'entwurf' && (
               <button
                 onClick={() => onSend(initialInvoice.id!)}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 font-medium"
+                className={secondaryButtonClass}
+                title="Belegstatus auf gesendet setzen"
               >
-                📧 Senden
+                <Send size={14} aria-hidden="true" />
+                Senden
               </button>
             )}
           </div>

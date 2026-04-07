@@ -824,36 +824,136 @@ export async function openInvoicePDF(invoice: Invoice, items?: InvoiceItem[], te
   await openInvoicePreview(invoice, items, template);
 }
 
-export async function openInvoicePreview(invoice: Invoice, items?: InvoiceItem[], template?: InvoiceTemplate | null): Promise<void> {
-  // Open the tab synchronously (user-gesture) to avoid popup blockers, then render into it.
-  const win = window.open('', '_blank');
-  if (!win) return;
-  try {
-    win.document.write('<!doctype html><html><head><meta charset="utf-8"/></head><body>Lade...</body></html>');
-  } catch {}
+let invoicePreviewOverlayEl: HTMLDivElement | null = null;
 
+function closeInvoicePreviewOverlay() {
+  if (invoicePreviewOverlayEl && invoicePreviewOverlayEl.parentElement) {
+    invoicePreviewOverlayEl.parentElement.removeChild(invoicePreviewOverlayEl);
+  }
+  invoicePreviewOverlayEl = null;
+}
+
+function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean): boolean {
+  if (typeof document === 'undefined') return false;
+
+  closeInvoicePreviewOverlay();
+  const overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.inset = '0';
+  overlay.style.zIndex = '2147483647';
+  overlay.style.background = 'rgba(15,23,42,0.65)';
+  overlay.style.display = 'flex';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.padding = '16px';
+
+  const frame = document.createElement('div');
+  frame.style.width = 'min(1400px, 96vw)';
+  frame.style.height = 'min(94vh, 1100px)';
+  frame.style.background = '#fff';
+  frame.style.borderRadius = '14px';
+  frame.style.overflow = 'hidden';
+  frame.style.display = 'flex';
+  frame.style.flexDirection = 'column';
+  frame.style.boxShadow = '0 18px 60px rgba(0,0,0,0.35)';
+
+  const toolbar = document.createElement('div');
+  toolbar.style.display = 'flex';
+  toolbar.style.alignItems = 'center';
+  toolbar.style.justifyContent = 'space-between';
+  toolbar.style.padding = '10px 12px';
+  toolbar.style.borderBottom = '1px solid #e2e8f0';
+  toolbar.style.gap = '8px';
+
+  const titleEl = document.createElement('div');
+  titleEl.textContent = title;
+  titleEl.style.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+  titleEl.style.color = '#0f172a';
+  titleEl.style.whiteSpace = 'nowrap';
+  titleEl.style.overflow = 'hidden';
+  titleEl.style.textOverflow = 'ellipsis';
+
+  const actions = document.createElement('div');
+  actions.style.display = 'flex';
+  actions.style.alignItems = 'center';
+  actions.style.gap = '8px';
+
+  const printBtn = document.createElement('button');
+  printBtn.textContent = 'Drucken';
+  printBtn.style.padding = '6px 10px';
+  printBtn.style.borderRadius = '8px';
+  printBtn.style.border = '1px solid #cbd5e1';
+  printBtn.style.background = '#fff';
+  printBtn.style.cursor = 'pointer';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Schließen';
+  closeBtn.style.padding = '6px 10px';
+  closeBtn.style.borderRadius = '8px';
+  closeBtn.style.border = '1px solid #0f172a';
+  closeBtn.style.background = '#0f172a';
+  closeBtn.style.color = '#fff';
+  closeBtn.style.cursor = 'pointer';
+
+  const iframe = document.createElement('iframe');
+  iframe.title = title;
+  iframe.style.border = '0';
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
+  iframe.srcdoc = html;
+
+  printBtn.addEventListener('click', () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      // ignore print failures in restricted environments
+    }
+  });
+  closeBtn.addEventListener('click', closeInvoicePreviewOverlay);
+  overlay.addEventListener('click', (ev) => {
+    if (ev.target === overlay) closeInvoicePreviewOverlay();
+  });
+
+  actions.appendChild(printBtn);
+  actions.appendChild(closeBtn);
+  toolbar.appendChild(titleEl);
+  toolbar.appendChild(actions);
+  frame.appendChild(toolbar);
+  frame.appendChild(iframe);
+  overlay.appendChild(frame);
+  document.body.appendChild(overlay);
+  invoicePreviewOverlayEl = overlay;
+
+  if (autoPrint) {
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        // ignore
+      }
+    }, 500);
+  }
+  return true;
+}
+
+export async function openInvoicePreview(invoice: Invoice, items?: InvoiceItem[], template?: InvoiceTemplate | null): Promise<void> {
   const tpl = await resolveTemplate(invoice, template);
   const its = await resolveItems(invoice, items);
   const html = await renderInvoiceHtml({ invoice, items: its, template: tpl, autoPrint: false });
-
-  try {
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  } catch {
-    // If writing fails (rare cross-origin/window cases), fall back to navigating via blob URL.
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    win.location.href = URL.createObjectURL(blob);
+  if (openInvoiceHtmlOverlay(html, `${invoice.invoiceType} ${invoice.invoiceNo}`, false)) {
+    return;
   }
+
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
 
 export async function saveInvoicePdfViaPrintDialog(invoice: Invoice, items?: InvoiceItem[], template?: InvoiceTemplate | null): Promise<void> {
-  const win = window.open('', '_blank');
-  if (!win) return;
-  try {
-    win.document.write('<!doctype html><html><head><meta charset="utf-8"/></head><body>Lade...</body></html>');
-  } catch {}
-
   const tpl = await resolveTemplate(invoice, template);
   const its = await resolveItems(invoice, items);
   const html = await renderInvoiceHtml({ invoice, items: its, template: tpl, autoPrint: true });
@@ -864,12 +964,13 @@ export async function saveInvoicePdfViaPrintDialog(invoice: Invoice, items?: Inv
     console.warn('Generated document could not be persisted:', error);
   }
 
-  try {
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  } catch {
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    win.location.href = URL.createObjectURL(blob);
+  if (openInvoiceHtmlOverlay(html, `${invoice.invoiceType} ${invoice.invoiceNo}`, true)) {
+    return;
   }
+
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }

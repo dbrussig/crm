@@ -21,6 +21,19 @@ CREATE TABLE IF NOT EXISTS resources (
     raw_json TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS accessories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    inventory_key TEXT NOT NULL,
+    brand TEXT,
+    model TEXT,
+    is_active INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rental_requests (
     id TEXT PRIMARY KEY,
     customer_id TEXT NOT NULL,
