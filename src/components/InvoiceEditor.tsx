@@ -44,6 +44,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const dirtyBaselineRef = useRef<string>('');
   const dirtyInitializedRef = useRef(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [inlineStatus, setInlineStatus] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const depositReceivedAmountRef = useRef<HTMLInputElement | null>(null);
 
   // Beleg-Daten
@@ -237,7 +239,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     };
   };
 
-  const totals = calculateTotals();
+  const totals = useMemo(() => calculateTotals(), [items]);
   const isDepositSupportedType = invoiceType === 'Angebot' || invoiceType === 'Auftrag';
   const depositAmountPreview =
     isDepositSupportedType && depositEnabled && depositPercent > 0
@@ -247,6 +249,12 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const linkedPaymentsTotal = useMemo(
     () => linkedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
     [linkedPayments]
+  );
+  const hasBuyerName = buyerName.trim().length > 0;
+  const hasBuyerAddress = buyerAddress.trim().length > 0;
+  const canSave = hasBuyerName && hasBuyerAddress;
+  const hasAdvancedTextBlocks = layout.editorBlocks.some(
+    (block) => block === 'payment' || block === 'paypal' || block === 'taxNote' || block === 'agbLink' || block === 'footer'
   );
 
   useEffect(() => {
@@ -415,9 +423,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // Position entfernen
   const removePosition = (id: string) => {
     if (items.length === 1) {
-      alert('Mindestens eine Position erforderlich');
+      setInlineStatus({ tone: 'error', text: 'Mindestens eine Position ist erforderlich.' });
       return;
     }
+    setInlineStatus(null);
     setItems(items.filter((item) => item.id !== id));
   };
 
@@ -430,10 +439,12 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   // Speichern
   const handleSave = () => {
-    if (!buyerName || !buyerAddress) {
-      alert('Bitte Kundendaten ausfüllen');
+    setShowValidationErrors(true);
+    if (!canSave) {
+      setInlineStatus({ tone: 'error', text: 'Bitte Name und Adresse im Kundenblock ausfüllen.' });
       return;
     }
+    setInlineStatus(null);
 
     // Soft-Warnung: Alle Positionen haben Preis 0 (aber Beleg hat Inhalt)
     const hasNamedItems = items.some((it) => it.name.trim().length > 0);
@@ -514,43 +525,46 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   const handleDownloadHtml = async () => {
     if (!template) {
-      alert('Template nicht geladen');
+      setInlineStatus({ tone: 'error', text: 'Template nicht geladen. Bitte Belegtyp/Layout prüfen.' });
       return;
     }
 
     try {
       await downloadInvoicePDF(buildInvoiceForExport(), items, template);
+      setInlineStatus(null);
     } catch (error) {
       console.error('PDF Export fehlgeschlagen:', error);
-      alert('PDF Export fehlgeschlagen. Bitte versuchen Sie es erneut.');
+      setInlineStatus({ tone: 'error', text: 'HTML/PDF Export fehlgeschlagen. Bitte erneut versuchen.' });
     }
   };
 
   // PDF öffnen
   const handlePreviewPdf = async () => {
     if (!template) {
-      alert('Template nicht geladen');
+      setInlineStatus({ tone: 'error', text: 'Template nicht geladen. Bitte Belegtyp/Layout prüfen.' });
       return;
     }
 
     try {
       await openInvoicePreview(buildInvoiceForExport(), items, template);
+      setInlineStatus(null);
     } catch (error) {
       console.error('PDF Öffnen fehlgeschlagen:', error);
-      alert('PDF konnte nicht geöffnet werden.');
+      setInlineStatus({ tone: 'error', text: 'PDF Vorschau konnte nicht geöffnet werden.' });
     }
   };
 
   const handleSavePdf = async () => {
     if (!template) {
-      alert('Template nicht geladen');
+      setInlineStatus({ tone: 'error', text: 'Template nicht geladen. Bitte Belegtyp/Layout prüfen.' });
       return;
     }
     try {
       await saveInvoicePdfViaPrintDialog(buildInvoiceForExport(), items, template);
+      setInlineStatus(null);
     } catch (error) {
       console.error('PDF Speichern fehlgeschlagen:', error);
-      alert('PDF Speichern fehlgeschlagen.');
+      setInlineStatus({ tone: 'error', text: 'PDF Speichern fehlgeschlagen.' });
     }
   };
 
@@ -558,7 +572,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     const customer = customers.find((c) => c.id === selectedCustomerId);
     const toEmail = (customer?.email || '').trim();
     if (!toEmail) {
-      alert('Keine Kunden-E-Mail hinterlegt. Bitte im Kundenprofil eine E-Mail setzen.');
+      setInlineStatus({ tone: 'error', text: 'Keine Kunden-E-Mail hinterlegt. Bitte Kundenprofil ergänzen.' });
       return;
     }
     try {
@@ -568,9 +582,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         customerName: `${customer?.firstName || ''} ${customer?.lastName || ''}`.trim() || buyerName,
         preferGmail: true,
       });
+      setInlineStatus(null);
     } catch (e) {
       console.error('Mail Draft fehlgeschlagen:', e);
-      alert('Mail konnte nicht geöffnet werden.');
+      setInlineStatus({ tone: 'error', text: 'Mail-Entwurf konnte nicht geöffnet werden.' });
     }
   };
 
@@ -642,6 +657,19 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
+        {inlineStatus && (
+          <div
+            className={[
+              'mb-4 rounded-md border px-3 py-2 text-sm',
+              inlineStatus.tone === 'error'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-slate-200 bg-slate-50 text-slate-700',
+            ].join(' ')}
+          >
+            {inlineStatus.text}
+          </div>
+        )}
+
         {/* Beleg-Info */}
         <div className="mb-6 grid grid-cols-5 gap-4">
           {/* Typ */}
@@ -774,10 +802,19 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               id="invoice-buyer-name"
               type="text"
               value={buyerName}
-              onChange={(e) => setBuyerName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              onChange={(e) => {
+                setBuyerName(e.target.value);
+                if (showValidationErrors) setInlineStatus(null);
+              }}
+              className={[
+                'w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
+                showValidationErrors && !hasBuyerName ? 'border-red-300 bg-red-50' : 'border-gray-300',
+              ].join(' ')}
               placeholder="Max Mustermann"
             />
+            {showValidationErrors && !hasBuyerName && (
+              <p className="mt-1 text-xs text-red-600">Name ist ein Pflichtfeld.</p>
+            )}
           </div>
 
           <div className="mt-3">
@@ -785,11 +822,20 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             <textarea
               id="invoice-buyer-address"
               value={buyerAddress}
-              onChange={(e) => setBuyerAddress(e.target.value)}
+              onChange={(e) => {
+                setBuyerAddress(e.target.value);
+                if (showValidationErrors) setInlineStatus(null);
+              }}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className={[
+                'w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
+                showValidationErrors && !hasBuyerAddress ? 'border-red-300 bg-red-50' : 'border-gray-300',
+              ].join(' ')}
               placeholder="Musterstraße 1&#10;12345 Musterstadt&#10;Deutschland"
             />
+            {showValidationErrors && !hasBuyerAddress && (
+              <p className="mt-1 text-xs text-red-600">Adresse ist ein Pflichtfeld.</p>
+            )}
           </div>
         </div>
 
@@ -1068,110 +1114,121 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         )}
 
-        {/* Zahlungsbedingungen */}
-        {layout.editorBlocks.includes('payment') && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Zahlungsbedingungen</h3>
+        {hasAdvancedTextBlocks && (
+          <details className="mb-6 rounded-lg border border-slate-200 bg-slate-50/70">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800">
+              Erweiterte Texte &amp; Bedingungen
+            </summary>
+            <div className="space-y-6 border-t border-slate-200 bg-white px-4 py-4">
+              {/* Zahlungsbedingungen */}
+              {layout.editorBlocks.includes('payment') && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-3">Zahlungsbedingungen</h3>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-payment-terms">Bedingungen</label>
-              <textarea
-                id="invoice-payment-terms"
-                value={paymentTerms}
-                onChange={(e) => setPaymentTerms(e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-payment-terms">Bedingungen</label>
+                    <textarea
+                      id="invoice-payment-terms"
+                      value={paymentTerms}
+                      onChange={(e) => setPaymentTerms(e.target.value)}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-payment-info">Zahlungsinfo (optional)</label>
+                    <input
+                      id="invoice-payment-info"
+                      type="text"
+                      value={paymentInfo}
+                      onChange={(e) => setPaymentInfo(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      placeholder="PayPal: https://paypal.me/..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {layout.editorBlocks.includes('paypal') && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-3">PayPal Zeile</h3>
+                  <input
+                    id="invoice-paypal-text"
+                    type="text"
+                    value={paypalText}
+                    onChange={(e) => setPaypalText(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    placeholder={`Zahlungslink Paypal ${company.paypalMeUrl}`}
+                  />
+                </div>
+              )}
+
+              {layout.editorBlocks.includes('taxNote') && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-3">Steuerhinweis</h3>
+                  <textarea
+                    id="invoice-tax-note"
+                    value={taxNote}
+                    onChange={(e) => setTaxNote(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                </div>
+              )}
+
+              {layout.editorBlocks.includes('agbLink') && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-3">Links</h3>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-agb-text">AGB Text (wie im PDF)</label>
+                    <input
+                      id="invoice-agb-text"
+                      type="text"
+                      value={agbText}
+                      onChange={(e) => setAgbText(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      placeholder={`Bitte beachten Sie die gültigen AGBs auf meiner Homepage : ${company.agbsUrl}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-agb-link">AGB Link</label>
+                    <input
+                      id="invoice-agb-link"
+                      type="text"
+                      value={agbLink}
+                      onChange={(e) => setAgbLink(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {layout.editorBlocks.includes('footer') && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-3">Footer / Hinweis</h3>
+                  <textarea
+                    id="invoice-footer"
+                    value={footerText}
+                    onChange={(e) => setFooterText(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                </div>
+              )}
             </div>
-
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-payment-info">Zahlungsinfo (optional)</label>
-              <input
-                id="invoice-payment-info"
-                type="text"
-                value={paymentInfo}
-                onChange={(e) => setPaymentInfo(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder="PayPal: https://paypal.me/..."
-              />
-            </div>
-          </div>
-        )}
-
-        {layout.editorBlocks.includes('paypal') && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">PayPal Zeile</h3>
-            <input
-              id="invoice-paypal-text"
-              type="text"
-              value={paypalText}
-              onChange={(e) => setPaypalText(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              placeholder={`Zahlungslink Paypal ${company.paypalMeUrl}`}
-            />
-          </div>
-        )}
-
-        {layout.editorBlocks.includes('taxNote') && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Steuerhinweis</h3>
-            <textarea
-              id="invoice-tax-note"
-              value={taxNote}
-              onChange={(e) => setTaxNote(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
-          </div>
-        )}
-
-        {layout.editorBlocks.includes('agbLink') && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Links</h3>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-agb-text">AGB Text (wie im PDF)</label>
-              <input
-                id="invoice-agb-text"
-                type="text"
-                value={agbText}
-                onChange={(e) => setAgbText(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder={`Bitte beachten Sie die gültigen AGBs auf meiner Homepage : ${company.agbsUrl}`}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-agb-link">AGB Link</label>
-              <input
-                id="invoice-agb-link"
-                type="text"
-                value={agbLink}
-                onChange={(e) => setAgbLink(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
-            </div>
-          </div>
-        )}
-
-        {layout.editorBlocks.includes('footer') && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Footer / Hinweis</h3>
-            <textarea
-              id="invoice-footer"
-              value={footerText}
-              onChange={(e) => setFooterText(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
-          </div>
+          </details>
         )}
 
         {/* Footer Buttons */}
-        <div className="flex items-center justify-between gap-2 pt-4 border-t border-gray-200">
+        <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-gray-200 bg-white/95 px-4 pb-4 pt-4 backdrop-blur">
+          <div className="flex items-center justify-between gap-2">
           <div className="flex gap-2">
             <button
               onClick={handleSave}
               className={primaryButtonClass}
               title="Beleg speichern"
+              disabled={!canSave}
             >
               <Save size={14} aria-hidden="true" />
               Speichern
@@ -1217,6 +1274,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               onClick={handlePreviewPdf}
               className={secondaryButtonClass}
               title="PDF Vorschau öffnen"
+              disabled={!template}
             >
               <Eye size={14} aria-hidden="true" />
               PDF ansehen
@@ -1226,6 +1284,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               onClick={handleSavePdf}
               className={secondaryButtonClass}
               title="PDF lokal speichern"
+              disabled={!template}
             >
               <FileText size={14} aria-hidden="true" />
               PDF speichern
@@ -1235,6 +1294,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               onClick={handleMailCustomer}
               className={secondaryButtonClass}
               title="Öffnet Gmail-Entwurf (PDF bitte über 'PDF speichern' erstellen und anhängen)."
+              disabled={!template}
             >
               <Mail size={14} aria-hidden="true" />
               Mail
@@ -1244,6 +1304,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               onClick={handleDownloadHtml}
               className={secondaryButtonClass}
               title="Optional: druckbare HTML-Datei herunterladen"
+              disabled={!template}
             >
               <Download size={14} aria-hidden="true" />
               HTML
@@ -1282,6 +1343,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               </button>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>
