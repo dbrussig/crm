@@ -14,7 +14,10 @@ export function isDesktopApp(): boolean {
 }
 
 export function isMacApp(): boolean {
-  return false;
+  if (typeof window === 'undefined') return false;
+  return navigator.platform.toLowerCase().includes('mac') || 
+         navigator.userAgent.toLowerCase().includes('macintosh') ||
+         navigator.userAgent.toLowerCase().includes('mac os');
 }
 
 export async function invokeDesktopCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
