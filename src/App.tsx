@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AISettings, Customer, GmailAttachmentSummary, GoogleOAuthSettings, InboxImportResult, Invoice, InvoiceItem, MailTransportSettings, RentalRequest, RentalStatus } from './types';
-import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources } from './services/sqliteService';
+import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources, updateInvoice } from './services/sqliteService';
 import { MessageBox } from './components/MessageBox';
 import { KanbanBoard } from './components/KanbanBoard';
 import CustomerList from './components/CustomerList';
@@ -287,6 +287,10 @@ export default function App() {
         console.error(`Status sync failed after ${source.invoice.invoiceType} -> ${targetType}:`, e);
         try {
           await removeInvoice(nextId);
+          await updateInvoice(source.invoice.id, {
+            state: source.invoice.state,
+            replacesInvoiceId: undefined,
+          });
         } catch (rollbackError) {
           console.error('Rollback failed after status sync error:', rollbackError);
         }

@@ -144,6 +144,16 @@ export async function createFollowUpInvoiceFromInvoice(
   const src = await fetchInvoiceById(sourceInvoiceId);
   if (!src) throw new Error('Quelle-Beleg nicht gefunden');
 
+  // Idempotent conversion: if source already references a follow-up of the requested target type,
+  // return that invoice instead of creating another one.
+  const existingFollowUpId = String(src.invoice.replacesInvoiceId || '').trim();
+  if (existingFollowUpId) {
+    const existingFollowUp = await fetchInvoiceById(existingFollowUpId);
+    if (existingFollowUp?.invoice?.invoiceType === targetType) {
+      return existingFollowUp.invoice.id;
+    }
+  }
+
   const now = Date.now();
   const newId = `invoice_${now}_${Math.random().toString(16).slice(2)}`;
   const tpl = await fetchInvoiceTemplate(targetType);

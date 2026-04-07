@@ -69,4 +69,19 @@ describe('createFollowUpInvoiceFromInvoice', () => {
     const created: Invoice = mocks.addInvoiceMock.mock.calls[0][0];
     expect(created.invoiceNo).toMatch(/^AU-\d{4}-\d{3,}$/);
   });
+
+  it('reuses existing follow-up if source already has matching replacement', async () => {
+    const source = makeInvoice({ replacesInvoiceId: 'inv_order_1' });
+    const existingOrder = makeInvoice({
+      id: 'inv_order_1',
+      invoiceType: 'Auftrag',
+      invoiceNo: 'AU-2026-034',
+    });
+    mocks.getAllInvoicesMock.mockResolvedValue([source, existingOrder]);
+
+    const id = await createFollowUpInvoiceFromInvoice('inv_source', 'Auftrag');
+
+    expect(id).toBe('inv_order_1');
+    expect(mocks.addInvoiceMock).not.toHaveBeenCalled();
+  });
 });
