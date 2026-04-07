@@ -24,6 +24,8 @@ release_latest_macos:
     - if: '$CI_COMMIT_BRANCH == "main" && $TAURI_UPDATER_PUBLIC_KEY && $TAURI_SIGNING_PRIVATE_KEY'
     - when: never
   before_script:
+    - mkdir -p .ci-artifacts
+    - echo "release_latest_macos started at $(date -u +%Y-%m-%dT%H:%M:%SZ) for ${CI_COMMIT_SHA}" > .ci-artifacts/release_latest_macos.txt
     - npm ci
   script:
     - bash scripts/ci/release_latest_macos.sh
@@ -31,6 +33,7 @@ release_latest_macos:
     when: always
     expire_in: 7 days
     paths:
+      - .ci-artifacts/
       - src-tauri/target/release/bundle/macos/
       - src-tauri/target/release/bundle/dmg/
       - latest.json
