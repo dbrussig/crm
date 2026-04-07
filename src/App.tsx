@@ -567,7 +567,12 @@ export default function App() {
                         <div className="text-xs text-slate-600 mt-0.5">
                           {new Date(r.rentalStart).toLocaleDateString('de-DE')} bis {new Date(r.rentalEnd).toLocaleDateString('de-DE')} · {r.status}
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-1">{formatDisplayRef(r.id)}</div>
+                        <div className="text-[11px] text-slate-500 mt-1">
+                          {(() => {
+                            const c = customers.find(cu => cu.id === r.customerId);
+                            return c ? `${c.firstName} ${c.lastName}`.trim() : formatDisplayRef(r.id);
+                          })()}
+                        </div>
                       </button>
                     ))
                   )}
