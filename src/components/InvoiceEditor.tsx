@@ -15,6 +15,8 @@ import { openInvoiceCompose } from '../services/invoiceEmailService';
 import { getActiveSubTotalInvoiceTypeProfile } from '../services/subtotalInvoiceTypeProfileService';
 import { getPaymentsByInvoice } from '../services/sqliteService';
 import InvoiceWorkflowBar from './InvoiceWorkflowBar';
+import { useAutoSave } from '../hooks/useAutoSave';
+import AutoSaveIndicator from './AutoSaveIndicator';
 
 interface InvoiceEditorProps {
   invoice?: Partial<Invoice>;
@@ -437,6 +439,80 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     ));
   };
 
+  const buildInvoiceData = (): Partial<Invoice> => ({
+    invoiceType,
+    invoiceNo,
+    invoiceDate: new Date(invoiceDate).getTime(),
+    dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
+    currency,
+    state,
+    companyId: selectedCustomerId,
+    buyerName,
+    buyerAddress,
+    salutation,
+    introText,
+    servicePeriodStart: servicePeriodStart ? new Date(servicePeriodStart).getTime() : undefined,
+    servicePeriodEnd: servicePeriodEnd ? new Date(servicePeriodEnd).getTime() : undefined,
+    depositPercent,
+    depositText,
+    depositEnabled,
+    depositReceivedEnabled,
+    depositReceivedAmount,
+    paymentTerms,
+    paymentInfo,
+    paypalText,
+    footerText,
+    taxNote,
+    agbText,
+    agbLink,
+    layoutId,
+  });
+
+  const autoSaveData = useMemo(
+    () => ({ invoiceData: buildInvoiceData(), items }),
+    [
+      invoiceType,
+      invoiceNo,
+      invoiceDate,
+      dueDate,
+      currency,
+      state,
+      selectedCustomerId,
+      buyerName,
+      buyerAddress,
+      salutation,
+      introText,
+      servicePeriodStart,
+      servicePeriodEnd,
+      depositPercent,
+      depositText,
+      depositEnabled,
+      depositReceivedEnabled,
+      depositReceivedAmount,
+      paymentTerms,
+      paymentInfo,
+      paypalText,
+      footerText,
+      taxNote,
+      agbText,
+      agbLink,
+      layoutId,
+      items,
+    ]
+  );
+
+  const { saveState } = useAutoSave({
+    data: autoSaveData,
+    onSave: async (data) => {
+      onSave(data.invoiceData, data.items);
+      dirtyBaselineRef.current = buildDirtySnapshot();
+      setIsDirty(false);
+    },
+    isDirty,
+    condition: state === 'entwurf' && canSave,
+    delay: 1500,
+  });
+
   // Speichern
   const handleSave = () => {
     setShowValidationErrors(true);
@@ -454,36 +530,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       if (!ok) return;
     }
 
-    const invoiceData: Partial<Invoice> = {
-      invoiceType,
-      invoiceNo,
-      invoiceDate: new Date(invoiceDate).getTime(),
-      dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
-      currency,
-      state,
-      companyId: selectedCustomerId,
-      buyerName,
-      buyerAddress,
-      salutation,
-      introText,
-      servicePeriodStart: servicePeriodStart ? new Date(servicePeriodStart).getTime() : undefined,
-      servicePeriodEnd: servicePeriodEnd ? new Date(servicePeriodEnd).getTime() : undefined,
-      depositPercent,
-      depositText,
-      depositEnabled,
-      depositReceivedEnabled,
-      depositReceivedAmount,
-      paymentTerms,
-      paymentInfo,
-      paypalText,
-      footerText,
-      taxNote,
-      agbText,
-      agbLink,
-      layoutId,
-    };
-
-    onSave(invoiceData, items);
+    onSave(buildInvoiceData(), items);
     dirtyBaselineRef.current = buildDirtySnapshot();
     setIsDirty(false);
   };
@@ -634,7 +681,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       <div className="border-b border-gray-200 p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900">Beleg Editor</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <AutoSaveIndicator state={saveState} />
             {getStatusBadge()}
             {onClose && (
               <button

@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Customer } from '../types';
 import { formatDisplayRef } from '../utils/displayId';
+import { useAutoSave } from '../hooks/useAutoSave';
+import AutoSaveIndicator from './AutoSaveIndicator';
 
 interface CustomerFormProps {
   customer?: Customer;
@@ -84,6 +86,42 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const baselineRef = useRef('');
+  const draftStorageKey = useMemo(() => `customer-form-draft:${customer?.id || 'new'}`, [customer?.id]);
+  const isDirty = useMemo(() => JSON.stringify(formData) !== baselineRef.current, [formData]);
+
+  useEffect(() => {
+    if (customer) return;
+    try {
+      const raw = sessionStorage.getItem(draftStorageKey);
+      if (!raw) {
+        baselineRef.current = JSON.stringify(formData);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setFormData((prev) => ({ ...prev, ...parsed }));
+      baselineRef.current = JSON.stringify({ ...formData, ...parsed });
+    } catch {
+      baselineRef.current = JSON.stringify(formData);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer?.id, draftStorageKey]);
+
+  useEffect(() => {
+    if (!customer) return;
+    baselineRef.current = JSON.stringify(formData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer?.id]);
+
+  const { saveState: draftSaveState } = useAutoSave({
+    data: formData,
+    onSave: async (data) => {
+      sessionStorage.setItem(draftStorageKey, JSON.stringify(data));
+    },
+    isDirty,
+    condition: true,
+    delay: 1200,
+  });
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -173,6 +211,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
           : undefined,
     };
 
+    sessionStorage.removeItem(draftStorageKey);
     onSubmit(customerData);
   };
 
@@ -632,7 +671,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+      <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-200">
+        <AutoSaveIndicator state={draftSaveState} />
+        <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onCancel}
@@ -646,6 +687,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
         >
           {customer ? 'Speichern' : 'Kunde anlegen'}
         </button>
+        </div>
       </div>
     </form>
   );

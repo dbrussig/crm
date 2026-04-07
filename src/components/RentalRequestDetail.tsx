@@ -30,6 +30,8 @@ import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pd
 import { openInvoiceCompose } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
 import { getCompanyProfile } from '../config/companyProfile';
+import { useAutoSave } from '../hooks/useAutoSave';
+import AutoSaveIndicator from './AutoSaveIndicator';
 
 interface RentalRequestDetailProps {
   rentalId: string;
@@ -90,6 +92,20 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   const [paymentAssignBusyId, setPaymentAssignBusyId] = useState<string | null>(null);
   const [linkedInvoices, setLinkedInvoices] = useState<Invoice[]>([]);
   const [invoiceAmountById, setInvoiceAmountById] = useState<Record<string, number>>({});
+
+  const { saveState: commentAutoSaveState } = useAutoSave({
+    data: internalComment,
+    onSave: async (value) => {
+      if (!rental) return;
+      const nextComment = String(value || '').trim();
+      await updateRentalRequest(rental.id, { description: nextComment || undefined });
+      setRental((prev) => (prev ? { ...prev, description: nextComment || undefined } : prev));
+      setCommentDirty(false);
+    },
+    isDirty: commentDirty,
+    condition: Boolean(rental) && !actionLoading,
+    delay: 1500,
+  });
 
   // Load rental
   useEffect(() => {
@@ -1279,7 +1295,9 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 }}
                 disabled={actionLoading}
               />
-              <div className="mt-2 flex items-center justify-end gap-2">
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <AutoSaveIndicator state={commentAutoSaveState} />
+                <div className="flex items-center gap-2">
                 {commentDirty && (
                   <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                     Ungespeicherte Änderungen
@@ -1293,6 +1311,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                 >
                   Kommentar speichern
                 </button>
+                </div>
               </div>
             </div>
           </div>
