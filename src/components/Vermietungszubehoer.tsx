@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AccessoryCategory, RentalAccessory, RelingType, RentalRequest } from '../types';
 import { createAccessory, fetchAllAccessories, modifyAccessory, removeAccessory } from '../services/accessoryService';
 import { getAllRentalRequests, updateRentalRequest } from '../services/sqliteService';
 import { formatDisplayRef } from '../utils/displayId';
+import ConfirmModal from './ConfirmModal';
 
 const CATEGORY_OPTIONS: AccessoryCategory[] = ['Bundle', 'Dachträger', 'Fußsatz', 'Querträger', 'Kit', 'Sonstiges'];
 const RELING_OPTIONS: RelingType[] = ['offen', 'geschlossen', 'keine', 'unklar'];
@@ -83,6 +84,31 @@ export default function Vermietungszubehoer() {
   const [rentals, setRentals] = useState<RentalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
+  const showInfo = (text: string) => setNotice({ tone: 'info', text });
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
   const [category, setCategory] = useState<'alle' | AccessoryCategory>('alle');
   const [activeOnly, setActiveOnly] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -201,11 +227,11 @@ export default function Vermietungszubehoer() {
     const name = form.name.trim();
     const inventoryKey = normalizeKey(form.inventoryKey || form.name);
     if (!name) {
-      alert('Bitte einen Namen eintragen.');
+      showError('Bitte einen Namen eintragen.');
       return;
     }
     if (!inventoryKey) {
-      alert('Bitte einen Inventar-/Bundle-Schlüssel eintragen.');
+      showError('Bitte einen Inventar-/Bundle-Schlüssel eintragen.');
       return;
     }
 
@@ -242,28 +268,28 @@ export default function Vermietungszubehoer() {
       setModalOpen(false);
       await load();
     } catch (e: any) {
-      alert(e?.message || 'Speichern fehlgeschlagen.');
+      showError(e?.message || 'Speichern fehlgeschlagen.');
     }
   }
 
   async function linkAccessoryToRental(accessory: RentalAccessory) {
     const rentalId = selectedRentalByAccessory[accessory.id];
     if (!rentalId) {
-      alert('Bitte zuerst einen Vorgang auswählen.');
+      showError('Bitte zuerst einen Vorgang auswählen.');
       return;
     }
     const rental = openRentals.find((r) => r.id === rentalId);
     if (!rental) {
-      alert('Vorgang nicht gefunden.');
+      showError('Vorgang nicht gefunden.');
       return;
     }
 
     try {
       await updateRentalRequest(rentalId, { roofRackInventoryKey: normalizeKey(accessory.inventoryKey) });
       await load();
-      alert(`Vorgang ${rentalId} wurde mit ${accessory.inventoryKey} verknüpft.`);
+      showInfo(`Vorgang ${rentalId} wurde mit ${accessory.inventoryKey} verknüpft.`);
     } catch (e: any) {
-      alert(e?.message || 'Verknüpfung fehlgeschlagen.');
+      showError(e?.message || 'Verknüpfung fehlgeschlagen.');
     }
   }
 
@@ -272,7 +298,7 @@ export default function Vermietungszubehoer() {
       await updateRentalRequest(rentalId, { roofRackInventoryKey: undefined });
       await load();
     } catch (e: any) {
-      alert(e?.message || 'Lösen der Verknüpfung fehlgeschlagen.');
+      showError(e?.message || 'Lösen der Verknüpfung fehlgeschlagen.');
     }
   }
 
@@ -286,6 +312,50 @@ export default function Vermietungszubehoer() {
 
   return (
     <div className="space-y-4">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
+      {notice && (
+        <div
+          className={[
+            'rounded-xl border px-4 py-3 text-sm whitespace-pre-line',
+            notice.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-slate-200 bg-white text-slate-800',
+          ].join(' ')}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>{notice.text}</div>
+            <button
+              className="text-slate-600 hover:text-slate-900"
+              onClick={() => setNotice(null)}
+              aria-label="Hinweis schließen"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Vermietungszubehör</h2>
@@ -386,7 +456,14 @@ export default function Vermietungszubehoer() {
                         type="button"
                         className="px-3 py-1.5 rounded-md border border-red-200 text-red-700 text-sm hover:bg-red-50"
                         onClick={async () => {
-                          if (!confirm(`Zubehör "${item.name}" wirklich löschen?`)) return;
+                          const ok = await requestConfirm({
+                            title: 'Löschen bestätigen',
+                            message: `Zubehör "${item.name}" wirklich löschen?`,
+                            confirmLabel: 'Löschen',
+                            cancelLabel: 'Abbrechen',
+                            danger: true,
+                          });
+                          if (!ok) return;
                           await removeAccessory(item.id);
                           await load();
                         }}

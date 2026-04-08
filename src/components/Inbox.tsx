@@ -8,6 +8,7 @@ import { buildThreadPaymentAssignments, pickSuggestedInvoiceForPayment, type Thr
 import { generateConciergeReply, isAIAvailable } from '../services/aiService';
 import { openGenericCompose } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
+import ConfirmModal from './ConfirmModal';
 
 const CACHE_KEY = 'mietpark_crm_inbox_cache_v1';
 const CACHE_VERSION = 1 as const;
@@ -423,6 +424,31 @@ export default function Inbox(props: {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [selectedThread, setSelectedThread] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
+  const showInfo = (text: string) => setNotice({ tone: 'info', text });
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
   const [search, setSearch] = useState<string>('');
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState<boolean>(() => {
@@ -578,8 +604,23 @@ export default function Inbox(props: {
     }
     if (!next) return;
     if (conciergeReply.trim()) {
-      const ok = confirm('Vorlage anwenden und aktuellen Antworttext ersetzen?');
-      if (!ok) return;
+      void (async () => {
+        const ok = await requestConfirm({
+          title: 'Vorlage anwenden?'
+          ,
+          message: 'Vorlage anwenden und aktuellen Antworttext ersetzen?'
+          ,
+          confirmLabel: 'Ersetzen'
+          ,
+          cancelLabel: 'Abbrechen'
+          ,
+          danger: true,
+        });
+        if (!ok) return;
+        setReplyDraft(next);
+        setReplyTemplateId(templateId);
+      })();
+      return;
     }
     setReplyDraft(next);
     setReplyTemplateId(templateId);
@@ -1004,11 +1045,11 @@ export default function Inbox(props: {
   async function doImport(attachments: GmailAttachmentSummary[], draft?: ImportDraft) {
     const payload = draft || importDraft || null;
     if (!payload?.emailFrom) {
-      alert('Konnte Absender-E-Mail nicht ermitteln.');
+      showError('Konnte Absender-E-Mail nicht ermitteln.');
       return;
     }
     if (!payload.productType) {
-      alert('Konnte Produkt nicht sicher erkennen. Bitte in Nachricht markieren/ergänzen.');
+      showError('Konnte Produkt nicht sicher erkennen. Bitte in Nachricht markieren/ergänzen.');
       return;
     }
 
@@ -1081,7 +1122,7 @@ export default function Inbox(props: {
       ? '\n\nHinweis: Zeitraum wurde nicht eindeutig erkannt und automatisch vorbelegt.'
       : '';
 
-    alert(`In CRM übernommen.${after ? `\n\nAnhänge: ${after}` : ''}${fallbackHint}`);
+    showInfo(`In CRM übernommen.${after ? `\n\nAnhänge: ${after}` : ''}${fallbackHint}`);
     setImportMapOpen(false);
     setImportDraft(null);
     setPendingAttachments([]);
@@ -1089,12 +1130,12 @@ export default function Inbox(props: {
 
   async function importSelected() {
     if (!analysis?.fromEmail) {
-      alert('Konnte Absender-E-Mail nicht ermitteln.');
+      showError('Konnte Absender-E-Mail nicht ermitteln.');
       return;
     }
     const selectedProductType = (manualProductOverride || analysis.suggestion?.productType) as ProductType | undefined;
     if (!selectedProductType) {
-      alert('Konnte Produkt nicht sicher erkennen. Bitte in Nachricht markieren/ergänzen.');
+      showError('Konnte Produkt nicht sicher erkennen. Bitte in Nachricht markieren/ergänzen.');
       return;
     }
 
@@ -1136,11 +1177,11 @@ export default function Inbox(props: {
   async function continueImportFromMapping() {
     if (!importDraft) return;
     if (!importDraft.emailFrom?.trim()) {
-      alert('Bitte eine Kunden-E-Mail eingeben.');
+      showError('Bitte eine Kunden-E-Mail eingeben.');
       return;
     }
     if (!importDraft.productType) {
-      alert('Bitte ein Produkt auswählen.');
+      showError('Bitte ein Produkt auswählen.');
       return;
     }
 
@@ -1385,13 +1426,21 @@ export default function Inbox(props: {
         attachments: composerAttachments,
       });
       setComposerAttachments([]);
-      const markDone = confirm('Nachricht wurde gesendet. Konversation jetzt als verarbeitet markieren?');
-      if (markDone) {
-        await markSelectedProcessed();
-      }
+      const markDone = await requestConfirm({
+        title: 'Konversation abschließen?'
+        ,
+        message: 'Nachricht wurde gesendet. Konversation jetzt als verarbeitet markieren?'
+        ,
+        confirmLabel: 'Markieren'
+        ,
+        cancelLabel: 'Nicht jetzt'
+        ,
+        danger: false,
+      });
+      if (markDone) await markSelectedProcessed();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      alert(`Direktversand fehlgeschlagen: ${msg}`);
+      showError(`Direktversand fehlgeschlagen: ${msg}`);
     } finally {
       setDirectSendBusy(false);
     }
@@ -1527,6 +1576,49 @@ export default function Inbox(props: {
 
 	  return (
 	    <>
+	      {confirmModal && (
+	        <ConfirmModal
+	          title={confirmModal.title}
+	          message={confirmModal.message}
+	          confirmLabel={confirmModal.confirmLabel}
+	          cancelLabel={confirmModal.cancelLabel}
+	          danger={confirmModal.danger}
+	          onConfirm={() => {
+	            const resolve = confirmResolveRef.current;
+	            confirmResolveRef.current = null;
+	            setConfirmModal(null);
+	            resolve?.(true);
+	          }}
+	          onCancel={() => {
+	            const resolve = confirmResolveRef.current;
+	            confirmResolveRef.current = null;
+	            setConfirmModal(null);
+	            resolve?.(false);
+	          }}
+	        />
+	      )}
+
+	      {notice && (
+	        <div
+	          className={[
+	            'mb-4 rounded-xl border px-4 py-3 text-sm whitespace-pre-line',
+	            notice.tone === 'error'
+	              ? 'border-red-200 bg-red-50 text-red-800'
+	              : 'border-slate-200 bg-white text-slate-800',
+	          ].join(' ')}
+	        >
+	          <div className="flex items-start justify-between gap-3">
+	            <div>{notice.text}</div>
+	            <button
+	              className="text-slate-600 hover:text-slate-900"
+	              onClick={() => setNotice(null)}
+	              aria-label="Hinweis schließen"
+	            >
+	              ✕
+	            </button>
+	          </div>
+	        </div>
+	      )}
 	    {importMapOpen && importDraft && (
 	      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
 	        <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden">
@@ -1776,7 +1868,7 @@ export default function Inbox(props: {
                         }, {});
                         setPaymentInvoicesByRentalId(invoicesByRental);
 	                    } catch (e) {
-	                      alert('Konnte Vorgänge nicht laden: ' + (e instanceof Error ? e.message : String(e)));
+	                      showError('Konnte Vorgänge nicht laden: ' + (e instanceof Error ? e.message : String(e)));
 	                    } finally {
 	                      setPaymentBusy(false);
 	                    }
@@ -1902,11 +1994,11 @@ export default function Inbox(props: {
 	                className="px-4 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800 disabled:opacity-60"
 	                onClick={async () => {
 	                  if (!paymentRentalId) {
-	                    alert('Bitte zuerst einen Vorgang auswählen.');
+	                    showError('Bitte zuerst einen Vorgang auswählen.');
 	                    return;
 	                  }
 	                  if (!paymentAmount || paymentAmount <= 0) {
-	                    alert('Bitte einen gueltigen Betrag eingeben.');
+	                    showError('Bitte einen gueltigen Betrag eingeben.');
 	                    return;
 	                  }
 	                  setPaymentBusy(true);
@@ -1956,7 +2048,7 @@ export default function Inbox(props: {
                         paymentMarked: true,
                       }));
 	                  } catch (e) {
-	                    alert('Konnte Zahlung nicht speichern: ' + (e instanceof Error ? e.message : String(e)));
+	                    showError('Konnte Zahlung nicht speichern: ' + (e instanceof Error ? e.message : String(e)));
 	                  } finally {
 	                    setPaymentBusy(false);
 	                  }
@@ -2067,14 +2159,26 @@ export default function Inbox(props: {
             <button
               className="px-3 py-2 rounded-md border border-slate-200 text-slate-700 text-sm hover:bg-slate-50 disabled:opacity-60"
               onClick={() => {
-                const ok = confirm('Postfach-Cache lokal löschen?');
-                if (!ok) return;
-                void deleteKey(CACHE_KEY);
-                setThreads([]);
-                setNextPageToken(undefined);
-                setSelectedThreadId(null);
-                setSelectedThread(null);
-                setThreadDetailsById({});
+                void (async () => {
+                  const ok = await requestConfirm({
+                    title: 'Cache löschen?'
+                    ,
+                    message: 'Postfach-Cache lokal löschen?'
+                    ,
+                    confirmLabel: 'Löschen'
+                    ,
+                    cancelLabel: 'Abbrechen'
+                    ,
+                    danger: true,
+                  });
+                  if (!ok) return;
+                  void deleteKey(CACHE_KEY);
+                  setThreads([]);
+                  setNextPageToken(undefined);
+                  setSelectedThreadId(null);
+                  setSelectedThread(null);
+                  setThreadDetailsById({});
+                })();
               }}
               disabled={loading}
               title="Löscht die lokal gespeicherten Postfach-Daten"
@@ -3100,7 +3204,7 @@ export default function Inbox(props: {
                         setConciergeApproved(true);
                         if (composerAttachments.length > 0) {
                           const names = composerAttachments.map((f) => `• ${f.name}`).join('\n');
-                          alert(`Bitte diese Anhänge im Gmail-Entwurf hinzufügen:\n\n${names}`);
+                          showInfo(`Bitte diese Anhänge im Gmail-Entwurf hinzufügen:\n\n${names}`);
                         }
                         window.open(gmailReplyHref, '_blank', 'noopener,noreferrer');
                       }}
@@ -3115,7 +3219,7 @@ export default function Inbox(props: {
                           ? `\n\nAnhänge hinzufügen:\n${composerAttachments.map((f) => `- ${f.name}`).join('\n')}`
                           : '';
                         await navigator.clipboard.writeText((conciergeReply || '') + attachmentList);
-                        alert('Antwort in Zwischenablage kopiert.');
+                        showInfo('Antwort in Zwischenablage kopiert.');
                       }}
                       disabled={!conciergeReply.trim()}
                     >

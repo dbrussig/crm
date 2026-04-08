@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AISettings, GoogleOAuthSettings, MailTransportSettings } from '../types';
 import { getGLMModels } from '../services/zAiService';
 import { runMailBridgeAttachmentSelfTest } from '../services/invoiceEmailService';
 import { getCompanyProfile, saveCompanyProfile, type CompanyProfile } from '../config/companyProfile';
 import SubTotalImportPanel from './SubTotalImportPanel';
 import SubTotalInvoiceTypeProfilePanel from './SubTotalInvoiceTypeProfilePanel';
+import ConfirmModal from './ConfirmModal';
 
 type GoogleTestStatus = 'idle' | 'testing' | 'success' | 'error';
 type ZAiTestStatus = 'idle' | 'testing' | 'success' | 'error';
@@ -48,6 +49,28 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [mailBridgeTestStatus, setMailBridgeTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [mailBridgeAttachmentTestStatus, setMailBridgeAttachmentTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [mailBridgeAttachmentTestMsg, setMailBridgeAttachmentTestMsg] = useState<string>('');
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
 
   const handleChange = (key: keyof AISettings, value: string | boolean | number) => {
     onSettingsChange({
@@ -108,6 +131,28 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   return (
     <div className="w-full bg-white border border-slate-200 rounded-xl shadow-2xl p-4 space-y-3">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -385,8 +430,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <button
                     type="button"
                     className="px-3 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50"
-                    onClick={() => {
-                      const ok = confirm('Google OAuth Client ID auf die .env Konfiguration umstellen?');
+                    onClick={async () => {
+                      const ok = await requestConfirm({
+                        title: 'Google OAuth umstellen?',
+                        message: 'Google OAuth Client ID auf die .env Konfiguration umstellen?',
+                        confirmLabel: 'Umstellen',
+                        cancelLabel: 'Abbrechen',
+                        danger: false,
+                      });
                       if (!ok) return;
                       handleGoogleOAuthChange('enabled', true);
                       handleGoogleOAuthChange('clientId', envGoogleClientId);

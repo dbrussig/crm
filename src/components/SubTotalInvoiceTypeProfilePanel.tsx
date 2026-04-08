@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { InvoiceType, SubTotalInvoiceTypeProfile } from '../types';
 import {
   getSubTotalInvoiceTypeProfiles,
@@ -8,6 +8,7 @@ import {
   saveSubTotalInvoiceTypeProfiles,
   setSubTotalInvoiceTypeProfilesEnabled,
 } from '../services/subtotalInvoiceTypeProfileService';
+import ConfirmModal from './ConfirmModal';
 
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
@@ -46,6 +47,28 @@ export default function SubTotalInvoiceTypeProfilePanel() {
   const [profiles, setProfiles] = useState<SubTotalInvoiceTypeProfile[]>(() => getSubTotalInvoiceTypeProfiles());
   const [mapping, setMapping] = useState<Record<InvoiceType, number | null>>(() => getSubTotalInvoiceTypeMapping());
 
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
+
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
 
@@ -79,6 +102,28 @@ export default function SubTotalInvoiceTypeProfilePanel() {
 
   return (
     <div className="border-t border-slate-200 pt-3">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-800">Belegtypen (SubTotal)</p>
@@ -317,8 +362,14 @@ export default function SubTotalInvoiceTypeProfilePanel() {
                           <button
                             type="button"
                             className="px-3 py-2 rounded-lg text-xs border border-slate-200 hover:bg-slate-50"
-                            onClick={() => {
-                              const ok = confirm(`Profil ${p.invoiceTypeId}: ${p.name} wirklich loeschen?`);
+                            onClick={async () => {
+                              const ok = await requestConfirm({
+                                title: 'Profil löschen?',
+                                message: `Profil ${p.invoiceTypeId}: ${p.name} wirklich loeschen?`,
+                                confirmLabel: 'Löschen',
+                                cancelLabel: 'Abbrechen',
+                                danger: true,
+                              });
                               if (!ok) return;
                               setDirty(true);
                               setProfiles((cur) => cur.filter((x) => x.invoiceTypeId !== p.invoiceTypeId));

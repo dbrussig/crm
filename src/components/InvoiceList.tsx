@@ -62,6 +62,8 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   const [viewMode, setViewMode] = useState<'schnell' | 'erweitert'>('schnell');
   const [busyActionKey, setBusyActionKey] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; no: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
 
   // Load invoices
   useEffect(() => {
@@ -144,7 +146,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
     } catch (error) {
       console.error('Failed to delete invoice:', error);
       const message = error instanceof Error ? error.message : String(error || 'Unbekannter Fehler');
-      alert(`Löschen fehlgeschlagen: ${message}`);
+      showError(`Löschen fehlgeschlagen: ${message}`);
     }
   };
 
@@ -335,6 +337,28 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
   return (
     <div className="p-6">
+      {notice && (
+        <div
+          className={[
+            'mb-4 rounded-xl border px-4 py-3 text-sm whitespace-pre-line',
+            notice.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-slate-200 bg-white text-slate-800',
+          ].join(' ')}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>{notice.text}</div>
+            <button
+              className="text-slate-600 hover:text-slate-900"
+              onClick={() => setNotice(null)}
+              aria-label="Hinweis schließen"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -575,7 +599,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                             const c = customers.find((x) => x.id === invoice.companyId);
                             const toEmail = (c?.email || '').trim();
                             if (!toEmail) {
-                              alert('Keine Kunden-E-Mail hinterlegt.');
+                              showError('Keine Kunden-E-Mail hinterlegt.');
                               return;
                             }
                             openInvoiceCompose({

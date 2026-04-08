@@ -7,9 +7,10 @@
  * Hinweis: Kalender-Ansicht ist als eigener Menüpunkt "Kalender" vorhanden.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProductType, Resource } from '../types';
 import { fetchAllResources, createResource, modifyResource, removeResource } from '../services/resourceService';
+import ConfirmModal from './ConfirmModal';
 
 type CategoryId = 'alle' | 'dachboxen' | 'fahrradtraeger' | 'heckboxen' | 'huepfburgen';
 
@@ -63,9 +64,34 @@ async function resizeImageDataUrl(
   return canvas.toDataURL(opts.mime, opts.quality);
 }
 
-export const Stammdaten: React.FC = () => {
+export default function Stammdaten() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
+  const showInfo = (text: string) => setNotice({ tone: 'info', text });
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
   const [error, setError] = useState<string | null>(null);
 
   const [category, setCategory] = useState<CategoryId>('alle');
@@ -214,11 +240,11 @@ export const Stammdaten: React.FC = () => {
 
   async function save() {
     if (!form.name.trim()) {
-      alert('Bitte einen Namen eingeben.');
+      showError('Bitte einen Namen eingeben.');
       return;
     }
     if (!form.itemPhotoDataUrl?.trim()) {
-      alert('Bitte ein Foto für den Vermietungsgegenstand hochladen.');
+      showError('Bitte ein Foto für den Vermietungsgegenstand hochladen.');
       return;
     }
     try {
@@ -250,7 +276,7 @@ export const Stammdaten: React.FC = () => {
       setModalOpen(false);
       await load();
     } catch (e: any) {
-      alert(e?.message || String(e));
+      showError(e?.message || String(e));
     }
   }
 
@@ -259,18 +285,24 @@ export const Stammdaten: React.FC = () => {
       await modifyResource(r.id, { isActive: !r.isActive });
       setResources((prev) => prev.map((x) => (x.id === r.id ? { ...x, isActive: !r.isActive } : x)));
     } catch (e: any) {
-      alert(e?.message || String(e));
+      showError(e?.message || String(e));
     }
   }
 
   async function deleteItem(r: Resource) {
-    const ok = confirm(`Vermietungsgegenstand wirklich entfernen?\n\n${r.name}`);
+    const ok = await requestConfirm({
+      title: 'Löschen bestätigen',
+      message: `Vermietungsgegenstand wirklich entfernen?\n\n${r.name}`,
+      confirmLabel: 'Löschen',
+      cancelLabel: 'Abbrechen',
+      danger: true,
+    });
     if (!ok) return;
     try {
       await removeResource(r.id);
       await load();
     } catch (e: any) {
-      alert(e?.message || String(e));
+      showError(e?.message || String(e));
     }
   }
 
@@ -284,6 +316,50 @@ export const Stammdaten: React.FC = () => {
 
   return (
     <div className="max-w-7xl">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
+      {notice && (
+        <div
+          className={[
+            'mb-4 rounded-xl border px-4 py-3 text-sm whitespace-pre-line',
+            notice.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-slate-200 bg-white text-slate-800',
+          ].join(' ')}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>{notice.text}</div>
+            <button
+              className="text-slate-600 hover:text-slate-900"
+              onClick={() => setNotice(null)}
+              aria-label="Hinweis schließen"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Vermietungsgegenstände</h2>

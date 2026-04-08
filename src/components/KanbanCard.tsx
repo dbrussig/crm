@@ -9,7 +9,7 @@
 import { Invoice, RentalRequest, RentalStatus } from '../types';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
 
@@ -54,6 +54,9 @@ const arePropsEqual = (prevProps: KanbanCardProps, nextProps: KanbanCardProps): 
 };
 
 export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, customerEmail, latestInvoice, onEditLatestInvoice, onClick, onMoveLeft, onMoveRight, canMoveLeft, canMoveRight }) => {
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
+
   const {
     attributes,
     listeners,
@@ -195,6 +198,31 @@ export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, custome
         ${isDragging ? 'ring-2 ring-blue-500' : ''}
       `}
     >
+      {notice && (
+        <div
+          className={[
+            'm-2 rounded-lg border px-3 py-2 text-xs whitespace-pre-line',
+            notice.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-slate-200 bg-slate-50 text-slate-800',
+          ].join(' ')}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>{notice.text}</div>
+            <button
+              className="text-slate-500 hover:text-slate-800"
+              onClick={(e) => {
+                e.stopPropagation();
+                setNotice(null);
+              }}
+              aria-label="Hinweis schließen"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="p-3 border-b border-gray-100">
         <div className="flex items-start justify-between">
@@ -342,7 +370,7 @@ export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, custome
                   e.stopPropagation();
                   const to = String(customerEmail || '').trim();
                   if (!to) {
-                    alert('Keine Kunden-E-Mail hinterlegt.');
+                    showError('Keine Kunden-E-Mail hinterlegt.');
                     return;
                   }
                   openInvoiceCompose({

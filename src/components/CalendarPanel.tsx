@@ -19,6 +19,8 @@ export default function CalendarPanel(props: { clientId: string; enabled: boolea
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assignBusyId, setAssignBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
 
   const canUse = props.enabled && Boolean(props.clientId?.trim());
 
@@ -101,6 +103,28 @@ export default function CalendarPanel(props: { clientId: string; enabled: boolea
 
   return (
     <div className="max-w-7xl">
+      {notice && (
+        <div
+          className={[
+            'mb-4 rounded-xl border px-4 py-3 text-sm whitespace-pre-line',
+            notice.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-slate-200 bg-white text-slate-800',
+          ].join(' ')}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>{notice.text}</div>
+            <button
+              className="text-slate-600 hover:text-slate-900"
+              onClick={() => setNotice(null)}
+              aria-label="Hinweis schließen"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Kalender</h2>
@@ -298,7 +322,7 @@ export default function CalendarPanel(props: { clientId: string; enabled: boolea
                             await modifyResource(r.id, { googleCalendarId: nextId });
                             setResources((prev) => prev.map((x) => (x.id === r.id ? { ...x, googleCalendarId: nextId } : x)));
                           } catch (err: any) {
-                            alert('Konnte Kalender nicht speichern: ' + (err?.message || String(err)));
+                            showError('Konnte Kalender nicht speichern: ' + (err?.message || String(err)));
                           } finally {
                             setAssignBusyId(null);
                           }

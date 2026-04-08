@@ -9,7 +9,8 @@
  * - Screenreader-Announcements bei Status-Changes
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import ConfirmModal from './ConfirmModal';
 import {
   DndContext,
   DragEndEvent,
@@ -125,10 +126,20 @@ const getAdjacentStatus = (currentStatus: RentalStatus, direction: 'left' | 'rig
   return COLUMNS[targetIndex].status;
 };
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ customers, onCardClick, onOpenInvoice }) => {
+export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: KanbanBoardProps) {
   const [rentals, setRentals] = useState<RentalRequest[]>([]);
-  const [latestInvoiceByRentalId, setLatestInvoiceByRentalId] = useState<Record<string, Invoice>>({});
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'liste'>('kanban');
 
@@ -225,7 +236,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ customers, onCardClick
     const targetStatus = over.id as RentalStatus;
     if (!canTransitionStatus(activeRental.status, targetStatus)) {
       const errorMessage = `Der Schritt ist nicht möglich: erst den nächsten Workflow-Schritt von "${getRentalStatusLabel(activeRental.status)}" aus wählen.`;
-      alert(errorMessage);
+      showError(errorMessage);
       announceToScreenreader(`Fehler: ${errorMessage}`, 'assertive');
       setActiveId(null);
       return;
@@ -250,7 +261,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ customers, onCardClick
 
       // Show error to user
       const errorMessage = error.error || 'Status-Transition nicht erlaubt';
-      alert(errorMessage);
+      showError(errorMessage);
 
       // Screenreader-Announcement
       announceToScreenreader(
@@ -274,7 +285,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ customers, onCardClick
     if (!targetStatus) return;
     if (!canTransitionStatus(rental.status, targetStatus)) {
       const errorMessage = `Der Schritt ist nicht möglich: erst den nächsten Workflow-Schritt von "${getRentalStatusLabel(rental.status)}" aus wählen.`;
-      alert(errorMessage);
+      showError(errorMessage);
       announceToScreenreader(`Fehler: ${errorMessage}`, 'assertive');
       return;
     }
@@ -297,7 +308,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ customers, onCardClick
 
       // Show error to user
       const errorMessage = error.error || 'Status-Transition nicht erlaubt';
-      alert(errorMessage);
+      showError(errorMessage);
 
       // Screenreader-Announcement
       announceToScreenreader(
@@ -355,6 +366,50 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ customers, onCardClick
 
   return (
     <div className="h-full flex flex-col gap-3">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
+      {notice && (
+        <div
+          className={[
+            'mb-2 rounded-xl border px-4 py-3 text-sm whitespace-pre-line',
+            notice.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-slate-200 bg-white text-slate-800',
+          ].join(' ')}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>{notice.text}</div>
+            <button
+              className="text-slate-600 hover:text-slate-900"
+              onClick={() => setNotice(null)}
+              aria-label="Hinweis schließen"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="text-xs text-slate-500">Ansicht</div>
         <div className="inline-flex rounded-md border border-slate-200 overflow-hidden">

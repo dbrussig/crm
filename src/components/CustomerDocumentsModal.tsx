@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Customer, CustomerDocument, DocumentCategory } from '../types';
 import { deleteCustomerDocument, getCustomerDocumentPayload, getDocumentsByCustomer, updateCustomerDocumentMeta } from '../services/sqliteService';
+import ConfirmModal from './ConfirmModal';
 
 function base64ToBlob(base64: string, mimeType: string): Blob {
   const bin = atob(base64);
@@ -37,6 +38,28 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ src: string; mime: string; filename: string } | null>(null);
 
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -61,6 +84,27 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
           <div className="min-w-0">
@@ -206,7 +250,14 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
                       className="px-3 py-2 rounded-md border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-60"
                       disabled={busyId === d.id}
                       onClick={async () => {
-                        if (!confirm(`Dokument wirklich loeschen?\n\n${d.filename}`)) return;
+                        const ok = await requestConfirm({
+                          title: 'Löschen bestätigen',
+                          message: `Dokument wirklich loeschen?\n\n${d.filename}`,
+                          confirmLabel: 'Löschen',
+                          cancelLabel: 'Abbrechen',
+                          danger: true,
+                        });
+                        if (!ok) return;
                         setBusyId(d.id);
                         try {
                           await deleteCustomerDocument(d.id);

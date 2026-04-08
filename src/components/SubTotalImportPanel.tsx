@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { importFromSubTotalFile, type SubTotalImportReport } from '../services/subtotalImportService';
+import ConfirmModal from './ConfirmModal';
 
 export default function SubTotalImportPanel() {
   const [file, setFile] = useState<File | null>(null);
@@ -13,8 +14,52 @@ export default function SubTotalImportPanel() {
 
   const canImport = useMemo(() => Boolean(file) && !busy, [file, busy]);
 
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
+
   return (
     <div className="border-t border-slate-200 pt-3">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-slate-800">SubTotal Import</p>
@@ -59,9 +104,13 @@ export default function SubTotalImportPanel() {
             disabled={!canImport}
             onClick={async () => {
               if (!file) return;
-              const ok = confirm(
-                'SubTotal Import starten?\n\nHinweis: Duplikate werden (best-effort) uebersprungen.\nNach dem Import ggf. Seite neu laden.'
-              );
+              const ok = await requestConfirm({
+                title: 'SubTotal Import',
+                message: 'SubTotal Import starten?\n\nHinweis: Duplikate werden (best-effort) uebersprungen.\nNach dem Import ggf. Seite neu laden.',
+                confirmLabel: 'Import starten',
+                cancelLabel: 'Abbrechen',
+                danger: false,
+              });
               if (!ok) return;
               setBusy(true);
               setError(null);
