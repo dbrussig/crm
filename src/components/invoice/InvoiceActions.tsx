@@ -84,7 +84,7 @@ export default function InvoiceActions({
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                     : 'bg-slate-50 border-slate-200 text-slate-800'
                 }`}
-                aria-pressed={depositReceivedEnabled}
+                aria-pressed={depositReceivedEnabled ? 'true' : 'false'}
                 title="Fügt in der Rechnung einen Hinweis hinzu, dass die Kaution dankend erhalten wurde."
               >
                 Kautionsbestätigung
@@ -116,7 +116,7 @@ export default function InvoiceActions({
               className={secondaryBtnClass}
               title="Weitere Aktionen"
               aria-haspopup="menu"
-              aria-expanded={moreActionsOpen}
+              aria-expanded={moreActionsOpen ? 'true' : 'false'}
             >
               Mehr Aktionen <ChevronDown size={14} aria-hidden="true" />
             </button>

@@ -155,8 +155,9 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
                       {d.source === 'gmail' ? ' | Gmail' : ''}
                     </div>
                     <div className="mt-2 flex items-center gap-2">
-                      <label className="text-[11px] text-slate-500">Kategorie</label>
+                      <label className="text-[11px] text-slate-500" htmlFor={`doc-category-${d.id}`}>Kategorie</label>
                       <select
+                        id={`doc-category-${d.id}`}
                         className="text-xs px-2 py-1 border border-slate-200 rounded-md bg-white"
                         value={(d.category as any) || 'Sonstiges'}
                         disabled={busyId === d.id}

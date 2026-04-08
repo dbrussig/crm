@@ -58,11 +58,13 @@ export default function InvoiceTextBlocks({
         <div>
           <h3 className="text-sm font-medium text-gray-900 mb-3">Einleitungstext</h3>
           <textarea
+            id="invoice-intro-text"
             value={introText}
             onChange={(e) => onIntroTextChange(e.target.value)}
             rows={4}
+            title="Einleitungstext für den Beleg"
+            placeholder="Hallo {{name}},\n\nwie besprochen sende ich Ihnen..."
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="z.B. Vielen Dank für Ihre Anfrage..."
           />
         </div>
       )}
@@ -130,7 +132,7 @@ export default function InvoiceTextBlocks({
 
             {layout.editorBlocks.includes('taxNote') && (
               <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-3">Steuerhinweis</h3>
+                <label htmlFor="invoice-tax-note" className="block text-sm font-medium text-gray-900 mb-3">Steuerhinweis</label>
                 <textarea
                   id="invoice-tax-note"
                   value={taxNote}
@@ -138,6 +140,7 @@ export default function InvoiceTextBlocks({
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                   placeholder="z.B. Steuerfrei nach § 19 UStG (Kleinunternehmer)"
+                  title="Steuerhinweis für den Beleg"
                 />
               </div>
             )}

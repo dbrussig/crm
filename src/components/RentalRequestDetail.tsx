@@ -1700,7 +1700,6 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       ].join(' ')}
                       onClick={() => handleSetAhkPresent('ja')}
                       disabled={actionLoading}
-                      aria-pressed={rental.ahkPresent === 'ja' ? 'true' : 'false'}
                     >
                       Ja
                     </button>
@@ -1714,7 +1713,6 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       ].join(' ')}
                       onClick={() => handleSetAhkPresent('nein')}
                       disabled={actionLoading}
-                      aria-pressed={rental.ahkPresent === 'nein' ? 'true' : 'false'}
                     >
                       Nein
                     </button>
@@ -1728,7 +1726,6 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       ].join(' ')}
                       onClick={() => handleSetAhkPresent('unklar')}
                       disabled={actionLoading}
-                      aria-pressed={rental.ahkPresent === 'unklar' || !rental.ahkPresent ? 'true' : 'false'}
                       title="Zurücksetzen (unklar)"
                     >
                       Unklar

@@ -734,6 +734,8 @@ const CustomerList: React.FC<CustomerListProps> = ({
               accept=".zip"
               className="hidden"
               onChange={(e) => void handleImportBackupBundle(e.target.files?.[0] || null)}
+              aria-label="Backup-Datei auswählen"
+              title="Backup-Datei auswählen"
             />
             <button
               onClick={() => bundleInputRef.current?.click()}

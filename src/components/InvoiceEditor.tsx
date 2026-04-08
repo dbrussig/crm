@@ -804,7 +804,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Steuerhinweis</h3>
                   <textarea id="invoice-tax-note" value={taxNote}
                     onChange={(e) => setValue('taxNote', e.target.value)} rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    title="Steuerhinweis für den Beleg"
+                    placeholder="z.B. Steuerfrei nach § 19 UStG" />
                 </div>
               )}
               {layout.editorBlocks.includes('agbLink') && (
@@ -830,7 +832,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Footer / Hinweis</h3>
                   <textarea id="invoice-footer" value={footerText}
                     onChange={(e) => setValue('footerText', e.target.value)} rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    title="Footer / Hinweis für den Beleg"
+                    placeholder="z.B. Bei Rückfragen stehe ich Ihnen gerne zur Verfügung" />
                 </div>
               )}
             </div>
