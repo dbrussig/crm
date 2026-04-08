@@ -9,17 +9,71 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { ChevronDown, Download, Eye, FileText, Mail, Save, Send, X } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
-import { downloadInvoicePDF, openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { INVOICE_LAYOUTS, getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
-import { openInvoiceCompose } from '../services/invoiceEmailService';
 import { getActiveSubTotalInvoiceTypeProfile } from '../services/subtotalInvoiceTypeProfileService';
 import { getPaymentsByInvoice } from '../services/sqliteService';
 import InvoiceWorkflowBar from './InvoiceWorkflowBar';
 import { useAutoSave } from '../hooks/useAutoSave';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
+import { useInvoiceExport } from '../hooks/useInvoiceExport';
+import { useInvoiceDirtyTracking } from '../hooks/useInvoiceDirtyTracking';
 import AutoSaveIndicator from './AutoSaveIndicator';
 import InvoiceLineItems from './InvoiceLineItems';
-import ConfirmModal from './ConfirmModal';
+
+// ─── Inline Status Hook ───────────────────────────────────────────
+
+function useInlineStatus() {
+  const [status, setStatus] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = (s: { tone: 'error' | 'info'; text: string }, minDisplayMs = 4000) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setStatus(s);
+    timerRef.current = setTimeout(() => {
+      setStatus(null);
+      timerRef.current = null;
+    }, minDisplayMs);
+  };
+
+  const clear = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setStatus(null);
+  };
+
+  return { status, show, clear };
+}
+
+// ─── More Actions Dropdown Hook ────────────────────────────────────
+
+function useMoreActionsDropdown() {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const el = wrapRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && el.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return { open, setOpen, wrapRef };
+}
+
+// ─── Main Component ───────────────────────────────────────────────
 
 interface InvoiceEditorProps {
   invoice?: Partial<Invoice>;
@@ -46,13 +100,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 }) => {
   const company = useMemo(() => getCompanyProfile(), []);
 
-  const {
-    register,
-    setValue,
-    watch,
-    getValues,
-    control,
-  } = useForm<{
+  // ─── Form ──────────────────────────────────────────────────────
+
+  const { setValue, watch, getValues, control } = useForm<{
     invoiceNo: string;
     invoiceDate: string;
     dueDate: string;
@@ -87,114 +137,59 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       buyerName: initialInvoice?.buyerName || '',
       buyerAddress: initialInvoice?.buyerAddress || '',
       salutation: initialInvoice?.salutation || '',
-      introText: (initialInvoice as any)?.introText || '',
-      servicePeriodStart: (initialInvoice as any)?.servicePeriodStart
-        ? new Date((initialInvoice as any).servicePeriodStart).toISOString().substring(0, 10)
-        : '',
-      servicePeriodEnd: (initialInvoice as any)?.servicePeriodEnd
-        ? new Date((initialInvoice as any).servicePeriodEnd).toISOString().substring(0, 10)
-        : '',
-      depositPercent:
-        typeof (initialInvoice as any)?.depositPercent === 'number' ? (initialInvoice as any).depositPercent : 0,
-      depositText: (initialInvoice as any)?.depositText || '',
+      introText: initialInvoice?.introText || '',
+      servicePeriodStart: initialInvoice?.servicePeriodStart
+        ? new Date(initialInvoice.servicePeriodStart).toISOString().substring(0, 10) : '',
+      servicePeriodEnd: initialInvoice?.servicePeriodEnd
+        ? new Date(initialInvoice.servicePeriodEnd).toISOString().substring(0, 10) : '',
+      depositPercent: typeof initialInvoice?.depositPercent === 'number' ? initialInvoice.depositPercent : 0,
+      depositText: initialInvoice?.depositText || '',
       depositEnabled: (() => {
-        const explicit = (initialInvoice as any)?.depositEnabled;
+        const explicit = initialInvoice?.depositEnabled;
         if (typeof explicit === 'boolean') return explicit;
         const hasLegacyDeposit =
-          typeof (initialInvoice as any)?.depositPercent === 'number' &&
-          Number((initialInvoice as any)?.depositPercent) > 0 &&
-          Boolean(String((initialInvoice as any)?.depositText || '').trim());
+          typeof initialInvoice?.depositPercent === 'number' &&
+          Number(initialInvoice?.depositPercent) > 0 &&
+          Boolean(String(initialInvoice?.depositText || '').trim());
         return Boolean(initialInvoice?.id && hasLegacyDeposit);
       })(),
-      depositReceivedEnabled: Boolean((initialInvoice as any)?.depositReceivedEnabled),
-      depositReceivedAmount:
-        typeof (initialInvoice as any)?.depositReceivedAmount === 'number'
-          ? Number((initialInvoice as any).depositReceivedAmount)
-          : 0,
+      depositReceivedEnabled: Boolean(initialInvoice?.depositReceivedEnabled),
+      depositReceivedAmount: typeof initialInvoice?.depositReceivedAmount === 'number'
+        ? Number(initialInvoice.depositReceivedAmount) : 0,
       paymentTerms: initialInvoice?.paymentTerms || '',
       paymentInfo: initialInvoice?.paymentInfo || '',
-      paypalText: (initialInvoice as any)?.paypalText || '',
-      footerText: (initialInvoice as any)?.footerText || '',
-      taxNote: (initialInvoice as any)?.taxNote || '',
-      agbText: (initialInvoice as any)?.agbText || '',
-      agbLink: (initialInvoice as any)?.agbLink || '',
+      paypalText: initialInvoice?.paypalText || '',
+      footerText: initialInvoice?.footerText || '',
+      taxNote: initialInvoice?.taxNote || '',
+      agbText: initialInvoice?.agbText || '',
+      agbLink: initialInvoice?.agbLink || '',
       items: initialItems.length > 0 ? initialItems : [{ id: 'temp_1', invoiceId: '', name: '', orderIndex: 0, unitPrice: 0, quantity: 1, taxPercent: 0, unit: 'Stück', createdAt: Date.now() }],
     },
   });
 
-  const { fields, append, remove, update } = useFieldArray({
-    control,
-    name: 'items',
-    keyName: 'rhfId',
-  });
+  const { fields, append, remove, update } = useFieldArray({ control, name: 'items', keyName: 'rhfId' });
 
-  const dirtyBaselineRef = useRef<string>('');
-  const dirtyInitializedRef = useRef(false);
-  const [isDirty, setIsDirty] = useState(false);
-  const [showValidationErrors, setShowValidationErrors] = useState(false);
-  const [inlineStatus, setInlineStatus] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  // ─── Local State ───────────────────────────────────────────────
+
+  const { status: inlineStatus, show: showStatus, clear: clearStatus } = useInlineStatus();
+  const { requestConfirm, confirmDialog } = useConfirmDialog();
+  const moreActions = useMoreActionsDropdown();
   const depositReceivedAmountRef = useRef<HTMLInputElement | null>(null);
 
-  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
-  const [confirmModal, setConfirmModal] = useState<{
-    title: string;
-    message: string;
-    confirmLabel?: string;
-    cancelLabel?: string;
-    danger?: boolean;
-  } | null>(null);
-
-  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
-  const moreActionsWrapRef = useRef<HTMLDivElement | null>(null);
-
-  const requestConfirm = (opts: {
-    title: string;
-    message: string;
-    confirmLabel?: string;
-    cancelLabel?: string;
-    danger?: boolean;
-  }) => {
-    setConfirmModal(opts);
-    return new Promise<boolean>((resolve) => {
-      confirmResolveRef.current = resolve;
-    });
-  };
-
-  useEffect(() => {
-    if (!moreActionsOpen) return;
-
-    const onMouseDown = (e: MouseEvent) => {
-      const el = moreActionsWrapRef.current;
-      if (!el) return;
-      if (e.target instanceof Node && el.contains(e.target)) return;
-      setMoreActionsOpen(false);
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreActionsOpen(false);
-    };
-
-    window.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [moreActionsOpen]);
-
-  // Beleg-Daten
   const [invoiceType, setInvoiceType] = useState<InvoiceType>(initialInvoice?.invoiceType || 'Angebot');
   const [state, setState] = useState<InvoiceState>(initialInvoice?.state || 'entwurf');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(initialInvoice?.companyId || '');
+  const [template, setTemplate] = useState<InvoiceTemplate | null>(null);
+  const [layoutId, setLayoutId] = useState<string>(initialInvoice?.layoutId || getDefaultInvoiceLayoutId(invoiceType));
+  const [linkedPayments, setLinkedPayments] = useState<Payment[]>([]);
+  const [linkedPaymentsLoading, setLinkedPaymentsLoading] = useState(false);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
 
-  // Kunde
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
-    initialInvoice?.companyId || ''
-  );
+  // ─── Watched Fields (reactive for JSX rendering) ───────────────
 
   const invoiceNo = watch('invoiceNo');
   const invoiceDate = watch('invoiceDate');
   const dueDate = watch('dueDate');
-  const currency = watch('currency');
   const buyerName = watch('buyerName');
   const buyerAddress = watch('buyerAddress');
   const salutation = watch('salutation');
@@ -214,37 +209,30 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const agbText = watch('agbText');
   const agbLink = watch('agbLink');
 
-  // Text / Zeitraum / Anzahlung
-  const setDepositEnabled = (next: boolean | ((prev: boolean) => boolean)) => {
-    const prev = Boolean(getValues('depositEnabled'));
-    const resolved = typeof next === 'function' ? (next as (p: boolean) => boolean)(prev) : next;
-    setValue('depositEnabled', resolved);
-  };
+  // Single subscription für Dirty-Tracking
+  const _formVersion = watch();
 
-  const setDepositPercent = (next: number) => setValue('depositPercent', next);
-
-  const setDepositReceivedEnabled = (next: boolean | ((prev: boolean) => boolean)) => {
-    const prev = Boolean(getValues('depositReceivedEnabled'));
-    const resolved = typeof next === 'function' ? (next as (p: boolean) => boolean)(prev) : next;
-    setValue('depositReceivedEnabled', resolved);
-  };
-
-  const setDepositReceivedAmount = (next: number) => setValue('depositReceivedAmount', next);
-
-  // Template
-  const [template, setTemplate] = useState<InvoiceTemplate | null>(null);
-  const [layoutId, setLayoutId] = useState<string>((initialInvoice as any)?.layoutId || getDefaultInvoiceLayoutId(invoiceType));
-  const [linkedPayments, setLinkedPayments] = useState<Payment[]>([]);
-  const [linkedPaymentsLoading, setLinkedPaymentsLoading] = useState(false);
+  // ─── Derived State ─────────────────────────────────────────────
 
   const layout = useMemo(() => getInvoiceLayout(layoutId), [layoutId]);
   const subtotalProfile = useMemo(() => getActiveSubTotalInvoiceTypeProfile(invoiceType), [invoiceType]);
-  // Default editor shows quantity/unit/unitPrice and hides tax.
   const showQty = subtotalProfile ? (subtotalProfile.show.quantity ?? true) : true;
   const showUnit = subtotalProfile ? (subtotalProfile.show.unit ?? true) : true;
   const showUnitPrice = subtotalProfile ? (subtotalProfile.show.unitPrice ?? true) : true;
   const showTax = subtotalProfile ? (subtotalProfile.show.tax ?? false) : false;
   const showLineTotal = subtotalProfile ? (subtotalProfile.show.lineTotal ?? true) : true;
+
+  const hasBuyerName = buyerName.trim().length > 0;
+  const hasBuyerAddress = buyerAddress.trim().length > 0;
+  const canSave = hasBuyerName && hasBuyerAddress;
+  const isDepositSupportedType = invoiceType === 'Angebot' || invoiceType === 'Auftrag';
+  const hasAdvancedTextBlocks = layout.editorBlocks.some(
+    (b) => b === 'payment' || b === 'paypal' || b === 'taxNote' || b === 'agbLink' || b === 'footer'
+  );
+  const hasNonEmptyAdvancedFields = [paymentTerms, paypalText, taxNote, agbText, agbLink, footerText]
+    .some((v) => String(v || '').trim().length > 0);
+
+  // ─── Helpers ───────────────────────────────────────────────────
 
   const resolvePlaceholders = (s: string) => {
     const name = buyerName?.trim() || '{{name}}';
@@ -253,141 +241,104 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         const base = new Date(invoiceDate);
         base.setDate(base.getDate() + 7);
         return base.toLocaleDateString('de-DE');
-      } catch {
-        return '';
-      }
+      } catch { return ''; }
     })();
     return String(s || '')
-      .replaceAll('{{name}}', name)
-      .replaceAll('{{client}}', name)
-      .replaceAll('{client}', name)
+      .replaceAll('{{name}}', name).replaceAll('{{client}}', name).replaceAll('{client}', name)
       .replaceAll('{{paypalMeUrl}}', company.paypalMeUrl)
       .replaceAll('{{agbsUrl}}', company.agbsUrl)
       .replaceAll('{{validUntil}}', validUntil);
   };
 
-  const applyLayoutDefaults = (opts?: { force?: boolean }) => {
-    const d = layout.defaultsByType[invoiceType];
-    const force = Boolean(opts?.force);
-    if (force || !String(getValues('introText') || '').trim()) setValue('introText', resolvePlaceholders(d.introText));
-    if (force || !String(getValues('paymentTerms') || '').trim()) setValue('paymentTerms', d.paymentTerms);
-    if (force || !String(getValues('paymentInfo') || '').trim()) setValue('paymentInfo', d.paymentInfo);
-    if (force || !String(getValues('paypalText') || '').trim()) setValue('paypalText', resolvePlaceholders(d.paypalText));
-    if (force || !String(getValues('footerText') || '').trim()) setValue('footerText', d.footerText);
-    if (force || !String(getValues('taxNote') || '').trim()) setValue('taxNote', d.taxNote);
-    if (force || !String(getValues('agbText') || '').trim()) setValue('agbText', resolvePlaceholders(d.agbText));
-    if (force || !String(getValues('agbLink') || '').trim()) setValue('agbLink', template?.defaultAgbLink || getValues('agbLink') || '');
-    if (force || !depositPercent) setDepositPercent(typeof d.depositPercent === 'number' ? d.depositPercent : 0);
-    if (force || !String(getValues('depositText') || '').trim()) setValue('depositText', resolvePlaceholders(d.depositText || company.depositNote || ''));
-    if ((force || !dueDate) && typeof d.dueDays === 'number' && d.dueDays > 0) {
-      const base = new Date(invoiceDate);
-      base.setDate(base.getDate() + d.dueDays);
-      setValue('dueDate', base.toISOString().substring(0, 10));
-    }
+  const buildInvoice = (): Invoice => {
+    const v = getValues();
+    return {
+      id: initialInvoice?.id || 'temp', invoiceType, invoiceNo: v.invoiceNo,
+      companyId: selectedCustomerId,
+      invoiceDate: new Date(v.invoiceDate).getTime(),
+      dueDate: v.dueDate ? new Date(v.dueDate).getTime() : undefined,
+      currency: v.currency, state,
+      buyerName: v.buyerName, buyerAddress: v.buyerAddress, salutation: v.salutation,
+      introText: v.introText,
+      servicePeriodStart: v.servicePeriodStart ? new Date(v.servicePeriodStart).getTime() : undefined,
+      servicePeriodEnd: v.servicePeriodEnd ? new Date(v.servicePeriodEnd).getTime() : undefined,
+      depositPercent: v.depositPercent, depositText: v.depositText, depositEnabled: v.depositEnabled,
+      depositReceivedEnabled: v.depositReceivedEnabled, depositReceivedAmount: v.depositReceivedAmount,
+      paymentTerms: v.paymentTerms, paymentInfo: v.paymentInfo, paypalText: v.paypalText,
+      footerText: v.footerText, taxNote: v.taxNote, agbText: v.agbText, agbLink: v.agbLink,
+      layoutId, createdAt: Date.now(), updatedAt: Date.now(),
+    };
   };
 
-  const buildDirtySnapshot = () => {
-    return JSON.stringify({
-      invoiceType,
-      invoiceNo,
-      invoiceDate,
-      dueDate,
-      state,
-      currency,
-      selectedCustomerId,
-      buyerName,
-      buyerAddress,
-      salutation,
-      introText,
-      servicePeriodStart,
-      servicePeriodEnd,
-      depositPercent,
-      depositText,
-      depositEnabled,
-      depositReceivedEnabled,
-      depositReceivedAmount,
-      paymentTerms,
-      paymentInfo,
-      paypalText,
-      footerText,
-      taxNote,
-      agbText,
-      agbLink,
-      layoutId,
-      items: fields.map((it) => ({
-        id: it.id,
-        name: it.name,
-        unit: it.unit,
-        unitPrice: it.unitPrice,
-        quantity: it.quantity,
-        taxPercent: it.taxPercent,
-      })),
-    });
+  const buildInvoiceData = (): Partial<Invoice> => {
+    const { id, createdAt, updatedAt, ...rest } = buildInvoice();
+    return rest;
   };
 
-  // Summen
-  const calculateTotals = () => {
-    let subtotal = 0;
-    let tax = 0;
+  // ─── Dirty Tracking ────────────────────────────────────────────
 
+  const { isDirty, setIsDirty, resetDirtyBaseline } = useInvoiceDirtyTracking({
+    getValues: getValues as () => Record<string, unknown>,
+    fields: fields as InvoiceItem[],
+    externalState: { invoiceType, state, selectedCustomerId, layoutId },
+    formVersion: _formVersion,
+    template,
+  });
+
+  // ─── Export Hook ────────────────────────────────────────────────
+
+  const exportHandlers = useInvoiceExport({
+    buildInvoice,
+    getFields: () => fields as InvoiceItem[],
+    template,
+    customers,
+    selectedCustomerId,
+    buyerName,
+    showStatus,
+    clearStatus,
+    requestConfirm,
+  });
+
+  // ─── Totals ────────────────────────────────────────────────────
+
+  const totals = useMemo(() => {
+    let subtotal = 0, tax = 0;
+    const taxRates = new Set<number>();
     fields.forEach((item) => {
       const itemTotal = item.unitPrice * item.quantity;
       subtotal += itemTotal;
       tax += itemTotal * (item.taxPercent / 100);
+      if (item.taxPercent > 0) taxRates.add(item.taxPercent);
     });
-
     const total = subtotal + tax;
-
     return {
       subtotal: Math.round(subtotal * 100) / 100,
       tax: Math.round(tax * 100) / 100,
       total: Math.round(total * 100) / 100,
+      hasTax: tax > 0,
+      effectiveTaxRate: subtotal > 0 ? Math.round((tax / subtotal) * 10000) / 100 : 0,
+      singleTaxRate: taxRates.size === 1 ? [...taxRates][0] : undefined,
     };
-  };
+  }, [fields]);
 
-  const totals = useMemo(() => calculateTotals(), [fields]);
-  const isDepositSupportedType = invoiceType === 'Angebot' || invoiceType === 'Auftrag';
-  const depositAmountPreview =
-    isDepositSupportedType && depositEnabled && depositPercent > 0
-      ? Math.round((totals.total * (depositPercent / 100)) * 100) / 100
-      : 0;
+  const depositAmountPreview = isDepositSupportedType && depositEnabled && depositPercent > 0
+    ? Math.round((totals.total * (depositPercent / 100)) * 100) / 100 : 0;
   const grandTotalPreview = Math.round((totals.total + (depositText && depositAmountPreview > 0 ? depositAmountPreview : 0)) * 100) / 100;
-  const linkedPaymentsTotal = useMemo(
-    () => linkedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
-    [linkedPayments]
-  );
-  const hasBuyerName = buyerName.trim().length > 0;
-  const hasBuyerAddress = buyerAddress.trim().length > 0;
-  const canSave = hasBuyerName && hasBuyerAddress;
-  const hasAdvancedTextBlocks = layout.editorBlocks.some(
-    (block) => block === 'payment' || block === 'paypal' || block === 'taxNote' || block === 'agbLink' || block === 'footer'
-  );
+  const linkedPaymentsTotal = useMemo(() => linkedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0), [linkedPayments]);
 
+  // ─── Effects ───────────────────────────────────────────────────
+
+  // Linked Payments
   useEffect(() => {
     let cancelled = false;
     const invoiceId = String(initialInvoice?.id || '').trim();
-    if (!invoiceId) {
-      setLinkedPayments([]);
-      setLinkedPaymentsLoading(false);
-      return;
-    }
+    if (!invoiceId) { setLinkedPayments([]); setLinkedPaymentsLoading(false); return; }
     setLinkedPaymentsLoading(true);
     getPaymentsByInvoice(invoiceId)
-      .then((rows) => {
-        if (cancelled) return;
-        setLinkedPayments(rows);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setLinkedPayments([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLinkedPaymentsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then((rows) => { if (!cancelled) setLinkedPayments(rows); })
+      .catch(() => { if (!cancelled) setLinkedPayments([]); })
+      .finally(() => { if (!cancelled) setLinkedPaymentsLoading(false); });
+    return () => { cancelled = true; };
   }, [initialInvoice?.id]);
 
   // Template laden bei Typ-Änderung
@@ -397,390 +348,139 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       if (tpl) {
         setTemplate(tpl);
         setLayoutId((cur) => (initialInvoice?.id ? cur : (cur || tpl.layoutId || getDefaultInvoiceLayoutId(invoiceType))));
-        if (!(initialInvoice as any)?.introText) {
-          setValue('introText', resolvePlaceholders(tpl.defaultIntroText || ''));
+        const batchOpts = { shouldDirty: false };
+        if (!initialInvoice?.introText) setValue('introText', resolvePlaceholders(tpl.defaultIntroText || ''), batchOpts);
+        if (!initialInvoice?.paymentTerms) setValue('paymentTerms', tpl.defaultPaymentTerms, batchOpts);
+        if (!initialInvoice?.paymentInfo) setValue('paymentInfo', tpl.defaultPaymentInfo, batchOpts);
+        if (!initialInvoice?.paypalText) setValue('paypalText', resolvePlaceholders(tpl.defaultPaypalText || ''), batchOpts);
+        if (!initialInvoice?.footerText) setValue('footerText', tpl.defaultFooterText, batchOpts);
+        if (!initialInvoice?.taxNote) setValue('taxNote', tpl.defaultTaxNote, batchOpts);
+        if (!initialInvoice?.agbText) setValue('agbText', resolvePlaceholders(tpl.defaultAgbText || ''), batchOpts);
+        if (!initialInvoice?.agbLink) setValue('agbLink', tpl.defaultAgbLink, batchOpts);
+        if (typeof initialInvoice?.depositPercent !== 'number' && (invoiceType === 'Angebot' || invoiceType === 'Auftrag')) {
+          setValue('depositPercent', typeof tpl.defaultDepositPercent === 'number' ? tpl.defaultDepositPercent : 0, batchOpts);
         }
-        if (!initialInvoice?.paymentTerms) {
-          setValue('paymentTerms', tpl.defaultPaymentTerms);
-        }
-        if (!initialInvoice?.paymentInfo) {
-          setValue('paymentInfo', tpl.defaultPaymentInfo);
-        }
-        if (!(initialInvoice as any)?.paypalText) {
-          setValue('paypalText', resolvePlaceholders(tpl.defaultPaypalText || ''));
-        }
-        if (!(initialInvoice as any)?.footerText) {
-          setValue('footerText', tpl.defaultFooterText);
-        }
-        if (!(initialInvoice as any)?.taxNote) {
-          setValue('taxNote', tpl.defaultTaxNote);
-        }
-        if (!(initialInvoice as any)?.agbText) {
-          setValue('agbText', resolvePlaceholders(tpl.defaultAgbText || ''));
-        }
-        if (!(initialInvoice as any)?.agbLink) {
-          setValue('agbLink', tpl.defaultAgbLink);
-        }
-        if (typeof (initialInvoice as any)?.depositPercent !== 'number' && (invoiceType === 'Angebot' || invoiceType === 'Auftrag')) {
-          setDepositPercent(typeof tpl.defaultDepositPercent === 'number' ? tpl.defaultDepositPercent : 0);
-        }
-        if (!(initialInvoice as any)?.depositText && (invoiceType === 'Angebot' || invoiceType === 'Auftrag')) {
-          setValue('depositText', resolvePlaceholders(tpl.defaultDepositText || company.depositNote || ''));
+        if (!initialInvoice?.depositText && (invoiceType === 'Angebot' || invoiceType === 'Auftrag')) {
+          setValue('depositText', resolvePlaceholders(tpl.defaultDepositText || company.depositNote || ''), batchOpts);
         }
         if (!initialInvoice?.dueDate) {
           const d = layout.defaultsByType[invoiceType]?.dueDays;
-          if (typeof d === 'number' && d > 0 && !dueDate) {
-            const base = new Date(invoiceDate);
+          if (typeof d === 'number' && d > 0 && !getValues('dueDate')) {
+            const base = new Date(getValues('invoiceDate'));
             base.setDate(base.getDate() + d);
-            setValue('dueDate', base.toISOString().substring(0, 10));
+            setValue('dueDate', base.toISOString().substring(0, 10), batchOpts);
           }
         }
       }
     };
-
     loadTemplate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceType]);
-
-  // Initialize dirty baseline once we have a template (defaults filled) and initial customer fill ran.
-  useEffect(() => {
-    if (dirtyInitializedRef.current) return;
-    if (!template) return;
-    dirtyBaselineRef.current = buildDirtySnapshot();
-    dirtyInitializedRef.current = true;
-    setIsDirty(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template]);
-
-  // Recompute dirty after edits.
-  useEffect(() => {
-    if (!dirtyInitializedRef.current) return;
-    const next = buildDirtySnapshot();
-    setIsDirty(next !== dirtyBaselineRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    invoiceType,
-    invoiceNo,
-    invoiceDate,
-    dueDate,
-    state,
-    currency,
-    selectedCustomerId,
-    buyerName,
-    buyerAddress,
-    salutation,
-    introText,
-    servicePeriodStart,
-    servicePeriodEnd,
-    depositPercent,
-    depositText,
-    depositEnabled,
-    depositReceivedEnabled,
-    depositReceivedAmount,
-    paymentTerms,
-    paymentInfo,
-    paypalText,
-    footerText,
-    taxNote,
-    agbText,
-    agbLink,
-    layoutId,
-    fields,
-  ]);
-
-  // Warn on tab close / reload when there are unsaved changes.
-  useEffect(() => {
-    if (!isDirty) return;
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [isDirty]);
 
   // Kunde-Änderung
   useEffect(() => {
     const customer = customers.find((c) => c.id === selectedCustomerId);
     if (customer && !initialInvoice?.buyerName) {
       setValue('buyerName', `${customer.firstName} ${customer.lastName}`);
-      setValue(
-        'buyerAddress',
-        `${customer.address.street}\n${customer.address.zipCode} ${customer.address.city}\n${customer.address.country}`
-      );
+      setValue('buyerAddress', `${customer.address.street}\n${customer.address.zipCode} ${customer.address.city}\n${customer.address.country}`);
       setValue('salutation', customer.salutation || '');
     }
-  }, [selectedCustomerId, customers, initialInvoice]);
+  }, [selectedCustomerId, customers, initialInvoice, setValue]);
 
-  // Position hinzufügen
-  const addPosition = () => {
-    append({
-      id: `temp_${Date.now()}`,
-      invoiceId: '',
-      name: '',
-      orderIndex: fields.length,
-      unitPrice: 0,
-      quantity: 1,
-      taxPercent: 0,
-      unit: 'Stück',
-      createdAt: Date.now(),
-    } as InvoiceItem);
-  };
-
-  // Position entfernen (index-based für useFieldArray)
-  const removePosition = (index: number) => {
-    if (fields.length === 1) {
-      setInlineStatus({ tone: 'error', text: 'Mindestens eine Position ist erforderlich.' });
-      return;
-    }
-    setInlineStatus(null);
-    remove(index);
-  };
-
-  // Position aktualisieren (index-based für useFieldArray)
-  const updatePosition = (index: number, field: keyof InvoiceItem, value: any) => {
-    const current = fields[index] as InvoiceItem;
-    update(index, { ...current, [field]: value });
-  };
-
-  const buildInvoiceData = (): Partial<Invoice> => ({
-    invoiceType,
-    invoiceNo,
-    invoiceDate: new Date(invoiceDate).getTime(),
-    dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
-    currency,
-    state,
-    companyId: selectedCustomerId,
-    buyerName,
-    buyerAddress,
-    salutation,
-    introText,
-    servicePeriodStart: servicePeriodStart ? new Date(servicePeriodStart).getTime() : undefined,
-    servicePeriodEnd: servicePeriodEnd ? new Date(servicePeriodEnd).getTime() : undefined,
-    depositPercent,
-    depositText,
-    depositEnabled,
-    depositReceivedEnabled,
-    depositReceivedAmount,
-    paymentTerms,
-    paymentInfo,
-    paypalText,
-    footerText,
-    taxNote,
-    agbText,
-    agbLink,
-    layoutId,
-  });
+  // ─── Auto Save ─────────────────────────────────────────────────
 
   const autoSaveData = useMemo(
     () => ({ invoiceData: buildInvoiceData(), items: fields as InvoiceItem[] }),
-    [
-      invoiceType,
-      invoiceNo,
-      invoiceDate,
-      dueDate,
-      currency,
-      state,
-      selectedCustomerId,
-      buyerName,
-      buyerAddress,
-      salutation,
-      introText,
-      servicePeriodStart,
-      servicePeriodEnd,
-      depositPercent,
-      depositText,
-      depositEnabled,
-      depositReceivedEnabled,
-      depositReceivedAmount,
-      paymentTerms,
-      paymentInfo,
-      paypalText,
-      footerText,
-      taxNote,
-      agbText,
-      agbLink,
-      layoutId,
-      fields,
-    ]
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+    [_formVersion, invoiceType, state, selectedCustomerId, layoutId, fields]
   );
 
   const { saveState } = useAutoSave({
     data: autoSaveData,
     onSave: async (data) => {
       onSave(data.invoiceData, data.items);
-      dirtyBaselineRef.current = buildDirtySnapshot();
-      setIsDirty(false);
+      resetDirtyBaseline();
     },
     isDirty,
     condition: state === 'entwurf' && canSave,
     delay: 1500,
   });
 
-  // Speichern
+  // ─── Position CRUD ─────────────────────────────────────────────
+
+  const addPosition = () => {
+    append({
+      id: `temp_${Date.now()}`, invoiceId: '', name: '', orderIndex: fields.length,
+      unitPrice: 0, quantity: 1, taxPercent: 0, unit: 'Stück', createdAt: Date.now(),
+    } as InvoiceItem);
+  };
+
+  const removePosition = (index: number) => {
+    if (fields.length === 1) {
+      showStatus({ tone: 'error', text: 'Mindestens eine Position ist erforderlich.' });
+      return;
+    }
+    clearStatus();
+    remove(index);
+  };
+
+  const updatePosition = (index: number, field: keyof InvoiceItem, value: string | number) => {
+    const current = fields[index] as InvoiceItem;
+    update(index, { ...current, [field]: value });
+  };
+
+  // ─── Handlers ──────────────────────────────────────────────────
+
   const handleSave = async () => {
     setShowValidationErrors(true);
     if (!canSave) {
-      setInlineStatus({ tone: 'error', text: 'Bitte Name und Adresse im Kundenblock ausfüllen.' });
+      showStatus({ tone: 'error', text: 'Bitte Name und Adresse im Kundenblock ausfüllen.' });
       return;
     }
-    setInlineStatus(null);
-
-    // Soft-Warnung: Alle Positionen haben Preis 0 (aber Beleg hat Inhalt)
+    clearStatus();
     const hasNamedItems = fields.some((it: any) => it.name.trim().length > 0);
     const allZeroPrice = fields.every((it: any) => !it.unitPrice || it.unitPrice === 0);
     if (hasNamedItems && allZeroPrice) {
       const ok = await requestConfirm({
         title: 'Speichern bestätigen',
         message: '⚠️ Alle Positionen haben den Preis 0,00 €.\n\nTrotzdem speichern?',
-        confirmLabel: 'Trotzdem speichern',
-        cancelLabel: 'Abbrechen',
-        danger: false,
+        confirmLabel: 'Trotzdem speichern', cancelLabel: 'Abbrechen', danger: false,
       });
       if (!ok) return;
     }
-
     onSave(buildInvoiceData(), fields as InvoiceItem[]);
-    dirtyBaselineRef.current = buildDirtySnapshot();
-    setIsDirty(false);
+    resetDirtyBaseline();
+    showStatus({ tone: 'info', text: 'Beleg gespeichert.' }, 3000);
   };
 
-  // PDF exportieren
-  const buildInvoiceForExport = (): Invoice => {
-    return {
-      id: initialInvoice?.id || 'temp',
-      invoiceType,
-      invoiceNo,
-      companyId: selectedCustomerId,
-      invoiceDate: new Date(invoiceDate).getTime(),
-      dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
-      currency,
-      state,
-      buyerName,
-      buyerAddress,
-      salutation,
-      introText,
-      servicePeriodStart: servicePeriodStart ? new Date(servicePeriodStart).getTime() : undefined,
-      servicePeriodEnd: servicePeriodEnd ? new Date(servicePeriodEnd).getTime() : undefined,
-      depositPercent,
-      depositText,
-      depositEnabled,
-      depositReceivedEnabled,
-      depositReceivedAmount,
-      paymentTerms,
-      paymentInfo,
-      paypalText,
-      footerText,
-      taxNote,
-      agbText,
-      agbLink,
-      layoutId,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-  };
-
-  const handleDownloadHtml = async () => {
-    if (!template) {
-      setInlineStatus({ tone: 'error', text: 'Template nicht geladen. Bitte Belegtyp/Layout prüfen.' });
-      return;
-    }
-
-    try {
-      await downloadInvoicePDF(buildInvoiceForExport(), fields as InvoiceItem[], template);
-      setInlineStatus(null);
-    } catch (error) {
-      console.error('PDF Export fehlgeschlagen:', error);
-      setInlineStatus({ tone: 'error', text: 'HTML/PDF Export fehlgeschlagen. Bitte erneut versuchen.' });
+  const applyLayoutDefaults = (opts?: { force?: boolean }) => {
+    const d = layout.defaultsByType[invoiceType];
+    const force = Boolean(opts?.force);
+    const b = { shouldDirty: false };
+    if (force || !String(getValues('introText') || '').trim()) setValue('introText', resolvePlaceholders(d.introText), b);
+    if (force || !String(getValues('paymentTerms') || '').trim()) setValue('paymentTerms', d.paymentTerms, b);
+    if (force || !String(getValues('paymentInfo') || '').trim()) setValue('paymentInfo', d.paymentInfo, b);
+    if (force || !String(getValues('paypalText') || '').trim()) setValue('paypalText', resolvePlaceholders(d.paypalText), b);
+    if (force || !String(getValues('footerText') || '').trim()) setValue('footerText', d.footerText, b);
+    if (force || !String(getValues('taxNote') || '').trim()) setValue('taxNote', d.taxNote, b);
+    if (force || !String(getValues('agbText') || '').trim()) setValue('agbText', resolvePlaceholders(d.agbText), b);
+    if (force || !String(getValues('agbLink') || '').trim()) setValue('agbLink', template?.defaultAgbLink || getValues('agbLink') || '', b);
+    if (force || !getValues('depositPercent')) setValue('depositPercent', typeof d.depositPercent === 'number' ? d.depositPercent : 0, b);
+    if (force || !String(getValues('depositText') || '').trim()) setValue('depositText', resolvePlaceholders(d.depositText || company.depositNote || ''), b);
+    if ((force || !getValues('dueDate')) && typeof d.dueDays === 'number' && d.dueDays > 0) {
+      const base = new Date(getValues('invoiceDate'));
+      base.setDate(base.getDate() + d.dueDays);
+      setValue('dueDate', base.toISOString().substring(0, 10), b);
     }
   };
 
-  // PDF öffnen
-  const handlePreviewPdf = async () => {
-    if (!template) {
-      setInlineStatus({ tone: 'error', text: 'Template nicht geladen. Bitte Belegtyp/Layout prüfen.' });
-      return;
-    }
+  // ─── Status Badge ──────────────────────────────────────────────
 
-    try {
-      await openInvoicePreview(buildInvoiceForExport(), fields as InvoiceItem[], template);
-      setInlineStatus(null);
-    } catch (error) {
-      console.error('PDF Öffnen fehlgeschlagen:', error);
-      setInlineStatus({ tone: 'error', text: 'PDF Vorschau konnte nicht geöffnet werden.' });
-    }
+  const statusColors: Record<string, string> = {
+    entwurf: 'bg-gray-100 text-gray-800', gesendet: 'bg-blue-100 text-blue-800',
+    angenommen: 'bg-green-100 text-green-800', storniert: 'bg-red-100 text-red-800',
+    archiviert: 'bg-slate-200 text-slate-800',
   };
-
-  const handleSavePdf = async () => {
-    if (!template) {
-      setInlineStatus({ tone: 'error', text: 'Template nicht geladen. Bitte Belegtyp/Layout prüfen.' });
-      return;
-    }
-    try {
-      await saveInvoicePdfViaPrintDialog(buildInvoiceForExport(), fields as InvoiceItem[], template);
-      setInlineStatus(null);
-    } catch (error) {
-      console.error('PDF Speichern fehlgeschlagen:', error);
-      setInlineStatus({ tone: 'error', text: 'PDF Speichern fehlgeschlagen.' });
-    }
-  };
-
-  const handleMailCustomer = async () => {
-    const customer = customers.find((c) => c.id === selectedCustomerId);
-    const toEmail = (customer?.email || '').trim();
-    if (!toEmail) {
-      setInlineStatus({ tone: 'error', text: 'Keine Kunden-E-Mail hinterlegt. Bitte Kundenprofil ergänzen.' });
-      return;
-    }
-    try {
-      const result = await openInvoiceCompose({
-        invoice: buildInvoiceForExport(),
-        toEmail,
-        customerName: `${customer?.firstName || ''} ${customer?.lastName || ''}`.trim() || buyerName,
-        preferGmail: true,
-      });
-      if (result.type === 'sent' || result.type === 'warning') {
-        setInlineStatus({ tone: 'info', text: result.message });
-      } else if (result.type === 'fallback') {
-        const ok = await requestConfirm({
-          title: 'SMTP-Versand fehlgeschlagen',
-          message: `${result.error}\n\nStattdessen Entwurf im Browser öffnen?`,
-          confirmLabel: 'Browser öffnen',
-          cancelLabel: 'Abbrechen',
-        });
-        if (ok) {
-          const url = result.preferGmail === false ? result.links.mailtoUrl : result.links.gmailUrl;
-          const win = window.open(url, '_blank');
-          if (!win) window.location.href = url;
-        }
-      } else if (result.type === 'opened') {
-        setInlineStatus({ tone: 'info', text: 'Mail-Entwurf im Browser geöffnet.' });
-      }
-    } catch (e) {
-      console.error('Mail Draft fehlgeschlagen:', e);
-      setInlineStatus({ tone: 'error', text: 'Mail-Entwurf konnte nicht geöffnet werden.' });
-    }
-  };
-
-  // Status Badge
-  const getStatusBadge = () => {
-    const colors = {
-      entwurf: 'bg-gray-100 text-gray-800',
-      gesendet: 'bg-blue-100 text-blue-800',
-      angenommen: 'bg-green-100 text-green-800',
-      storniert: 'bg-red-100 text-red-800',
-      archiviert: 'bg-slate-200 text-slate-800',
-    };
-
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colors[state]}`}>
-        {state.charAt(0).toUpperCase() + state.slice(1)}
-      </span>
-    );
-  };
-
-  const baseButtonClass = 'inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
-  const primaryButtonClass = `${baseButtonClass} bg-slate-900 text-white hover:bg-slate-800`;
-  const secondaryButtonClass = `${baseButtonClass} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`;
 
   const workflowActionLabel = useMemo(() => {
     if (!initialInvoice?.id) return undefined;
@@ -791,45 +491,48 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   const handleWorkflowAdvance = () => {
     if (!initialInvoice?.id) return;
-    if (invoiceType === 'Angebot' && onConvertToOrder) {
-      onConvertToOrder(initialInvoice.id);
-      return;
-    }
-    if (invoiceType === 'Auftrag' && onConvertToInvoice) {
-      onConvertToInvoice(initialInvoice.id);
-    }
+    if (invoiceType === 'Angebot' && onConvertToOrder) { onConvertToOrder(initialInvoice.id); return; }
+    if (invoiceType === 'Auftrag' && onConvertToInvoice) { onConvertToInvoice(initialInvoice.id); }
   };
+
+  // ─── Button Classes ────────────────────────────────────────────
+
+  const baseBtn = 'inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
+  const primaryBtn = `${baseBtn} bg-slate-900 text-white hover:bg-slate-800`;
+  const secondaryBtn = `${baseBtn} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`;
+
+  // ─── Deposit Setters ───────────────────────────────────────────
+
+  const setDepositEnabled = (next: boolean | ((prev: boolean) => boolean)) => {
+    const prev = Boolean(getValues('depositEnabled'));
+    const resolved = typeof next === 'function' ? (next as (p: boolean) => boolean)(prev) : next;
+    setValue('depositEnabled', resolved);
+  };
+  const setDepositPercent = (next: number) => setValue('depositPercent', next);
+  const setDepositReceivedEnabled = (next: boolean | ((prev: boolean) => boolean)) => {
+    const prev = Boolean(getValues('depositReceivedEnabled'));
+    const resolved = typeof next === 'function' ? (next as (p: boolean) => boolean)(prev) : next;
+    setValue('depositReceivedEnabled', resolved);
+  };
+  const setDepositReceivedAmount = (next: number) => setValue('depositReceivedAmount', next);
+
+  // ═══════════════════════════════════════════════════════════════
+  // Render
+  // ═══════════════════════════════════════════════════════════════
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {confirmModal && (
-        <ConfirmModal
-          title={confirmModal.title}
-          message={confirmModal.message}
-          confirmLabel={confirmModal.confirmLabel}
-          cancelLabel={confirmModal.cancelLabel}
-          danger={confirmModal.danger}
-          onConfirm={() => {
-            const resolve = confirmResolveRef.current;
-            confirmResolveRef.current = null;
-            setConfirmModal(null);
-            resolve?.(true);
-          }}
-          onCancel={() => {
-            const resolve = confirmResolveRef.current;
-            confirmResolveRef.current = null;
-            setConfirmModal(null);
-            resolve?.(false);
-          }}
-        />
-      )}
+      {confirmDialog}
+
       {/* Header */}
       <div className="border-b border-gray-200 p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900">Beleg Editor</h2>
           <div className="flex items-center gap-3">
             <AutoSaveIndicator state={saveState} />
-            {getStatusBadge()}
+            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[state]}`}>
+              {state.charAt(0).toUpperCase() + state.slice(1)}
+            </span>
             {onClose && (
               <button
                 onClick={async () => {
@@ -837,9 +540,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                     const ok = await requestConfirm({
                       title: 'Änderungen verwerfen?',
                       message: 'Ungespeicherte Änderungen verwerfen und schließen?',
-                      confirmLabel: 'Verwerfen',
-                      cancelLabel: 'Abbrechen',
-                      danger: true,
+                      confirmLabel: 'Verwerfen', cancelLabel: 'Abbrechen', danger: true,
                     });
                     if (!ok) return;
                   }
@@ -848,8 +549,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
                 title="Schließen"
               >
-                <X size={16} aria-hidden="true" />
-                Schließen
+                <X size={16} aria-hidden="true" /> Schließen
               </button>
             )}
           </div>
@@ -857,143 +557,91 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
+
+        {/* Inline Status */}
         {inlineStatus && (
-          <div
-            className={[
-              'mb-4 rounded-md border px-3 py-2 text-sm',
-              inlineStatus.tone === 'error'
-                ? 'border-red-200 bg-red-50 text-red-700'
-                : 'border-slate-200 bg-slate-50 text-slate-700',
-            ].join(' ')}
-          >
+          <div className={[
+            'mb-4 rounded-md border px-3 py-2 text-sm',
+            inlineStatus.tone === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-slate-50 text-slate-700',
+          ].join(' ')}>
             {inlineStatus.text}
           </div>
         )}
 
         {/* Beleg-Info */}
-        <div className="mb-6 grid grid-cols-5 gap-4">
-          {/* Typ */}
+        <div className="mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-type">Typ</label>
-            <select
-              id="invoice-type"
-              value={invoiceType}
+            <select id="invoice-type" value={invoiceType}
               onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
               disabled={!!initialInvoice?.id}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
-            >
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100">
               <option value="Angebot">Angebot</option>
               <option value="Auftrag">Auftrag</option>
               <option value="Rechnung">Rechnung</option>
             </select>
           </div>
-
-          {/* Belegnummer */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-no">Belegnummer</label>
-            <input
-              id="invoice-no"
-              type="text"
-              value={invoiceNo}
-              onChange={(e) => setValue('invoiceNo', e.target.value)}
-              disabled={!!initialInvoice?.id}
+            <input id="invoice-no" type="text" value={invoiceNo}
+              onChange={(e) => setValue('invoiceNo', e.target.value)} disabled={!!initialInvoice?.id}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
-              placeholder="2025001"
-            />
+              placeholder="2025001" />
           </div>
-
-          {/* Layout */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-layout">PDF Layout</label>
             <div className="flex items-center gap-2">
-              <select
-                id="invoice-layout"
-                value={layoutId}
-                onChange={(e) => setLayoutId(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                {INVOICE_LAYOUTS.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.label}
-                  </option>
-                ))}
+              <select id="invoice-layout" value={layoutId} onChange={(e) => setLayoutId(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                {INVOICE_LAYOUTS.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
               </select>
-              <button
-                type="button"
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
-                title="Setzt Default-Texte fuer dieses Layout (Zahlung, Footer, etc.)"
+              <button type="button" className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                title="Setzt Default-Texte fuer dieses Layout"
                 onClick={async () => {
                   const ok = await requestConfirm({
                     title: 'Default-Texte anwenden?',
                     message: 'Default-Texte fuer dieses Layout anwenden?\n\nBestehende Texte werden ueberschrieben.',
-                    confirmLabel: 'Anwenden',
-                    cancelLabel: 'Abbrechen',
-                    danger: false,
+                    confirmLabel: 'Anwenden', cancelLabel: 'Abbrechen', danger: false,
                   });
                   if (!ok) return;
                   applyLayoutDefaults({ force: true });
-                }}
-              >
+                }}>
                 Default-Texte anwenden
               </button>
             </div>
           </div>
-
-          {/* Datum */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-date">Datum</label>
-            <input
-              id="invoice-date"
-              type="date"
-              value={invoiceDate}
+            <input id="invoice-date" type="date" value={invoiceDate}
               onChange={(e) => setValue('invoiceDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
           </div>
-
-          {/* Fälligkeit */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-due">Fälligkeit</label>
-            <input
-              id="invoice-due"
-              type="date"
-              value={dueDate}
+            <input id="invoice-due" type="date" value={dueDate}
               onChange={(e) => setValue('dueDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
           </div>
         </div>
 
         {/* Kunde */}
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
           <h3 className="text-sm font-medium text-gray-900 mb-3">Kunde</h3>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-customer">Kunde wählen</label>
-              <select
-                id="invoice-customer"
-                value={selectedCustomerId}
+              <select id="invoice-customer" value={selectedCustomerId}
                 onChange={(e) => setSelectedCustomerId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                 <option value="">-- Kunde wählen --</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.lastName}, {customer.firstName}
-                  </option>
-                ))}
+                {customers.map((c) => (<option key={c.id} value={c.id}>{c.lastName}, {c.firstName}</option>))}
               </select>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-salutation">Anrede</label>
-              <select
-                id="invoice-salutation"
-                value={salutation}
+              <select id="invoice-salutation" value={salutation}
                 onChange={(e) => setValue('salutation', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                 <option value="">-- Keine --</option>
                 <option value="Herr">Herr</option>
                 <option value="Frau">Frau</option>
@@ -1001,50 +649,28 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               </select>
             </div>
           </div>
-
           <div className="mt-3">
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-buyer-name">Name</label>
-            <input
-              id="invoice-buyer-name"
-              type="text"
-              value={buyerName}
-              onChange={(e) => {
-                setValue('buyerName', e.target.value);
-                if (showValidationErrors) setInlineStatus(null);
-              }}
-              className={[
-                'w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
-                showValidationErrors && !hasBuyerName ? 'border-red-300 bg-red-50' : 'border-gray-300',
-              ].join(' ')}
-              placeholder="Max Mustermann"
-            />
-            {showValidationErrors && !hasBuyerName && (
-              <p className="mt-1 text-xs text-red-600">Name ist ein Pflichtfeld.</p>
-            )}
+            <input id="invoice-buyer-name" type="text" value={buyerName}
+              onChange={(e) => { setValue('buyerName', e.target.value); if (showValidationErrors) clearStatus(); }}
+              className={['w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
+                showValidationErrors && !hasBuyerName ? 'border-red-300 bg-red-50' : 'border-gray-300'].join(' ')}
+              placeholder="Max Mustermann" />
+            {showValidationErrors && !hasBuyerName && <p className="mt-1 text-xs text-red-600">Name ist ein Pflichtfeld.</p>}
           </div>
-
           <div className="mt-3">
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-buyer-address">Adresse</label>
-            <textarea
-              id="invoice-buyer-address"
-              value={buyerAddress}
-              onChange={(e) => {
-                setValue('buyerAddress', e.target.value);
-                if (showValidationErrors) setInlineStatus(null);
-              }}
+            <textarea id="invoice-buyer-address" value={buyerAddress}
+              onChange={(e) => { setValue('buyerAddress', e.target.value); if (showValidationErrors) clearStatus(); }}
               rows={3}
-              className={[
-                'w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
-                showValidationErrors && !hasBuyerAddress ? 'border-red-300 bg-red-50' : 'border-gray-300',
-              ].join(' ')}
-              placeholder="Musterstraße 1&#10;12345 Musterstadt&#10;Deutschland"
-            />
-            {showValidationErrors && !hasBuyerAddress && (
-              <p className="mt-1 text-xs text-red-600">Adresse ist ein Pflichtfeld.</p>
-            )}
+              className={['w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
+                showValidationErrors && !hasBuyerAddress ? 'border-red-300 bg-red-50' : 'border-gray-300'].join(' ')}
+              placeholder="Musterstraße 1&#10;12345 Musterstadt&#10;Deutschland" />
+            {showValidationErrors && !hasBuyerAddress && <p className="mt-1 text-xs text-red-600">Adresse ist ein Pflichtfeld.</p>}
           </div>
         </div>
 
+        {/* Verknüpfte Zahlungen */}
         {initialInvoice?.id && (
           <div className="mb-6 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
             <h3 className="text-sm font-medium text-emerald-900 mb-2">Verknüpfte Zahlungen</h3>
@@ -1076,14 +702,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         {layout.editorBlocks.includes('intro') && (
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Text (oben)</h3>
-            <textarea
-              id="invoice-intro"
-              value={introText}
-              onChange={(e) => setValue('introText', e.target.value)}
-              rows={5}
+            <textarea id="invoice-intro" value={introText}
+              onChange={(e) => setValue('introText', e.target.value)} rows={5}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              placeholder="Hallo ...\n\nWie besprochen ...\n\nBesten Dank!"
-            />
+              placeholder="Hallo ...\n\nWie besprochen ...\n\nBesten Dank!" />
           </div>
         )}
 
@@ -1094,39 +716,26 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-period-start">Von</label>
-                <input
-                  id="invoice-period-start"
-                  type="date"
-                  value={servicePeriodStart}
+                <input id="invoice-period-start" type="date" value={servicePeriodStart}
                   onChange={(e) => setValue('servicePeriodStart', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-period-end">Bis</label>
-                <input
-                  id="invoice-period-end"
-                  type="date"
-                  value={servicePeriodEnd}
+                <input id="invoice-period-end" type="date" value={servicePeriodEnd}
                   onChange={(e) => setValue('servicePeriodEnd', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
               </div>
             </div>
           </div>
         )}
 
+        {/* Positionen */}
         <InvoiceLineItems
-          items={fields as InvoiceItem[]}
-          labels={subtotalProfile?.labels}
-          showQty={showQty}
-          showUnit={showUnit}
-          showUnitPrice={showUnitPrice}
-          showTax={showTax}
-          showLineTotal={showLineTotal}
-          onAdd={addPosition}
-          onRemove={removePosition}
-          onUpdate={updatePosition}
+          items={fields as InvoiceItem[]} labels={subtotalProfile?.labels}
+          showQty={showQty} showUnit={showUnit} showUnitPrice={showUnitPrice}
+          showTax={showTax} showLineTotal={showLineTotal}
+          onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition}
         />
 
         {/* Summen */}
@@ -1136,19 +745,18 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               <span className="text-gray-600">Zwischensumme:</span>
               <span className="font-medium">{totals.subtotal.toFixed(2)} €</span>
             </div>
-
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">USt. (0%):</span>
-              <span className="font-medium">{totals.tax.toFixed(2)} €</span>
-            </div>
-
+            {totals.hasTax && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">USt. ({totals.singleTaxRate != null ? `${totals.singleTaxRate}%` : `${totals.effectiveTaxRate}%`}):</span>
+                <span className="font-medium">{totals.tax.toFixed(2)} €</span>
+              </div>
+            )}
             {isDepositSupportedType && depositEnabled && depositText && depositAmountPreview > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Anzahlung ({depositPercent || 0}%):</span>
                 <span className="font-medium">{depositAmountPreview.toFixed(2)} €</span>
               </div>
             )}
-
             <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-300">
               <span>Gesamtbetrag:</span>
               <span>{grandTotalPreview.toFixed(2)} €</span>
@@ -1156,14 +764,12 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         </div>
 
-        {/* Anzahlung (optional fuer Angebot/Auftrag) */}
+        {/* Anzahlung */}
         {isDepositSupportedType && layout.editorBlocks.includes('deposit') && (
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Anzahlung ({invoiceType})</h3>
             <div className="mb-3">
-              <button
-                type="button"
-                title="Anzahlungsblock ein- oder ausblenden"
+              <button type="button" title="Anzahlungsblock ein- oder ausblenden"
                 onClick={() => {
                   setDepositEnabled((v) => {
                     const next = !v;
@@ -1180,40 +786,24 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                     return next;
                   });
                 }}
-                className={`px-3 py-1.5 rounded-md text-sm border ${
-                  depositEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-                aria-pressed={depositEnabled ? 'true' : 'false'}
-              >
+                className={`px-3 py-1.5 rounded-md text-sm border ${depositEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                aria-pressed={depositEnabled ? 'true' : 'false'}>
                 {depositEnabled ? 'Anzahlung aktiv' : 'Anzahlung aktivieren'}
               </button>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-deposit-percent">Prozent</label>
-                <input
-                  id="invoice-deposit-percent"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={depositPercent}
-                  onChange={(e) => setDepositPercent(Number(e.target.value))}
-                  disabled={!depositEnabled}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
+                <input id="invoice-deposit-percent" type="number" min="0" max="100" step="1" value={depositPercent}
+                  onChange={(e) => setDepositPercent(Number(e.target.value))} disabled={!depositEnabled}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
               </div>
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-deposit-text">Text</label>
-                <input
-                  id="invoice-deposit-text"
-                  type="text"
-                  value={depositText}
-                  onChange={(e) => setValue('depositText', e.target.value)}
-                  disabled={!depositEnabled}
+                <input id="invoice-deposit-text" type="text" value={depositText}
+                  onChange={(e) => setValue('depositText', e.target.value)} disabled={!depositEnabled}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  placeholder="Anzahlung 50 % nach Angebotsannahme"
-                />
+                  placeholder="Anzahlung 50 % nach Angebotsannahme" />
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-2">
@@ -1222,106 +812,72 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         )}
 
+        {/* Erweiterte Texte */}
         {hasAdvancedTextBlocks && (
-          <details className="mb-6 rounded-lg border border-slate-200 bg-slate-50/70">
+          <details open={hasNonEmptyAdvancedFields} className="mb-6 rounded-lg border border-slate-200 bg-slate-50/70">
             <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800">
               Erweiterte Texte &amp; Bedingungen
             </summary>
             <div className="space-y-6 border-t border-slate-200 bg-white px-4 py-4">
-              {/* Zahlungsbedingungen */}
               {layout.editorBlocks.includes('payment') && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Zahlungsbedingungen</h3>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-payment-terms">Bedingungen</label>
-                    <textarea
-                      id="invoice-payment-terms"
-                      value={paymentTerms}
-                      onChange={(e) => setValue('paymentTerms', e.target.value)}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    />
+                    <textarea id="invoice-payment-terms" value={paymentTerms}
+                      onChange={(e) => setValue('paymentTerms', e.target.value)} rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
                   </div>
-
                   <div className="mt-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-payment-info">Zahlungsinfo (optional)</label>
-                    <input
-                      id="invoice-payment-info"
-                      type="text"
-                      value={paymentInfo}
+                    <input id="invoice-payment-info" type="text" value={paymentInfo}
                       onChange={(e) => setValue('paymentInfo', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="PayPal: https://paypal.me/..."
-                    />
+                      placeholder="PayPal: https://paypal.me/..." />
                   </div>
                 </div>
               )}
-
               {layout.editorBlocks.includes('paypal') && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-3">PayPal Zeile</h3>
-                  <input
-                    id="invoice-paypal-text"
-                    type="text"
-                    value={paypalText}
+                  <input id="invoice-paypal-text" type="text" value={paypalText}
                     onChange={(e) => setValue('paypalText', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    placeholder={`Zahlungslink Paypal ${company.paypalMeUrl}`}
-                  />
+                    placeholder={`Zahlungslink Paypal ${company.paypalMeUrl}`} />
                 </div>
               )}
-
               {layout.editorBlocks.includes('taxNote') && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Steuerhinweis</h3>
-                  <textarea
-                    id="invoice-tax-note"
-                    value={taxNote}
-                    onChange={(e) => setValue('taxNote', e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  />
+                  <textarea id="invoice-tax-note" value={taxNote}
+                    onChange={(e) => setValue('taxNote', e.target.value)} rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
                 </div>
               )}
-
               {layout.editorBlocks.includes('agbLink') && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Links</h3>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-agb-text">AGB Text (wie im PDF)</label>
-                    <input
-                      id="invoice-agb-text"
-                      type="text"
-                      value={agbText}
+                    <input id="invoice-agb-text" type="text" value={agbText}
                       onChange={(e) => setValue('agbText', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder={`Bitte beachten Sie die gültigen AGBs auf meiner Homepage : ${company.agbsUrl}`}
-                    />
+                      placeholder={`Bitte beachten Sie die gültigen AGBs auf meiner Homepage : ${company.agbsUrl}`} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-agb-link">AGB Link</label>
-                    <input
-                      id="invoice-agb-link"
-                      type="text"
-                      value={agbLink}
+                    <input id="invoice-agb-link" type="text" value={agbLink}
                       onChange={(e) => setValue('agbLink', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    />
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
                   </div>
                 </div>
               )}
-
               {layout.editorBlocks.includes('footer') && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Footer / Hinweis</h3>
-                  <textarea
-                    id="invoice-footer"
-                    value={footerText}
-                    onChange={(e) => setValue('footerText', e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  />
+                  <textarea id="invoice-footer" value={footerText}
+                    onChange={(e) => setValue('footerText', e.target.value)} rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
                 </div>
               )}
             </div>
@@ -1331,166 +887,85 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         {/* Footer Buttons */}
         <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-gray-200 bg-white/95 px-4 pb-4 pt-4 backdrop-blur">
           <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={handleSave}
-              className={primaryButtonClass}
-              title="Beleg speichern"
-              disabled={!canSave}
-            >
-              <Save size={14} aria-hidden="true" />
-              Speichern
-            </button>
-
-            {onSend && initialInvoice?.id && state === 'entwurf' && (
-              <button
-                onClick={() => onSend(initialInvoice.id!)}
-                className={secondaryButtonClass}
-                title="Belegstatus auf gesendet setzen"
-              >
-                <Send size={14} aria-hidden="true" />
-                Senden
+            <div className="flex flex-wrap gap-2">
+              <button onClick={handleSave} className={primaryBtn} title="Beleg speichern" disabled={!canSave}>
+                <Save size={14} aria-hidden="true" /> Speichern
               </button>
-            )}
-
-            {invoiceType === 'Rechnung' && (
-              <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-white">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDepositReceivedEnabled((v) => {
-                      const next = !v;
-                      if (next) {
-                        setTimeout(() => depositReceivedAmountRef.current?.focus(), 0);
-                      }
-                      return next;
-                    });
-                  }}
-                  className={`px-2 py-1 rounded text-sm border ${
-                    depositReceivedEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-800'
-                  }`}
-                  aria-pressed={depositReceivedEnabled ? 'true' : 'false'}
-                  title="Fuegt in der Rechnung einen Hinweis hinzu, dass die Kaution dankend erhalten wurde."
-                >
-                  Kautionsbestaetigung
+              {onSend && initialInvoice?.id && state === 'entwurf' && (
+                <button onClick={() => onSend(initialInvoice.id!)} className={secondaryBtn} title="Belegstatus auf gesendet setzen">
+                  <Send size={14} aria-hidden="true" /> Senden
                 </button>
-                <input
-                  ref={depositReceivedAmountRef}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
-                  placeholder="Wert"
-                  value={depositReceivedAmount || ''}
-                  onChange={(e) => setDepositReceivedAmount(Number(e.target.value))}
-                  disabled={!depositReceivedEnabled}
-                  aria-label="Kaution Wert in Euro"
-                />
-              </div>
-            )}
-
-            <button
-              onClick={handlePreviewPdf}
-              className={secondaryButtonClass}
-              title="PDF Vorschau öffnen"
-              disabled={!template}
-            >
-              <Eye size={14} aria-hidden="true" />
-              PDF ansehen
-            </button>
-
-            <div className="relative" ref={moreActionsWrapRef}>
-              <button
-                type="button"
-                onClick={() => setMoreActionsOpen((v) => !v)}
-                className={secondaryButtonClass}
-                title="Weitere Aktionen"
-                aria-haspopup="menu"
-                aria-expanded={moreActionsOpen ? 'true' : 'false'}
-              >
-                Mehr Aktionen
-                <ChevronDown size={14} aria-hidden="true" />
-              </button>
-
-              {moreActionsOpen && (
-                <div
-                  className="absolute left-0 bottom-full mb-2 w-64 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden"
-                  role="menu"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
+              )}
+              {invoiceType === 'Rechnung' && (
+                <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-white">
+                  <button type="button"
                     onClick={() => {
-                      setMoreActionsOpen(false);
-                      void handleSavePdf();
+                      setDepositReceivedEnabled((v) => {
+                        const next = !v;
+                        if (next) setTimeout(() => depositReceivedAmountRef.current?.focus(), 0);
+                        return next;
+                      });
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                    disabled={!template}
-                    title="PDF lokal speichern"
-                  >
-                    <FileText size={14} aria-hidden="true" />
-                    PDF speichern
+                    className={`px-2 py-1 rounded text-sm border ${depositReceivedEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                    aria-pressed={depositReceivedEnabled ? 'true' : 'false'}
+                    title="Fuegt in der Rechnung einen Hinweis hinzu, dass die Kaution dankend erhalten wurde.">
+                    Kautionsbestaetigung
                   </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreActionsOpen(false);
-                      void handleMailCustomer();
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                    disabled={!template}
-                    title="Öffnet Gmail-Entwurf (PDF bitte über 'PDF speichern' erstellen und anhängen)."
-                  >
-                    <Mail size={14} aria-hidden="true" />
-                    Mail
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreActionsOpen(false);
-                      handleDownloadHtml();
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                    disabled={!template}
-                    title="Optional: druckbare HTML-Datei herunterladen"
-                  >
-                    <Download size={14} aria-hidden="true" />
-                    HTML herunterladen
-                  </button>
-
-                  {invoiceType === 'Rechnung' && onReissue && initialInvoice?.id && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setMoreActionsOpen(false);
-                        onReissue(initialInvoice.id!);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
-                      title="Storniert die alte Rechnung und erstellt einen Folgebeleg mit Suffix -2/-3/..."
-                    >
-                      Rechnung neu generieren
-                    </button>
-                  )}
+                  <input ref={depositReceivedAmountRef} type="number" step="0.01" min="0"
+                    className="w-28 px-2 py-1 border border-gray-300 rounded text-sm" placeholder="Wert"
+                    value={depositReceivedAmount || ''}
+                    onChange={(e) => setDepositReceivedAmount(Number(e.target.value))}
+                    disabled={!depositReceivedEnabled} aria-label="Kaution Wert in Euro" />
                 </div>
+              )}
+              <button onClick={exportHandlers.handlePreviewPdf} className={secondaryBtn}
+                title="PDF Vorschau öffnen" disabled={!template}>
+                <Eye size={14} aria-hidden="true" /> PDF ansehen
+              </button>
+              <div className="relative" ref={moreActions.wrapRef}>
+                <button type="button" onClick={() => moreActions.setOpen((v) => !v)}
+                  className={secondaryBtn} title="Weitere Aktionen"
+                  aria-haspopup="menu" aria-expanded={moreActions.open ? 'true' : 'false'}>
+                  Mehr Aktionen <ChevronDown size={14} aria-hidden="true" />
+                </button>
+                {moreActions.open && (
+                  <div className="absolute left-0 bottom-full mb-2 w-64 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden" role="menu">
+                    <button type="button" role="menuitem"
+                      onClick={() => { moreActions.setOpen(false); void exportHandlers.handleSavePdf(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                      disabled={!template} title="PDF lokal speichern">
+                      <FileText size={14} aria-hidden="true" /> PDF speichern
+                    </button>
+                    <button type="button" role="menuitem"
+                      onClick={() => { moreActions.setOpen(false); void exportHandlers.handleMailCustomer(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                      disabled={!template} title="Öffnet Gmail-Entwurf">
+                      <Mail size={14} aria-hidden="true" /> Mail
+                    </button>
+                    <button type="button" role="menuitem"
+                      onClick={() => { moreActions.setOpen(false); exportHandlers.handleDownloadHtml(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                      disabled={!template} title="druckbare HTML-Datei herunterladen">
+                      <Download size={14} aria-hidden="true" /> HTML herunterladen
+                    </button>
+                    {invoiceType === 'Rechnung' && onReissue && initialInvoice?.id && (
+                      <button type="button" role="menuitem"
+                        onClick={() => { moreActions.setOpen(false); onReissue(initialInvoice.id!); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+                        title="Storniert die alte Rechnung und erstellt einen Folgebeleg">
+                        Rechnung neu generieren
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {initialInvoice?.id && (
+                <InvoiceWorkflowBar currentType={invoiceType} nextActionLabel={workflowActionLabel} onAdvance={handleWorkflowAdvance} />
               )}
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {initialInvoice?.id && (
-              <InvoiceWorkflowBar
-                currentType={invoiceType}
-                nextActionLabel={workflowActionLabel}
-                onAdvance={handleWorkflowAdvance}
-              />
-            )}
-
-            
-          </div>
-        </div>
         </div>
       </div>
     </div>

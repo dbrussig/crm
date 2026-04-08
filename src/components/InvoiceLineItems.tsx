@@ -20,7 +20,7 @@ export default function InvoiceLineItems(props: {
   showLineTotal: boolean;
   onAdd: () => void;
   onRemove: (index: number) => void;
-  onUpdate: (index: number, field: keyof InvoiceItem, value: any) => void;
+  onUpdate: (index: number, field: keyof InvoiceItem, value: string | number) => void;
 }) {
   const { items, labels, showQty, showUnit, showUnitPrice, showTax, showLineTotal, onAdd, onRemove, onUpdate } = props;
 
