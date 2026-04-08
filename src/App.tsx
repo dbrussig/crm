@@ -11,7 +11,7 @@ import { generateRentalId } from './services/rentalIdService';
 import { fetchAllRentalRequests } from './services/rentalService';
 import { InvoiceList } from './components/InvoiceList';
 import { InvoiceEditor } from './components/InvoiceEditor';
-import { createFollowUpInvoiceFromInvoice, fetchAllInvoices, fetchInvoiceById, reissueInvoice, removeInvoice, saveInvoice } from './services/invoiceService';
+import { fetchAllInvoices, fetchInvoiceById, reissueInvoice, removeInvoice, saveInvoice } from './services/invoiceService';
 import SettingsPanel from './components/SettingsPanel';
 import { testZAiConnection } from './services/zAiService';
 import { findActiveResourcesForType } from './services/resourceService';
@@ -25,6 +25,7 @@ import Vermietungszubehoer from './components/Vermietungszubehoer';
 import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
 import { formatDisplayRef } from './utils/displayId';
 import { getDashboardFinancials, type DashboardFinancials } from './services/dashboardService';
+import { createFollowUpInvoiceWithStatusSync } from './services/workflowService';
 
 type View =
   | 'dashboard'
@@ -36,6 +37,7 @@ type View =
   | 'stammdaten'
   | 'zubehoer'
   | 'belege'
+  | 'beleg_editor'
   | 'einstellungen';
 
 export default function App() {
@@ -270,39 +272,17 @@ export default function App() {
     setEditingInvoiceContext(null);
     setEditingInvoice(loaded.invoice);
     setEditingInvoiceItems(loaded.items);
+    setActiveView('beleg_editor');
   };
 
   const convertInvoiceAndSync = async (
     invoiceId: string,
     targetType: 'Auftrag' | 'Rechnung'
   ) => {
-    const source = await fetchInvoiceById(invoiceId);
-    const nextId = await createFollowUpInvoiceFromInvoice(invoiceId, targetType);
-    if (source?.invoice?.rentalRequestId) {
-      const targetStatus: RentalStatus = targetType === 'Auftrag' ? 'angenommen' : 'abgeschlossen';
-      try {
-        await transitionStatus(source.invoice.rentalRequestId, targetStatus);
-        setKanbanKey((k) => k + 1);
-      } catch (e) {
-        console.error(`Status sync failed after ${source.invoice.invoiceType} -> ${targetType}:`, e);
-        try {
-          await removeInvoice(nextId);
-          await updateInvoice(source.invoice.id, {
-            state: source.invoice.state,
-            replacesInvoiceId: undefined,
-          });
-        } catch (rollbackError) {
-          console.error('Rollback failed after status sync error:', rollbackError);
-        }
-        alert(
-          `Status konnte nicht aktualisiert werden. Der neu erstellte ${targetType === 'Auftrag' ? 'Auftrag' : 'Rechnung'} wurde zur Konsistenz wieder entfernt.`
-        );
-        setInvoiceListKey((k) => k + 1);
-        return;
-      }
-    }
+    const next = await createFollowUpInvoiceWithStatusSync(invoiceId, targetType);
+    if (next.rentalStatusUpdated) setKanbanKey((k) => k + 1);
     setInvoiceListKey((k) => k + 1);
-    await openInvoiceEditorById(nextId);
+    await openInvoiceEditorById(next.nextInvoiceId);
   };
 
   const onRentalRequestCreate = async (data: {
@@ -1154,6 +1134,7 @@ export default function App() {
                   setEditingInvoiceContext(null);
                   setEditingInvoice({});
                   setEditingInvoiceItems([]);
+                  setActiveView('beleg_editor');
                 }}
               >
                 + Neuer Beleg
@@ -1168,6 +1149,7 @@ export default function App() {
                 setEditingInvoiceContext(null);
                 setEditingInvoice({});
                 setEditingInvoiceItems([]);
+                setActiveView('beleg_editor');
               }}
               onEdit={(inv) => {
                 void (async () => {
@@ -1175,6 +1157,7 @@ export default function App() {
                   setEditingInvoiceContext(null);
                   setEditingInvoice(loaded?.invoice || inv);
                   setEditingInvoiceItems(loaded?.items || []);
+                  setActiveView('beleg_editor');
                 })();
               }}
               onConvertToOrder={async (invoiceId) => {
@@ -1190,6 +1173,72 @@ export default function App() {
               onMarkAccepted={async (invoiceId) => {
                 await updateInvoice(invoiceId, { state: 'angenommen' });
                 setInvoiceListKey((k) => k + 1);
+              }}
+            />
+          </div>
+        )}
+
+        {activeView === 'beleg_editor' && editingInvoice && (
+          <div className="max-w-7xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-slate-900">
+                {editingInvoice?.id ? 'Beleg bearbeiten' : 'Beleg erstellen'}
+              </h2>
+              <button
+                className="px-3 py-2 rounded-md border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+                onClick={() => {
+                  setEditingInvoiceContext(null);
+                  setEditingInvoice(null);
+                  setActiveView('belege');
+                }}
+              >
+                Zurück zu Belegen
+              </button>
+            </div>
+            <InvoiceEditor
+              invoice={editingInvoice}
+              items={editingInvoiceItems || []}
+              customers={customers}
+              onSave={async (inv, items) => {
+                const wasCreate = !inv.id;
+                const savedInvoiceId = await saveInvoice(inv, items);
+                if (editingInvoiceContext?.rentalId && editingInvoiceContext.nextRentalStatus) {
+                  try {
+                    await transitionStatus(editingInvoiceContext.rentalId, editingInvoiceContext.nextRentalStatus);
+                    setKanbanKey((k) => k + 1);
+                  } catch (e: any) {
+                    if (wasCreate) {
+                      try {
+                        await removeInvoice(savedInvoiceId);
+                      } catch (rollbackError) {
+                        console.error('Rollback failed after status transition error:', rollbackError);
+                      }
+                    }
+                    const msg = e?.error || e?.message || 'Status konnte nicht automatisch gesetzt werden.';
+                    alert(`${msg}${wasCreate ? '\n\nDer neu erstellte Beleg wurde zur Konsistenz wieder entfernt.' : ''}`);
+                    return;
+                  }
+                }
+                setInvoiceListKey((k) => k + 1);
+                setEditingInvoiceContext(null);
+                setEditingInvoice(null);
+                setActiveView('belege');
+              }}
+              onConvertToOrder={async (invoiceId) => {
+                await convertInvoiceAndSync(invoiceId, 'Auftrag');
+              }}
+              onConvertToInvoice={async (invoiceId) => {
+                await convertInvoiceAndSync(invoiceId, 'Rechnung');
+              }}
+              onReissue={async (invoiceId) => {
+                const nextId = await reissueInvoice(invoiceId);
+                setInvoiceListKey((k) => k + 1);
+                await openInvoiceEditorById(nextId);
+              }}
+              onClose={() => {
+                setEditingInvoiceContext(null);
+                setEditingInvoice(null);
+                setActiveView('belege');
               }}
             />
           </div>
@@ -1268,16 +1317,15 @@ export default function App() {
                 mailTransportSettings={mailTransportSettings}
                 onClose={() => setSelectedRentalId(null)}
                 onRefresh={() => setKanbanKey((k) => k + 1)}
-                onPrepareInvoiceDraft={({ rentalId, invoice, items, nextRentalStatus }) => {
+              onPrepareInvoiceDraft={({ rentalId, invoice, items, nextRentalStatus }) => {
                   setEditingInvoiceContext({ rentalId, nextRentalStatus });
                   setEditingInvoice(invoice);
                   setEditingInvoiceItems(items);
                   setSelectedRentalId(null);
-                  setActiveView('belege');
+                  setActiveView('beleg_editor');
                 }}
                 onOpenInvoice={async (invoiceId) => {
                   setSelectedRentalId(null);
-                  setActiveView('belege');
                   await openInvoiceEditorById(invoiceId);
                 }}
               />
@@ -1286,74 +1334,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Invoice editor modal */}
-      {editingInvoice && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-auto">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
-              <div className="font-semibold text-slate-800">
-                {editingInvoice?.id ? 'Beleg bearbeiten' : 'Beleg erstellen'}
-              </div>
-              <button
-                className="text-slate-500 hover:text-slate-800"
-                onClick={() => {
-                  setEditingInvoiceContext(null);
-                  setEditingInvoice(null);
-                }}
-                aria-label="Schließen"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-4">
-              <InvoiceEditor
-                invoice={editingInvoice}
-                items={editingInvoiceItems || []}
-                customers={customers}
-                onSave={async (inv, items) => {
-                  const wasCreate = !inv.id;
-                  const savedInvoiceId = await saveInvoice(inv, items);
-                  if (editingInvoiceContext?.rentalId && editingInvoiceContext.nextRentalStatus) {
-                    try {
-                      await transitionStatus(editingInvoiceContext.rentalId, editingInvoiceContext.nextRentalStatus);
-                      setKanbanKey((k) => k + 1);
-                    } catch (e: any) {
-                      if (wasCreate) {
-                        try {
-                          await removeInvoice(savedInvoiceId);
-                        } catch (rollbackError) {
-                          console.error('Rollback failed after status transition error:', rollbackError);
-                        }
-                      }
-                      const msg = e?.error || e?.message || 'Status konnte nicht automatisch gesetzt werden.';
-                      alert(`${msg}${wasCreate ? '\n\nDer neu erstellte Beleg wurde zur Konsistenz wieder entfernt.' : ''}`);
-                      return;
-                    }
-                  }
-                  setInvoiceListKey((k) => k + 1);
-                  setEditingInvoiceContext(null);
-                  setEditingInvoice(null);
-                }}
-                onConvertToOrder={async (invoiceId) => {
-                  await convertInvoiceAndSync(invoiceId, 'Auftrag');
-                }}
-                onConvertToInvoice={async (invoiceId) => {
-                  await convertInvoiceAndSync(invoiceId, 'Rechnung');
-                }}
-                onReissue={async (invoiceId) => {
-                  const nextId = await reissueInvoice(invoiceId);
-                  setInvoiceListKey((k) => k + 1);
-                  await openInvoiceEditorById(nextId);
-                }}
-                onClose={() => {
-                  setEditingInvoiceContext(null);
-                  setEditingInvoice(null);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
