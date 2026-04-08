@@ -194,28 +194,27 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [showValidationErrors, setShowValidationErrors] = useState(false);
 
   // ─── Watched Fields (reactive for JSX rendering) ───────────────
+  // Gruppiert für bessere Performance (~7 statt 21 Subscriptions)
 
-  const invoiceNo = watch('invoiceNo');
-  const invoiceDate = watch('invoiceDate');
-  const dueDate = watch('dueDate');
-  const buyerName = watch('buyerName');
-  const buyerAddress = watch('buyerAddress');
-  const salutation = watch('salutation');
-  const introText = watch('introText');
-  const servicePeriodStart = watch('servicePeriodStart');
-  const servicePeriodEnd = watch('servicePeriodEnd');
-  const depositPercent = watch('depositPercent');
-  const depositText = watch('depositText');
-  const depositEnabled = watch('depositEnabled');
-  const depositReceivedEnabled = watch('depositReceivedEnabled');
-  const depositReceivedAmount = watch('depositReceivedAmount');
-  const paymentTerms = watch('paymentTerms');
-  const paymentInfo = watch('paymentInfo');
-  const paypalText = watch('paypalText');
-  const footerText = watch('footerText');
-  const taxNote = watch('taxNote');
-  const agbText = watch('agbText');
-  const agbLink = watch('agbLink');
+  // Gruppe 1: Header-Felder (Typ, Nummer, Layout, Datum)
+  const [invoiceNo, invoiceDate, dueDate] = watch(['invoiceNo', 'invoiceDate', 'dueDate']);
+
+  // Gruppe 2: Kunden-Felder (für Validation-Feedback)
+  const [buyerName, buyerAddress, salutation] = watch(['buyerName', 'buyerAddress', 'salutation']);
+
+  // Gruppe 3: Zeitraum & Intro
+  const [servicePeriodStart, servicePeriodEnd, introText] = watch(['servicePeriodStart', 'servicePeriodEnd', 'introText']);
+
+  // Gruppe 4: Anzahlung (für Berechnungen)
+  const [depositEnabled, depositPercent, depositText] = watch(['depositEnabled', 'depositPercent', 'depositText']);
+
+  // Gruppe 5: Kautionsbestätigung (für UI)
+  const [depositReceivedEnabled, depositReceivedAmount] = watch(['depositReceivedEnabled', 'depositReceivedAmount']);
+
+  // Gruppe 6: Erweiterte Text-Blöcke
+  const [paymentTerms, paymentInfo, paypalText, footerText, taxNote, agbText, agbLink] = watch([
+    'paymentTerms', 'paymentInfo', 'paypalText', 'footerText', 'taxNote', 'agbText', 'agbLink'
+  ]);
 
   // Single subscription für Dirty-Tracking
   const _formVersion = watch();
