@@ -6,7 +6,7 @@ import { deleteKey, loadJson, saveJson } from '../services/_storage';
 import { addPayment, getAllInvoices, getAllPayments, getAllRentalRequests } from '../services/sqliteService';
 import { buildThreadPaymentAssignments, pickSuggestedInvoiceForPayment, type ThreadPaymentAssignment } from '../services/inboxPaymentMappingService';
 import { generateConciergeReply, isAIAvailable } from '../services/aiService';
-import { openGenericCompose } from '../services/invoiceEmailService';
+import { openGenericCompose, type EmailSendResult } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
 import ConfirmModal from './ConfirmModal';
 
@@ -1418,13 +1418,29 @@ export default function Inbox(props: {
     if (!conciergeApproved || !sendChecklistDone || wizardStep < 3) return;
     setDirectSendBusy(true);
     try {
-      await openGenericCompose({
+      const result = await openGenericCompose({
         toEmail: analysis.fromEmail,
         subject: `Re: ${selectedThread?.subject || ''}`.trim() || 'Re: Nachricht',
         body: conciergeReply,
         preferGmail: false,
         attachments: composerAttachments,
       });
+      if (result.type === 'sent' || result.type === 'warning') {
+        showInfo(result.message);
+      } else if (result.type === 'fallback') {
+        const ok = await requestConfirm({
+          title: 'SMTP-Versand fehlgeschlagen',
+          message: `${result.error}\n\nStattdessen Entwurf im Browser öffnen?`,
+          confirmLabel: 'Browser öffnen',
+          cancelLabel: 'Abbrechen',
+        });
+        if (ok) {
+          const url = result.preferGmail === false ? result.links.mailtoUrl : result.links.gmailUrl;
+          const win = window.open(url, '_blank');
+          if (!win) window.location.href = url;
+        }
+        return;
+      }
       setComposerAttachments([]);
       const markDone = await requestConfirm({
         title: 'Konversation abschließen?'

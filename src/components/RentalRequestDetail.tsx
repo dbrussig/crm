@@ -27,7 +27,7 @@ import { calculateWebsitePrice } from '../services/pricingService';
 import { assignPaymentToInvoice, getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer } from '../services/sqliteService';
 import { findActiveResourcesForType } from '../services/resourceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
-import { openInvoiceCompose } from '../services/invoiceEmailService';
+import { openInvoiceCompose, type EmailSendResult } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
 import ConfirmModal from './ConfirmModal';
 import { getCompanyProfile } from '../config/companyProfile';
@@ -1961,19 +1961,34 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                           PDF speichern
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             const toEmail = (customer?.email || '').trim();
                             if (!toEmail) {
                               showError('Keine Kunden-E-Mail hinterlegt.');
                               return;
                             }
-                            openInvoiceCompose({
+                            const result = await openInvoiceCompose({
                               invoice: inv,
                               toEmail,
                               customerName: customerLabel,
                               preferGmail: true,
                               mailTransportSettings,
                             });
+                            if (result.type === 'sent' || result.type === 'warning') {
+                              showInfo(result.message);
+                            } else if (result.type === 'fallback') {
+                              const ok = await requestConfirm({
+                                title: 'SMTP-Versand fehlgeschlagen',
+                                message: `${result.error}\n\nStattdessen Entwurf im Browser öffnen?`,
+                                confirmLabel: 'Browser öffnen',
+                                cancelLabel: 'Abbrechen',
+                              });
+                              if (ok) {
+                                const url = result.preferGmail === false ? result.links.mailtoUrl : result.links.gmailUrl;
+                                const win = window.open(url, '_blank');
+                                if (!win) window.location.href = url;
+                              }
+                            }
                           }}
                           title="E-Mail an Kunden vorbereiten"
                           className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"

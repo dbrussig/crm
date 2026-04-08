@@ -9,9 +9,10 @@
 import { Invoice, RentalRequest, RentalStatus } from '../types';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
-import { openInvoiceCompose } from '../services/invoiceEmailService';
+import { openInvoiceCompose, type EmailSendResult } from '../services/invoiceEmailService';
+import ConfirmModal from './ConfirmModal';
 
 interface KanbanCardProps {
   rental: RentalRequest;
@@ -56,6 +57,29 @@ const arePropsEqual = (prevProps: KanbanCardProps, nextProps: KanbanCardProps): 
 export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, customerEmail, latestInvoice, onEditLatestInvoice, onClick, onMoveLeft, onMoveRight, canMoveLeft, canMoveRight }) => {
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const showError = (text: string) => setNotice({ tone: 'error', text });
+  const showInfo = (text: string) => setNotice({ tone: 'info', text });
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
 
   const {
     attributes,
@@ -198,6 +222,28 @@ export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, custome
         ${isDragging ? 'ring-2 ring-blue-500' : ''}
       `}
     >
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
       {notice && (
         <div
           className={[
@@ -366,19 +412,34 @@ export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, custome
               </button>
               <button
                 onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
                   const to = String(customerEmail || '').trim();
                   if (!to) {
                     showError('Keine Kunden-E-Mail hinterlegt.');
                     return;
                   }
-                  openInvoiceCompose({
+                  const result = await openInvoiceCompose({
                     invoice: latestInvoice,
                     toEmail: to,
                     customerName: customerName || latestInvoice.buyerName || '',
                     preferGmail: true,
                   });
+                  if (result.type === 'sent' || result.type === 'warning') {
+                    showInfo(result.message);
+                  } else if (result.type === 'fallback') {
+                    const ok = await requestConfirm({
+                      title: 'SMTP-Versand fehlgeschlagen',
+                      message: `${result.error}\n\nStattdessen Entwurf im Browser öffnen?`,
+                      confirmLabel: 'Browser öffnen',
+                      cancelLabel: 'Abbrechen',
+                    });
+                    if (ok) {
+                      const url = result.preferGmail === false ? result.links.mailtoUrl : result.links.gmailUrl;
+                      const win = window.open(url, '_blank');
+                      if (!win) window.location.href = url;
+                    }
+                  }
                 }}
                 className="px-2 py-0.5 text-[11px] rounded border border-gray-300 hover:bg-white"
                 aria-label={`Beleg ${latestInvoice.invoiceNo} per E-Mail senden`}

@@ -730,13 +730,29 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       return;
     }
     try {
-      openInvoiceCompose({
+      const result = await openInvoiceCompose({
         invoice: buildInvoiceForExport(),
         toEmail,
         customerName: `${customer?.firstName || ''} ${customer?.lastName || ''}`.trim() || buyerName,
         preferGmail: true,
       });
-      setInlineStatus(null);
+      if (result.type === 'sent' || result.type === 'warning') {
+        setInlineStatus({ tone: 'info', text: result.message });
+      } else if (result.type === 'fallback') {
+        const ok = await requestConfirm({
+          title: 'SMTP-Versand fehlgeschlagen',
+          message: `${result.error}\n\nStattdessen Entwurf im Browser öffnen?`,
+          confirmLabel: 'Browser öffnen',
+          cancelLabel: 'Abbrechen',
+        });
+        if (ok) {
+          const url = result.preferGmail === false ? result.links.mailtoUrl : result.links.gmailUrl;
+          const win = window.open(url, '_blank');
+          if (!win) window.location.href = url;
+        }
+      } else if (result.type === 'opened') {
+        setInlineStatus({ tone: 'info', text: 'Mail-Entwurf im Browser geöffnet.' });
+      }
     } catch (e) {
       console.error('Mail Draft fehlgeschlagen:', e);
       setInlineStatus({ tone: 'error', text: 'Mail-Entwurf konnte nicht geöffnet werden.' });
