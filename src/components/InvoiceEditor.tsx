@@ -576,107 +576,53 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         )}
 
-        {/* Beleg-Info */}
-        <div className="mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-type">Typ</label>
-            <select id="invoice-type" value={invoiceType}
-              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-              disabled={!!initialInvoice?.id}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100">
-              <option value="Angebot">Angebot</option>
-              <option value="Auftrag">Auftrag</option>
-              <option value="Rechnung">Rechnung</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-no">Belegnummer</label>
-            <input id="invoice-no" type="text" value={invoiceNo}
-              onChange={(e) => setValue('invoiceNo', e.target.value)} disabled={!!initialInvoice?.id}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
-              placeholder="2025001" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-layout">PDF Layout</label>
-            <div className="flex items-center gap-2">
-              <select id="invoice-layout" value={layoutId} onChange={(e) => setLayoutId(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                {INVOICE_LAYOUTS.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
-              </select>
-              <button type="button" className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
-                title="Setzt Default-Texte fuer dieses Layout"
-                onClick={async () => {
-                  const ok = await requestConfirm({
-                    title: 'Default-Texte anwenden?',
-                    message: 'Default-Texte fuer dieses Layout anwenden?\n\nBestehende Texte werden ueberschrieben.',
-                    confirmLabel: 'Anwenden', cancelLabel: 'Abbrechen', danger: false,
-                  });
-                  if (!ok) return;
-                  applyLayoutDefaults({ force: true });
-                }}>
-                Default-Texte anwenden
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-date">Datum</label>
-            <input id="invoice-date" type="date" value={invoiceDate}
-              onChange={(e) => setValue('invoiceDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-due">Fälligkeit</label>
-            <input id="invoice-due" type="date" value={dueDate}
-              onChange={(e) => setValue('dueDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
-          </div>
-        </div>
+        {/* Header Fields */}
+        <InvoiceHeaderFields
+          invoiceType={invoiceType}
+          onTypeChange={setInvoiceType}
+          typeDisabled={!!initialInvoice?.id}
+          invoiceNo={invoiceNo}
+          onInvoiceNoChange={(v: string) => setValue('invoiceNo', v)}
+          invoiceNoDisabled={!!initialInvoice?.id}
+          layoutId={layoutId}
+          onLayoutChange={setLayoutId}
+          onApplyDefaults={async () => {
+            const ok = await requestConfirm({
+              title: 'Default-Texte anwenden?',
+              message: 'Default-Texte fuer dieses Layout anwenden?\n\nBestehende Texte werden ueberschrieben.',
+              confirmLabel: 'Anwenden', cancelLabel: 'Abbrechen', danger: false,
+            });
+            if (!ok) return;
+            applyLayoutDefaults({ force: true });
+          }}
+          invoiceDate={invoiceDate}
+          onDateChange={(v: string) => setValue('invoiceDate', v)}
+          dueDate={dueDate}
+          onDueDateChange={(v: string) => setValue('dueDate', v)}
+        />
 
-        {/* Kunde */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Kunde</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-customer">Kunde wählen</label>
-              <select id="invoice-customer" value={selectedCustomerId}
-                onChange={(e) => setSelectedCustomerId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                <option value="">-- Kunde wählen --</option>
-                {customers.map((c) => (<option key={c.id} value={c.id}>{c.lastName}, {c.firstName}</option>))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-salutation">Anrede</label>
-              <select id="invoice-salutation" value={salutation}
-                onChange={(e) => setValue('salutation', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                <option value="">-- Keine --</option>
-                <option value="Herr">Herr</option>
-                <option value="Frau">Frau</option>
-                <option value="Divers">Divers</option>
-              </select>
-            </div>
-          </div>
-          <div className="mt-3">
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-buyer-name">Name</label>
-            <input id="invoice-buyer-name" type="text" value={buyerName}
-              onChange={(e) => { setValue('buyerName', e.target.value); if (showValidationErrors) clearStatus(); }}
-              className={['w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
-                showValidationErrors && !hasBuyerName ? 'border-red-300 bg-red-50' : 'border-gray-300'].join(' ')}
-              placeholder="Max Mustermann" />
-            {showValidationErrors && !hasBuyerName && <p className="mt-1 text-xs text-red-600">Name ist ein Pflichtfeld.</p>}
-          </div>
-          <div className="mt-3">
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-buyer-address">Adresse</label>
-            <textarea id="invoice-buyer-address" value={buyerAddress}
-              onChange={(e) => { setValue('buyerAddress', e.target.value); if (showValidationErrors) clearStatus(); }}
-              rows={3}
-              className={['w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
-                showValidationErrors && !hasBuyerAddress ? 'border-red-300 bg-red-50' : 'border-gray-300'].join(' ')}
-              placeholder="Musterstraße 1&#10;12345 Musterstadt&#10;Deutschland" />
-            {showValidationErrors && !hasBuyerAddress && <p className="mt-1 text-xs text-red-600">Adresse ist ein Pflichtfeld.</p>}
-          </div>
-        </div>
+        {/* Customer Block */}
+        <InvoiceCustomerBlock
+          customers={customers}
+          selectedCustomerId={selectedCustomerId}
+          onCustomerChange={setSelectedCustomerId}
+          salutation={salutation}
+          onSalutationChange={(v: string) => setValue('salutation', v)}
+          buyerName={buyerName}
+          onBuyerNameChange={(v: string) => {
+            setValue('buyerName', v);
+            if (showValidationErrors) clearStatus();
+          }}
+          buyerAddress={buyerAddress}
+          onBuyerAddressChange={(v: string) => {
+            setValue('buyerAddress', v);
+            if (showValidationErrors) clearStatus();
+          }}
+          showValidationErrors={showValidationErrors}
+          clearStatus={clearStatus}
+          hasBuyerName={hasBuyerName}
+          hasBuyerAddress={hasBuyerAddress}
+        />
 
         {/* Verknüpfte Zahlungen */}
         {initialInvoice?.id && (
