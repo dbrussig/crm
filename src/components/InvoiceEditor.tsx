@@ -5,6 +5,7 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
 import { ChevronDown, Download, Eye, FileText, Mail, Save, Send, X } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
@@ -44,6 +45,51 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   onClose,
 }) => {
   const company = useMemo(() => getCompanyProfile(), []);
+
+  const {
+    register,
+    setValue,
+    watch,
+    getValues,
+  } = useForm<{
+    invoiceNo: string;
+    invoiceDate: string;
+    dueDate: string;
+    currency: string;
+    buyerName: string;
+    buyerAddress: string;
+    salutation: string;
+    introText: string;
+    depositText: string;
+    paymentTerms: string;
+    paymentInfo: string;
+    paypalText: string;
+    footerText: string;
+    taxNote: string;
+    agbText: string;
+    agbLink: string;
+  }>({
+    defaultValues: {
+      invoiceNo: initialInvoice?.invoiceNo || '',
+      invoiceDate: initialInvoice?.invoiceDate
+        ? new Date(initialInvoice.invoiceDate).toISOString().substring(0, 10)
+        : new Date().toISOString().substring(0, 10),
+      dueDate: initialInvoice?.dueDate ? new Date(initialInvoice.dueDate).toISOString().substring(0, 10) : '',
+      currency: initialInvoice?.currency || 'EUR',
+      buyerName: initialInvoice?.buyerName || '',
+      buyerAddress: initialInvoice?.buyerAddress || '',
+      salutation: initialInvoice?.salutation || '',
+      introText: (initialInvoice as any)?.introText || '',
+      depositText: (initialInvoice as any)?.depositText || '',
+      paymentTerms: initialInvoice?.paymentTerms || '',
+      paymentInfo: initialInvoice?.paymentInfo || '',
+      paypalText: (initialInvoice as any)?.paypalText || '',
+      footerText: (initialInvoice as any)?.footerText || '',
+      taxNote: (initialInvoice as any)?.taxNote || '',
+      agbText: (initialInvoice as any)?.agbText || '',
+      agbLink: (initialInvoice as any)?.agbLink || '',
+    },
+  });
 
   const dirtyBaselineRef = useRef<string>('');
   const dirtyInitializedRef = useRef(false);
@@ -101,30 +147,31 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   // Beleg-Daten
   const [invoiceType, setInvoiceType] = useState<InvoiceType>(initialInvoice?.invoiceType || 'Angebot');
-  const [invoiceNo, setInvoiceNo] = useState<string>(initialInvoice?.invoiceNo || '');
-  const [invoiceDate, setInvoiceDate] = useState<string>(
-    initialInvoice?.invoiceDate
-      ? new Date(initialInvoice.invoiceDate).toISOString().substring(0, 10)
-      : new Date().toISOString().substring(0, 10)
-  );
-  const [dueDate, setDueDate] = useState<string>(
-    initialInvoice?.dueDate
-      ? new Date(initialInvoice.dueDate).toISOString().substring(0, 10)
-      : ''
-  );
   const [state, setState] = useState<InvoiceState>(initialInvoice?.state || 'entwurf');
-  const [currency, setCurrency] = useState<string>(initialInvoice?.currency || 'EUR');
 
   // Kunde
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
     initialInvoice?.companyId || ''
   );
-  const [buyerName, setBuyerName] = useState<string>(initialInvoice?.buyerName || '');
-  const [buyerAddress, setBuyerAddress] = useState<string>(initialInvoice?.buyerAddress || '');
-  const [salutation, setSalutation] = useState<string>(initialInvoice?.salutation || '');
+
+  const invoiceNo = watch('invoiceNo');
+  const invoiceDate = watch('invoiceDate');
+  const dueDate = watch('dueDate');
+  const currency = watch('currency');
+  const buyerName = watch('buyerName');
+  const buyerAddress = watch('buyerAddress');
+  const salutation = watch('salutation');
+  const introText = watch('introText');
+  const depositText = watch('depositText');
+  const paymentTerms = watch('paymentTerms');
+  const paymentInfo = watch('paymentInfo');
+  const paypalText = watch('paypalText');
+  const footerText = watch('footerText');
+  const taxNote = watch('taxNote');
+  const agbText = watch('agbText');
+  const agbLink = watch('agbLink');
 
   // Text / Zeitraum / Anzahlung
-  const [introText, setIntroText] = useState<string>((initialInvoice as any)?.introText || '');
   const [servicePeriodStart, setServicePeriodStart] = useState<string>(
     (initialInvoice as any)?.servicePeriodStart
       ? new Date((initialInvoice as any).servicePeriodStart).toISOString().substring(0, 10)
@@ -139,7 +186,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [depositPercent, setDepositPercent] = useState<number>(
     typeof (initialInvoice as any)?.depositPercent === 'number' ? (initialInvoice as any).depositPercent : 0
   );
-  const [depositText, setDepositText] = useState<string>((initialInvoice as any)?.depositText || '');
   const [depositEnabled, setDepositEnabled] = useState<boolean>(() => {
     const explicit = (initialInvoice as any)?.depositEnabled;
     if (typeof explicit === 'boolean') return explicit;
@@ -157,19 +203,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       ? Number((initialInvoice as any).depositReceivedAmount)
       : 0
   );
-
-  // Zahlungsbedingungen
-  const [paymentTerms, setPaymentTerms] = useState<string>(
-    initialInvoice?.paymentTerms || ''
-  );
-  const [paymentInfo, setPaymentInfo] = useState<string>(
-    initialInvoice?.paymentInfo || ''
-  );
-  const [paypalText, setPaypalText] = useState<string>((initialInvoice as any)?.paypalText || '');
-  const [footerText, setFooterText] = useState<string>((initialInvoice as any)?.footerText || '');
-  const [taxNote, setTaxNote] = useState<string>((initialInvoice as any)?.taxNote || '');
-  const [agbText, setAgbText] = useState<string>((initialInvoice as any)?.agbText || '');
-  const [agbLink, setAgbLink] = useState<string>((initialInvoice as any)?.agbLink || '');
 
   // Template
   const [template, setTemplate] = useState<InvoiceTemplate | null>(null);
@@ -209,20 +242,20 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const applyLayoutDefaults = (opts?: { force?: boolean }) => {
     const d = layout.defaultsByType[invoiceType];
     const force = Boolean(opts?.force);
-    if (force || !introText) setIntroText(resolvePlaceholders(d.introText));
-    if (force || !paymentTerms) setPaymentTerms(d.paymentTerms);
-    if (force || !paymentInfo) setPaymentInfo(d.paymentInfo);
-    if (force || !paypalText) setPaypalText(resolvePlaceholders(d.paypalText));
-    if (force || !footerText) setFooterText(d.footerText);
-    if (force || !taxNote) setTaxNote(d.taxNote);
-    if (force || !agbText) setAgbText(resolvePlaceholders(d.agbText));
-    if (force || !agbLink) setAgbLink(template?.defaultAgbLink || agbLink || '');
+    if (force || !String(getValues('introText') || '').trim()) setValue('introText', resolvePlaceholders(d.introText));
+    if (force || !String(getValues('paymentTerms') || '').trim()) setValue('paymentTerms', d.paymentTerms);
+    if (force || !String(getValues('paymentInfo') || '').trim()) setValue('paymentInfo', d.paymentInfo);
+    if (force || !String(getValues('paypalText') || '').trim()) setValue('paypalText', resolvePlaceholders(d.paypalText));
+    if (force || !String(getValues('footerText') || '').trim()) setValue('footerText', d.footerText);
+    if (force || !String(getValues('taxNote') || '').trim()) setValue('taxNote', d.taxNote);
+    if (force || !String(getValues('agbText') || '').trim()) setValue('agbText', resolvePlaceholders(d.agbText));
+    if (force || !String(getValues('agbLink') || '').trim()) setValue('agbLink', template?.defaultAgbLink || getValues('agbLink') || '');
     if (force || !depositPercent) setDepositPercent(typeof d.depositPercent === 'number' ? d.depositPercent : 0);
-    if (force || !depositText) setDepositText(resolvePlaceholders(d.depositText || company.depositNote || ''));
+    if (force || !String(getValues('depositText') || '').trim()) setValue('depositText', resolvePlaceholders(d.depositText || company.depositNote || ''));
     if ((force || !dueDate) && typeof d.dueDays === 'number' && d.dueDays > 0) {
       const base = new Date(invoiceDate);
       base.setDate(base.getDate() + d.dueDays);
-      setDueDate(base.toISOString().substring(0, 10));
+      setValue('dueDate', base.toISOString().substring(0, 10));
     }
   };
 
@@ -343,41 +376,41 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         setTemplate(tpl);
         setLayoutId((cur) => (initialInvoice?.id ? cur : (cur || tpl.layoutId || getDefaultInvoiceLayoutId(invoiceType))));
         if (!(initialInvoice as any)?.introText) {
-          setIntroText(resolvePlaceholders(tpl.defaultIntroText || ''));
+          setValue('introText', resolvePlaceholders(tpl.defaultIntroText || ''));
         }
         if (!initialInvoice?.paymentTerms) {
-          setPaymentTerms(tpl.defaultPaymentTerms);
+          setValue('paymentTerms', tpl.defaultPaymentTerms);
         }
         if (!initialInvoice?.paymentInfo) {
-          setPaymentInfo(tpl.defaultPaymentInfo);
+          setValue('paymentInfo', tpl.defaultPaymentInfo);
         }
         if (!(initialInvoice as any)?.paypalText) {
-          setPaypalText(resolvePlaceholders(tpl.defaultPaypalText || ''));
+          setValue('paypalText', resolvePlaceholders(tpl.defaultPaypalText || ''));
         }
         if (!(initialInvoice as any)?.footerText) {
-          setFooterText(tpl.defaultFooterText);
+          setValue('footerText', tpl.defaultFooterText);
         }
         if (!(initialInvoice as any)?.taxNote) {
-          setTaxNote(tpl.defaultTaxNote);
+          setValue('taxNote', tpl.defaultTaxNote);
         }
         if (!(initialInvoice as any)?.agbText) {
-          setAgbText(resolvePlaceholders(tpl.defaultAgbText || ''));
+          setValue('agbText', resolvePlaceholders(tpl.defaultAgbText || ''));
         }
         if (!(initialInvoice as any)?.agbLink) {
-          setAgbLink(tpl.defaultAgbLink);
+          setValue('agbLink', tpl.defaultAgbLink);
         }
         if (typeof (initialInvoice as any)?.depositPercent !== 'number' && (invoiceType === 'Angebot' || invoiceType === 'Auftrag')) {
           setDepositPercent(typeof tpl.defaultDepositPercent === 'number' ? tpl.defaultDepositPercent : 0);
         }
         if (!(initialInvoice as any)?.depositText && (invoiceType === 'Angebot' || invoiceType === 'Auftrag')) {
-          setDepositText(resolvePlaceholders(tpl.defaultDepositText || company.depositNote || ''));
+          setValue('depositText', resolvePlaceholders(tpl.defaultDepositText || company.depositNote || ''));
         }
         if (!initialInvoice?.dueDate) {
           const d = layout.defaultsByType[invoiceType]?.dueDays;
           if (typeof d === 'number' && d > 0 && !dueDate) {
             const base = new Date(invoiceDate);
             base.setDate(base.getDate() + d);
-            setDueDate(base.toISOString().substring(0, 10));
+            setValue('dueDate', base.toISOString().substring(0, 10));
           }
         }
       }
@@ -447,11 +480,12 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   useEffect(() => {
     const customer = customers.find((c) => c.id === selectedCustomerId);
     if (customer && !initialInvoice?.buyerName) {
-      setBuyerName(`${customer.firstName} ${customer.lastName}`);
-      setBuyerAddress(
+      setValue('buyerName', `${customer.firstName} ${customer.lastName}`);
+      setValue(
+        'buyerAddress',
         `${customer.address.street}\n${customer.address.zipCode} ${customer.address.city}\n${customer.address.country}`
       );
-      setSalutation(customer.salutation || '');
+      setValue('salutation', customer.salutation || '');
     }
   }, [selectedCustomerId, customers, initialInvoice]);
 
@@ -825,7 +859,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               id="invoice-no"
               type="text"
               value={invoiceNo}
-              onChange={(e) => setInvoiceNo(e.target.value)}
+              onChange={(e) => setValue('invoiceNo', e.target.value)}
               disabled={!!initialInvoice?.id}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
               placeholder="2025001"
@@ -876,7 +910,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               id="invoice-date"
               type="date"
               value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
+              onChange={(e) => setValue('invoiceDate', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -888,7 +922,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               id="invoice-due"
               type="date"
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              onChange={(e) => setValue('dueDate', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -921,7 +955,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               <select
                 id="invoice-salutation"
                 value={salutation}
-                onChange={(e) => setSalutation(e.target.value)}
+                onChange={(e) => setValue('salutation', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">-- Keine --</option>
@@ -939,7 +973,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               type="text"
               value={buyerName}
               onChange={(e) => {
-                setBuyerName(e.target.value);
+                setValue('buyerName', e.target.value);
                 if (showValidationErrors) setInlineStatus(null);
               }}
               className={[
@@ -959,7 +993,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               id="invoice-buyer-address"
               value={buyerAddress}
               onChange={(e) => {
-                setBuyerAddress(e.target.value);
+                setValue('buyerAddress', e.target.value);
                 if (showValidationErrors) setInlineStatus(null);
               }}
               rows={3}
@@ -1009,7 +1043,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             <textarea
               id="invoice-intro"
               value={introText}
-              onChange={(e) => setIntroText(e.target.value)}
+              onChange={(e) => setValue('introText', e.target.value)}
               rows={5}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
               placeholder="Hallo ...\n\nWie besprochen ...\n\nBesten Dank!"
@@ -1104,7 +1138,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                       }
                       if (!String(depositText || '').trim()) {
                         const d = layout.defaultsByType[invoiceType];
-                        setDepositText(resolvePlaceholders(d.depositText || company.depositNote || 'Anzahlung'));
+                        setValue('depositText', resolvePlaceholders(d.depositText || company.depositNote || 'Anzahlung'));
                       }
                     }
                     return next;
@@ -1113,7 +1147,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 className={`px-3 py-1.5 rounded-md text-sm border ${
                   depositEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-800'
                 }`}
-                aria-pressed={depositEnabled}
+                aria-pressed={depositEnabled ? 'true' : 'false'}
               >
                 {depositEnabled ? 'Anzahlung aktiv' : 'Anzahlung aktivieren'}
               </button>
@@ -1139,7 +1173,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   id="invoice-deposit-text"
                   type="text"
                   value={depositText}
-                  onChange={(e) => setDepositText(e.target.value)}
+                  onChange={(e) => setValue('depositText', e.target.value)}
                   disabled={!depositEnabled}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                   placeholder="Anzahlung 50 % nach Angebotsannahme"
@@ -1168,7 +1202,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                     <textarea
                       id="invoice-payment-terms"
                       value={paymentTerms}
-                      onChange={(e) => setPaymentTerms(e.target.value)}
+                      onChange={(e) => setValue('paymentTerms', e.target.value)}
                       rows={4}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                     />
@@ -1180,7 +1214,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                       id="invoice-payment-info"
                       type="text"
                       value={paymentInfo}
-                      onChange={(e) => setPaymentInfo(e.target.value)}
+                      onChange={(e) => setValue('paymentInfo', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                       placeholder="PayPal: https://paypal.me/..."
                     />
@@ -1195,7 +1229,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                     id="invoice-paypal-text"
                     type="text"
                     value={paypalText}
-                    onChange={(e) => setPaypalText(e.target.value)}
+                    onChange={(e) => setValue('paypalText', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                     placeholder={`Zahlungslink Paypal ${company.paypalMeUrl}`}
                   />
@@ -1208,7 +1242,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   <textarea
                     id="invoice-tax-note"
                     value={taxNote}
-                    onChange={(e) => setTaxNote(e.target.value)}
+                    onChange={(e) => setValue('taxNote', e.target.value)}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                   />
@@ -1224,7 +1258,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                       id="invoice-agb-text"
                       type="text"
                       value={agbText}
-                      onChange={(e) => setAgbText(e.target.value)}
+                      onChange={(e) => setValue('agbText', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                       placeholder={`Bitte beachten Sie die gültigen AGBs auf meiner Homepage : ${company.agbsUrl}`}
                     />
@@ -1235,7 +1269,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                       id="invoice-agb-link"
                       type="text"
                       value={agbLink}
-                      onChange={(e) => setAgbLink(e.target.value)}
+                      onChange={(e) => setValue('agbLink', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                     />
                   </div>
@@ -1248,7 +1282,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   <textarea
                     id="invoice-footer"
                     value={footerText}
-                    onChange={(e) => setFooterText(e.target.value)}
+                    onChange={(e) => setValue('footerText', e.target.value)}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                   />
@@ -1299,7 +1333,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   className={`px-2 py-1 rounded text-sm border ${
                     depositReceivedEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-800'
                   }`}
-                  aria-pressed={depositReceivedEnabled}
+                  aria-pressed={depositReceivedEnabled ? 'true' : 'false'}
                   title="Fuegt in der Rechnung einen Hinweis hinzu, dass die Kaution dankend erhalten wurde."
                 >
                   Kautionsbestaetigung
