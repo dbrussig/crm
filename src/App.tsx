@@ -1183,6 +1183,10 @@ export default function App() {
               onConvertToInvoice={async (invoiceId) => {
                 await convertInvoiceAndSync(invoiceId, 'Rechnung');
               }}
+              onMarkSent={async (invoiceId) => {
+                await updateInvoice(invoiceId, { state: 'gesendet' });
+                setInvoiceListKey((k) => k + 1);
+              }}
               onMarkAccepted={async (invoiceId) => {
                 await updateInvoice(invoiceId, { state: 'angenommen' });
                 setInvoiceListKey((k) => k + 1);

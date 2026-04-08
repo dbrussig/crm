@@ -26,6 +26,7 @@ interface InvoiceListProps {
   onEdit: (invoice: Invoice) => void;
   onDelete?: (invoiceId: string) => void;
   onSend?: (invoiceId: string) => void;
+  onMarkSent?: (invoiceId: string) => void;
   onMarkAccepted?: (invoiceId: string) => void;
   onConvertToOrder?: (invoiceId: string) => void;
   onConvertToInvoice?: (invoiceId: string) => void;
@@ -38,6 +39,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   onEdit,
   onDelete,
   onSend,
+  onMarkSent,
   onMarkAccepted,
   onConvertToOrder,
   onConvertToInvoice,
@@ -621,6 +623,25 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                               aria-label={`Auftrag ${invoice.invoiceNo} als angenommen markieren`}
                             >
                               <Check size={14} aria-hidden="true" />
+                            </button>
+                          )}
+
+                        {/* Auftrag manuell als gesendet markieren */}
+                        {invoice.invoiceType === 'Auftrag' &&
+                          onMarkSent &&
+                          invoice.state === 'entwurf' && (
+                            <button
+                              onClick={() =>
+                                void runAction(`markSent:${invoice.id}`, async () => {
+                                  await onMarkSent(invoice.id);
+                                })
+                              }
+                              className={actionButtonClass}
+                              disabled={Boolean(busyActionKey)}
+                              title="Auftrag als gesendet markieren"
+                              aria-label={`Auftrag ${invoice.invoiceNo} als gesendet markieren`}
+                            >
+                              <Send size={14} aria-hidden="true" />
                             </button>
                           )}
 
