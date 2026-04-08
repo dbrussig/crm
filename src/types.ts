@@ -383,39 +383,6 @@ export interface InboxImportResult {
 export type InvoiceType = 'Angebot' | 'Auftrag' | 'Rechnung';
 export type InvoiceState = 'entwurf' | 'gesendet' | 'angenommen' | 'storniert' | 'archiviert';
 
-// SubTotal-derived invoice type profiles (labels + column visibility per invoice type).
-export type SubTotalInvoiceTypeProfile = {
-  source: 'subtotal';
-  invoiceTypeId: number;
-  name: string;
-  heading?: string;
-  color?: string;
-  language?: string;
-  taxMode?: number;
-  labels: Partial<{
-    invoiceNo: string;
-    invoiceDate: string;
-    dueDate: string;
-    totalSum: string;
-    description: string;
-    quantity: string;
-    unit: string;
-    unitPrice: string;
-    tax: string;
-    lineTotal: string;
-  }>;
-  // SubTotal stores these as ints; for our use, we store boolean "show" after decoding.
-  show: Partial<{
-    lineItemNo: boolean;
-    description: boolean;
-    quantity: boolean;
-    unit: boolean;
-    unitPrice: boolean;
-    tax: boolean;
-    lineTotal: boolean;
-  }>;
-};
-
 export interface Invoice {
   id: string;
   rentalRequestId?: string; // Optional linkage to the source Vorgang

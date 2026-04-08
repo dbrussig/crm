@@ -11,7 +11,6 @@ import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTempl
 import { fetchInvoiceTemplate } from '../services/invoiceService';
 import { INVOICE_LAYOUTS, getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
-import { getActiveSubTotalInvoiceTypeProfile } from '../services/subtotalInvoiceTypeProfileService';
 import { getPaymentsByInvoice } from '../services/sqliteService';
 import InvoiceWorkflowBar from './InvoiceWorkflowBar';
 import { useAutoSave } from '../hooks/useAutoSave';
@@ -222,12 +221,11 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // ─── Derived State ─────────────────────────────────────────────
 
   const layout = useMemo(() => getInvoiceLayout(layoutId), [layoutId]);
-  const subtotalProfile = useMemo(() => getActiveSubTotalInvoiceTypeProfile(invoiceType), [invoiceType]);
-  const showQty = subtotalProfile ? (subtotalProfile.show.quantity ?? true) : true;
-  const showUnit = subtotalProfile ? (subtotalProfile.show.unit ?? true) : true;
-  const showUnitPrice = subtotalProfile ? (subtotalProfile.show.unitPrice ?? true) : true;
-  const showTax = subtotalProfile ? (subtotalProfile.show.tax ?? false) : false;
-  const showLineTotal = subtotalProfile ? (subtotalProfile.show.lineTotal ?? true) : true;
+  const showQty = true;
+  const showUnit = true;
+  const showUnitPrice = true;
+  const showTax = false;
+  const showLineTotal = true;
 
   const hasBuyerName = buyerName.trim().length > 0;
   const hasBuyerAddress = buyerAddress.trim().length > 0;
@@ -685,7 +683,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
         {/* Positionen */}
         <InvoiceLineItems
-          items={fields as InvoiceItem[]} labels={subtotalProfile?.labels}
+          items={fields as InvoiceItem[]}
           showQty={showQty} showUnit={showUnit} showUnitPrice={showUnitPrice}
           showTax={showTax} showLineTotal={showLineTotal}
           onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition}

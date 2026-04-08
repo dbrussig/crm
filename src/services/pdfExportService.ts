@@ -4,7 +4,6 @@ import { getInvoiceLayout } from '../config/invoiceLayouts';
 import { fetchInvoiceTemplate } from './invoiceService';
 import { addCustomerDocumentBlob, getDocumentsByCustomer, getInvoiceItems } from './sqliteService';
 import QRCode from 'qrcode';
-import { getActiveSubTotalInvoiceTypeProfile } from './subtotalInvoiceTypeProfileService';
 
 function euro(n: number): string {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n);
@@ -298,12 +297,11 @@ async function renderMietparkHtml(opts: {
     validUntil,
   };
 
-  const profile = getActiveSubTotalInvoiceTypeProfile(invoice.invoiceType);
   const numberLabelRaw =
-    profile?.labels?.invoiceNo || d.numberLabel || (invoice.invoiceType === 'Angebot' ? 'Angebotsnummer' : 'Rechnungsnummer');
+    d.numberLabel || (invoice.invoiceType === 'Angebot' ? 'Angebotsnummer' : 'Rechnungsnummer');
   const dateLabelRaw =
-    profile?.labels?.invoiceDate || d.dateLabel || (invoice.invoiceType === 'Angebot' ? 'Angebotsdatum' : 'Rechnungsdatum');
-  const dueLabelRaw = profile?.labels?.dueDate || d.dueLabel || 'Fälligkeitsdatum';
+    d.dateLabel || (invoice.invoiceType === 'Angebot' ? 'Angebotsdatum' : 'Rechnungsdatum');
+  const dueLabelRaw = d.dueLabel || 'Fälligkeitsdatum';
   const numberLabel = numberLabelRaw.endsWith(':') ? numberLabelRaw : `${numberLabelRaw}:`;
   const dateLabel = dateLabelRaw.endsWith(':') ? dateLabelRaw : `${dateLabelRaw}:`;
   const dueLabel = dueLabelRaw.endsWith(':') ? dueLabelRaw : `${dueLabelRaw}:`;
@@ -343,19 +341,19 @@ async function renderMietparkHtml(opts: {
   const depositAmount =
     depositEnabled && depositPercent > 0 ? Math.round((totals.total * (depositPercent / 100)) * 100) / 100 : 0;
 
-  const showQty = profile?.show?.quantity === true ? true : false;
-  const showUnit = profile?.show?.unit === true ? true : false;
-  const showTax = profile?.show?.tax === true ? true : false;
-  const showUnitPrice = profile?.show?.unitPrice === false ? false : true; // default show
-  const showLineTotal = profile?.show?.lineTotal === false ? false : true; // default show
+  const showQty = true;
+  const showUnit = true;
+  const showTax = false;
+  const showUnitPrice = true;
+  const showLineTotal = true;
 
-  const headerDescription = profile?.labels?.description || 'Beschreibung';
-  const headerQuantity = profile?.labels?.quantity || 'Menge';
-  const headerUnit = profile?.labels?.unit || 'Einheit';
-  const headerUnitPrice = profile?.labels?.unitPrice || 'Einzelpreis';
-  const headerTax = profile?.labels?.tax || 'USt.';
-  const headerLineTotal = profile?.labels?.lineTotal || 'Betrag';
-  const totalLabel = profile?.labels?.totalSum || 'Gesamtbetrag';
+  const headerDescription = 'Beschreibung';
+  const headerQuantity = 'Menge';
+  const headerUnit = 'Einheit';
+  const headerUnitPrice = 'Einzelpreis';
+  const headerTax = 'USt.';
+  const headerLineTotal = 'Betrag';
+  const totalLabel = 'Gesamtbetrag';
 
   const rows = items
     .map((it) => {

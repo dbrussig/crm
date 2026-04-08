@@ -3,8 +3,6 @@ import { AISettings, GoogleOAuthSettings, MailTransportSettings } from '../types
 import { getGLMModels } from '../services/zAiService';
 import { runMailBridgeAttachmentSelfTest } from '../services/invoiceEmailService';
 import { getCompanyProfile, saveCompanyProfile, type CompanyProfile } from '../config/companyProfile';
-import SubTotalImportPanel from './SubTotalImportPanel';
-import SubTotalInvoiceTypeProfilePanel from './SubTotalInvoiceTypeProfilePanel';
 import ConfirmModal from './ConfirmModal';
 
 type GoogleTestStatus = 'idle' | 'testing' | 'success' | 'error';
@@ -1011,9 +1009,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </button>
         </div>
       </div>
-
-      <SubTotalImportPanel />
-      <SubTotalInvoiceTypeProfilePanel />
 
       {/* Gmail API Settings */}
       {onGoogleOAuthChange && (
