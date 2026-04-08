@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AISettings, Customer, GmailAttachmentSummary, GoogleOAuthSettings, InboxImportResult, Invoice, InvoiceItem, MailTransportSettings, RentalRequest, RentalStatus } from './types';
 import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources, updateInvoice } from './services/sqliteService';
@@ -264,6 +265,17 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('mietpark_mail_transport_settings', JSON.stringify(mailTransportSettings));
   }, [mailTransportSettings]);
+
+  // Escape key to close rental detail offcanvas
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedRentalId) {
+        setSelectedRentalId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRentalId]);
 
   const openInvoiceEditorById = async (invoiceId: string) => {
     const loaded = await fetchInvoiceById(invoiceId);
@@ -1334,39 +1346,54 @@ export default function App() {
         />
       )}
 
-      {/* Rental detail modal */}
-      {selectedRentalId && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-auto">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
-              <div className="font-semibold text-slate-800">Vorgang</div>
-              <button className="text-slate-500 hover:text-slate-800" onClick={() => setSelectedRentalId(null)} aria-label="Schließen">
-                ✕
-              </button>
-            </div>
-            <div className="p-4">
-              <RentalRequestDetail
-                rentalId={selectedRentalId}
-                customers={customers}
-                mailTransportSettings={mailTransportSettings}
-                onClose={() => setSelectedRentalId(null)}
-                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['rentals'] })}
-                onPrepareInvoiceDraft={({ rentalId, invoice, items, nextRentalStatus }) => {
-                  setEditingInvoiceContext({ rentalId, nextRentalStatus });
-                  setEditingInvoice(invoice);
-                  setEditingInvoiceItems(items);
-                  setSelectedRentalId(null);
-                  setActiveView('beleg_editor');
-                }}
-                onOpenInvoice={async (invoiceId) => {
-                  setSelectedRentalId(null);
-                  await openInvoiceEditorById(invoiceId);
-                }}
-              />
-            </div>
-          </div>
+      {/* Rental detail offcanvas */}
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 ${
+          selectedRentalId ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setSelectedRentalId(null)}
+      />
+      {/* Slide-out panel */}
+      <div
+        className={`fixed inset-y-0 right-0 z-40 w-full max-w-4xl bg-white shadow-2xl transform transition-transform duration-300 ease-in-out overflow-auto ${
+          selectedRentalId ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="flex items-center gap-3 p-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+          <button
+            className="flex items-center gap-1 text-slate-600 hover:text-slate-900"
+            onClick={() => setSelectedRentalId(null)}
+            aria-label="Schließen"
+          >
+            <ChevronLeft size={20} />
+            <span className="text-sm font-medium">Zurück</span>
+          </button>
+          <div className="font-semibold text-slate-800">Vorgang</div>
         </div>
-      )}
+        <div className="p-4">
+          {selectedRentalId && (
+            <RentalRequestDetail
+              rentalId={selectedRentalId}
+              customers={customers}
+              mailTransportSettings={mailTransportSettings}
+              onClose={() => setSelectedRentalId(null)}
+              onRefresh={() => queryClient.invalidateQueries({ queryKey: ['rentals'] })}
+              onPrepareInvoiceDraft={({ rentalId, invoice, items, nextRentalStatus }) => {
+                setEditingInvoiceContext({ rentalId, nextRentalStatus });
+                setEditingInvoice(invoice);
+                setEditingInvoiceItems(items);
+                setSelectedRentalId(null);
+                setActiveView('beleg_editor');
+              }}
+              onOpenInvoice={async (invoiceId) => {
+                setSelectedRentalId(null);
+                await openInvoiceEditorById(invoiceId);
+              }}
+            />
+          )}
+        </div>
+      </div>
 
     </div>
   );
