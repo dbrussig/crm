@@ -436,8 +436,9 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
       <div className={['mb-6 grid gap-4', viewMode === 'erweitert' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'].join(' ')}>
         {/* Type Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
+          <label htmlFor="filter-type" className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
           <select
+            id="filter-type"
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as InvoiceType | 'alle')}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
@@ -451,8 +452,9 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
         {/* State Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <label htmlFor="filter-state" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
           <select
+            id="filter-state"
             value={filterState}
             onChange={(e) => setFilterState(e.target.value as InvoiceState | 'alle')}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
@@ -481,8 +483,9 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
         {/* Sort */}
         {viewMode === 'erweitert' && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sortierung</label>
+            <label htmlFor="filter-sort" className="block text-sm font-medium text-gray-700 mb-1">Sortierung</label>
             <select
+              id="filter-sort"
               value={`${sortBy}-${sortOrder}`}
               onChange={(e) => {
                 const [sort, order] = e.target.value.split('-') as [typeof sortBy, typeof sortOrder];

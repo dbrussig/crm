@@ -186,13 +186,15 @@ export default function InvoiceTextBlocks({
 
             {layout.editorBlocks.includes('footer') && (
               <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-3">Footer / Hinweis</h3>
+                <label htmlFor="invoice-footer" className="block text-sm font-medium text-gray-900 mb-3">Footer / Hinweis</label>
                 <textarea
                   id="invoice-footer"
                   value={footerText}
                   onChange={(e) => onFooterTextChange(e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  title="Footer / Hinweis für den Beleg"
+                  placeholder="z.B. Bei Rückfragen stehe ich Ihnen gerne zur Verfügung"
                 />
               </div>
             )}
