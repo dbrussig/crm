@@ -181,8 +181,7 @@ export async function downloadBackup(backupId: string): Promise<void> {
   const key = `mietpark_crm_backup_payload_${backupId}`;
   const payload = await loadJson<BackupPayload | null>(key, null);
   if (!payload) {
-    alert('Backup nicht gefunden');
-    return;
+    throw new Error('Backup nicht gefunden');
   }
   const raw = JSON.stringify(payload);
   const meta = (await getAllBackups()).find((b) => b.id === backupId);
@@ -224,12 +223,13 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function downloadBackupBundle(backupId: string): Promise<void> {
+export type BackupBundleResult = { type: 'success' } | { type: 'warning'; missing: string[] };
+
+export async function downloadBackupBundle(backupId: string): Promise<BackupBundleResult> {
   const key = `mietpark_crm_backup_payload_${backupId}`;
   const payload = await loadJson<BackupPayload | null>(key, null);
   if (!payload) {
-    alert('Backup nicht gefunden');
-    return;
+    throw new Error('Backup nicht gefunden');
   }
 
   const zip = new JSZip();
@@ -267,8 +267,9 @@ export async function downloadBackupBundle(backupId: string): Promise<void> {
   const out = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   downloadBlob(out, `${backupId}.zip`);
   if (missing.length) {
-    alert(`Export erstellt, aber ${missing.length} Dokument(e) konnten nicht exportiert werden (Payload fehlt).`);
+    return { type: 'warning', missing };
   }
+  return { type: 'success' };
 }
 
 export async function importBackupBundleFromFile(file: File): Promise<{ customerCount: number; docCount: number; docImported: number }> {

@@ -4,7 +4,7 @@
  * Mit Filter, Sortierung und Export
  */
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { ArrowRight, Check, Eye, FileText, Mail, Pencil, Send, Trash2 } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, MailTransportSettings } from '../types';
 import {
@@ -14,7 +14,7 @@ import {
   removeInvoice,
 } from '../services/invoiceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
-import { openInvoiceCompose } from '../services/invoiceEmailService';
+import { openInvoiceCompose, type EmailSendResult } from '../services/invoiceEmailService';
 import { getInvoiceItems, getPaymentsByInvoice } from '../services/sqliteService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import ConfirmModal from './ConfirmModal';
@@ -64,6 +64,29 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; no: string } | null>(null);
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const showError = (text: string) => setNotice({ tone: 'error', text });
+  const showInfo = (text: string) => setNotice({ tone: 'info', text });
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
 
   // Load invoices
   useEffect(() => {
@@ -337,6 +360,28 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
   return (
     <div className="p-6">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
       {notice && (
         <div
           className={[
@@ -595,20 +640,37 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                           <FileText size={14} aria-hidden="true" />
                         </button>
                         <button
-                          onClick={() => void runAction(`mail:${invoice.id}`, () => {
+                          onClick={() => void runAction(`mail:${invoice.id}`, async () => {
                             const c = customers.find((x) => x.id === invoice.companyId);
                             const toEmail = (c?.email || '').trim();
                             if (!toEmail) {
                               showError('Keine Kunden-E-Mail hinterlegt.');
                               return;
                             }
-                            openInvoiceCompose({
+                            const result = await openInvoiceCompose({
                               invoice,
                               toEmail,
                               customerName: `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || invoice.buyerName,
                               preferGmail: true,
                               mailTransportSettings,
                             });
+                            if (result.type === 'sent') {
+                              showInfo(result.message);
+                            } else if (result.type === 'warning') {
+                              showInfo(result.message);
+                            } else if (result.type === 'fallback') {
+                              const ok = await requestConfirm({
+                                title: 'SMTP-Versand fehlgeschlagen',
+                                message: `${result.error}\n\nStattdessen Entwurf im Browser öffnen?`,
+                                confirmLabel: 'Browser öffnen',
+                                cancelLabel: 'Abbrechen',
+                              });
+                              if (ok) {
+                                const url = result.preferGmail === false ? result.links.mailtoUrl : result.links.gmailUrl;
+                                const win = window.open(url, '_blank');
+                                if (!win) window.location.href = url;
+                              }
+                            }
                           })}
                           className={actionButtonClass}
                           disabled={Boolean(busyActionKey)}

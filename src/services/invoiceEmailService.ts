@@ -191,6 +191,12 @@ export function getGenericComposeLinks(opts: {
   return { gmailUrl, mailtoUrl };
 }
 
+export type EmailSendResult =
+  | { type: 'sent'; message: string }
+  | { type: 'warning'; message: string }
+  | { type: 'fallback'; error: string; links: { gmailUrl: string; mailtoUrl: string }; preferGmail?: boolean }
+  | { type: 'opened'; url: string };
+
 export async function openGenericCompose(opts: {
   toEmail: string;
   subject: string;
@@ -198,12 +204,8 @@ export async function openGenericCompose(opts: {
   preferGmail?: boolean;
   mailTransportSettings?: MailTransportSettings;
   attachments?: File[];
-}): Promise<void> {
+}): Promise<EmailSendResult> {
   const settings = getMailSettings({ mailTransportSettings: opts.mailTransportSettings });
-  const approved = window.confirm(
-    `Bitte E-Mail vor dem Versand manuell prüfen.\n\nEmpfänger: ${opts.toEmail}\nBetreff: ${opts.subject}\n\nFortfahren?`
-  );
-  if (!approved) return;
 
   if (isSmtpReady(settings)) {
     try {
@@ -216,8 +218,7 @@ export async function openGenericCompose(opts: {
           body: opts.body,
           attachments: wantedAttachments,
         });
-        alert(`E-Mail wurde über App-Passwort (SMTP) gesendet.${wantedAttachments.length ? ` Anhänge: ${wantedAttachments.length}` : ''}`);
-        return;
+        return { type: 'sent', message: `E-Mail wurde über App-Passwort (SMTP) gesendet.${wantedAttachments.length ? ` Anhänge: ${wantedAttachments.length}` : ''}` };
       } catch (firstErr) {
         const firstMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
         if (wantedAttachments.length > 0 && looksLikeAttachmentUnsupportedError(firstMsg)) {
@@ -229,18 +230,21 @@ export async function openGenericCompose(opts: {
             body: opts.body,
             attachments: [],
           });
-          alert(
-            'E-Mail wurde gesendet, aber die lokale Mail-Bridge unterstützt noch keine Anhänge. ' +
-            'Bitte Anhänge alternativ über Gmail/Manuell senden.'
-          );
-          return;
+          return {
+            type: 'warning',
+            message: 'E-Mail wurde gesendet, aber die lokale Mail-Bridge unterstützt noch keine Anhänge. Bitte Anhänge alternativ über Gmail/Manuell senden.'
+          };
         }
         throw firstErr;
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const fallback = window.confirm(`SMTP-Versand fehlgeschlagen:\n${msg}\n\nStattdessen Entwurf im Browser öffnen?`);
-      if (!fallback) return;
+      const links = getGenericComposeLinks({
+        toEmail: opts.toEmail,
+        subject: opts.subject,
+        body: opts.body,
+      });
+      return { type: 'fallback', error: msg, links, preferGmail: opts.preferGmail };
     }
   }
 
@@ -254,6 +258,7 @@ export async function openGenericCompose(opts: {
   if (!win) {
     window.location.href = url;
   }
+  return { type: 'opened', url };
 }
 
 export async function openInvoiceCompose(opts: {
@@ -262,9 +267,9 @@ export async function openInvoiceCompose(opts: {
   customerName?: string;
   preferGmail?: boolean;
   mailTransportSettings?: MailTransportSettings;
-}): Promise<void> {
+}): Promise<EmailSendResult> {
   const links = getInvoiceComposeLinks(opts);
-  await openGenericCompose({
+  return await openGenericCompose({
     toEmail: opts.toEmail,
     subject: links.subject,
     body: links.body,

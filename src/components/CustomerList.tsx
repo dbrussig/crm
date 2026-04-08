@@ -395,12 +395,23 @@ const CustomerList: React.FC<CustomerListProps> = ({
   };
 
   // Download backup
-  const handleDownloadBackup = (backupId: string) => {
-    void downloadBackup(backupId);
+  const handleDownloadBackup = async (backupId: string) => {
+    try {
+      await downloadBackup(backupId);
+    } catch (e: any) {
+      showError(e?.message || 'Fehler beim Herunterladen des Backups');
+    }
   };
 
-  const handleDownloadBackupBundle = (backupId: string) => {
-    void downloadBackupBundle(backupId);
+  const handleDownloadBackupBundle = async (backupId: string) => {
+    try {
+      const result = await downloadBackupBundle(backupId);
+      if (result.type === 'warning') {
+        showInfo(`Export erstellt, aber ${result.missing.length} Dokument(e) konnten nicht exportiert werden (Payload fehlt).`);
+      }
+    } catch (e: any) {
+      showError(e?.message || 'Fehler beim Export des Backup-Bundles');
+    }
   };
 
   const handleImportBackupBundle = async (file?: File | null) => {
