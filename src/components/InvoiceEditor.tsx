@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { ChevronDown, Download, Eye, FileText, Mail, Save, Send, X } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
@@ -51,6 +51,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     setValue,
     watch,
     getValues,
+    control,
   } = useForm<{
     invoiceNo: string;
     invoiceDate: string;
@@ -74,6 +75,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     taxNote: string;
     agbText: string;
     agbLink: string;
+    items: InvoiceItem[];
   }>({
     defaultValues: {
       invoiceNo: initialInvoice?.invoiceNo || '',
@@ -116,7 +118,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       taxNote: (initialInvoice as any)?.taxNote || '',
       agbText: (initialInvoice as any)?.agbText || '',
       agbLink: (initialInvoice as any)?.agbLink || '',
+      items: initialItems.length > 0 ? initialItems : [{ id: 'temp_1', invoiceId: '', name: '', orderIndex: 0, unitPrice: 0, quantity: 1, taxPercent: 0, unit: 'Stück', createdAt: Date.now() }],
     },
+  });
+
+  const { fields, append, remove, update } = useFieldArray({
+    control,
+    name: 'items',
+    keyName: 'rhfId',
   });
 
   const dirtyBaselineRef = useRef<string>('');
@@ -277,11 +286,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     }
   };
 
-  // Positionen
-  const [items, setItems] = useState<InvoiceItem[]>(
-    initialItems.length > 0 ? initialItems : [{ id: 'temp_1', invoiceId: '', name: '', orderIndex: 0, unitPrice: 0, quantity: 1, taxPercent: 0, unit: 'Stück', createdAt: Date.now() }]
-  );
-
   const buildDirtySnapshot = () => {
     return JSON.stringify({
       invoiceType,
@@ -310,7 +314,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       agbText,
       agbLink,
       layoutId,
-      items: items.map((it) => ({
+      items: fields.map((it) => ({
         id: it.id,
         name: it.name,
         unit: it.unit,
@@ -326,7 +330,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     let subtotal = 0;
     let tax = 0;
 
-    items.forEach((item) => {
+    fields.forEach((item) => {
       const itemTotal = item.unitPrice * item.quantity;
       subtotal += itemTotal;
       tax += itemTotal * (item.taxPercent / 100);
@@ -341,7 +345,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     };
   };
 
-  const totals = useMemo(() => calculateTotals(), [items]);
+  const totals = useMemo(() => calculateTotals(), [fields]);
   const isDepositSupportedType = invoiceType === 'Angebot' || invoiceType === 'Auftrag';
   const depositAmountPreview =
     isDepositSupportedType && depositEnabled && depositPercent > 0
@@ -480,7 +484,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     agbText,
     agbLink,
     layoutId,
-    items,
+    fields,
   ]);
 
   // Warn on tab close / reload when there are unsaved changes.
@@ -509,35 +513,33 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   // Position hinzufügen
   const addPosition = () => {
-    const newItem: InvoiceItem = {
+    append({
       id: `temp_${Date.now()}`,
       invoiceId: '',
       name: '',
-      orderIndex: items.length,
+      orderIndex: fields.length,
       unitPrice: 0,
       quantity: 1,
       taxPercent: 0,
       unit: 'Stück',
       createdAt: Date.now(),
-    };
-    setItems([...items, newItem]);
+    } as InvoiceItem);
   };
 
-  // Position entfernen
-  const removePosition = (id: string) => {
-    if (items.length === 1) {
+  // Position entfernen (index-based für useFieldArray)
+  const removePosition = (index: number) => {
+    if (fields.length === 1) {
       setInlineStatus({ tone: 'error', text: 'Mindestens eine Position ist erforderlich.' });
       return;
     }
     setInlineStatus(null);
-    setItems(items.filter((item) => item.id !== id));
+    remove(index);
   };
 
-  // Position aktualisieren
-  const updatePosition = (id: string, field: keyof InvoiceItem, value: any) => {
-    setItems(items.map((item) =>
-      item.id === id ? { ...item, [field]: value } : item
-    ));
+  // Position aktualisieren (index-based für useFieldArray)
+  const updatePosition = (index: number, field: keyof InvoiceItem, value: any) => {
+    const current = fields[index] as InvoiceItem;
+    update(index, { ...current, [field]: value });
   };
 
   const buildInvoiceData = (): Partial<Invoice> => ({
@@ -570,7 +572,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   });
 
   const autoSaveData = useMemo(
-    () => ({ invoiceData: buildInvoiceData(), items }),
+    () => ({ invoiceData: buildInvoiceData(), items: fields as InvoiceItem[] }),
     [
       invoiceType,
       invoiceNo,
@@ -598,7 +600,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       agbText,
       agbLink,
       layoutId,
-      items,
+      fields,
     ]
   );
 
@@ -624,8 +626,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     setInlineStatus(null);
 
     // Soft-Warnung: Alle Positionen haben Preis 0 (aber Beleg hat Inhalt)
-    const hasNamedItems = items.some((it) => it.name.trim().length > 0);
-    const allZeroPrice = items.every((it) => !it.unitPrice || it.unitPrice === 0);
+    const hasNamedItems = fields.some((it: any) => it.name.trim().length > 0);
+    const allZeroPrice = fields.every((it: any) => !it.unitPrice || it.unitPrice === 0);
     if (hasNamedItems && allZeroPrice) {
       const ok = await requestConfirm({
         title: 'Speichern bestätigen',
@@ -637,7 +639,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       if (!ok) return;
     }
 
-    onSave(buildInvoiceData(), items);
+    onSave(buildInvoiceData(), fields as InvoiceItem[]);
     dirtyBaselineRef.current = buildDirtySnapshot();
     setIsDirty(false);
   };
@@ -684,7 +686,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     }
 
     try {
-      await downloadInvoicePDF(buildInvoiceForExport(), items, template);
+      await downloadInvoicePDF(buildInvoiceForExport(), fields as InvoiceItem[], template);
       setInlineStatus(null);
     } catch (error) {
       console.error('PDF Export fehlgeschlagen:', error);
@@ -700,7 +702,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     }
 
     try {
-      await openInvoicePreview(buildInvoiceForExport(), items, template);
+      await openInvoicePreview(buildInvoiceForExport(), fields as InvoiceItem[], template);
       setInlineStatus(null);
     } catch (error) {
       console.error('PDF Öffnen fehlgeschlagen:', error);
@@ -714,7 +716,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       return;
     }
     try {
-      await saveInvoicePdfViaPrintDialog(buildInvoiceForExport(), items, template);
+      await saveInvoicePdfViaPrintDialog(buildInvoiceForExport(), fields as InvoiceItem[], template);
       setInlineStatus(null);
     } catch (error) {
       console.error('PDF Speichern fehlgeschlagen:', error);
@@ -1115,7 +1117,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         )}
 
         <InvoiceLineItems
-          items={items}
+          items={fields as InvoiceItem[]}
           labels={subtotalProfile?.labels}
           showQty={showQty}
           showUnit={showUnit}

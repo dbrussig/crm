@@ -19,8 +19,8 @@ export default function InvoiceLineItems(props: {
   showTax: boolean;
   showLineTotal: boolean;
   onAdd: () => void;
-  onRemove: (itemId: string) => void;
-  onUpdate: <K extends keyof InvoiceItem>(itemId: string, field: K, value: InvoiceItem[K]) => void;
+  onRemove: (index: number) => void;
+  onUpdate: (index: number, field: keyof InvoiceItem, value: any) => void;
 }) {
   const { items, labels, showQty, showUnit, showUnitPrice, showTax, showLineTotal, onAdd, onRemove, onUpdate } = props;
 
@@ -47,13 +47,13 @@ export default function InvoiceLineItems(props: {
         </div>
 
         {items.map((item, index) => (
-          <div key={item.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-200 items-start">
+          <div key={(item as any).rhfId || item.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-200 items-start">
             <div className="col-span-1 text-sm text-gray-500">{index + 1}</div>
 
             <div className="col-span-5">
               <textarea
                 value={item.name}
-                onChange={(e) => onUpdate(item.id, 'name', e.target.value)}
+                onChange={(e) => onUpdate(index, 'name', e.target.value)}
                 rows={2}
                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Beschreibung"
@@ -64,7 +64,7 @@ export default function InvoiceLineItems(props: {
                   <input
                     type="text"
                     value={item.unit}
-                    onChange={(e) => onUpdate(item.id, 'unit', e.target.value)}
+                    onChange={(e) => onUpdate(index, 'unit', e.target.value)}
                     className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
                     placeholder={labels?.unit || 'Einheit'}
                     aria-label={`Position ${index + 1}: ${labels?.unit || 'Einheit'}`}
@@ -74,7 +74,7 @@ export default function InvoiceLineItems(props: {
                   <input
                     type="number"
                     value={item.taxPercent}
-                    onChange={(e) => onUpdate(item.id, 'taxPercent', parseFloat(e.target.value))}
+                    onChange={(e) => onUpdate(index, 'taxPercent', parseFloat(e.target.value))}
                     step="0.01"
                     className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
                     placeholder={labels?.tax || 'USt.'}
@@ -89,7 +89,7 @@ export default function InvoiceLineItems(props: {
                 <input
                   type="number"
                   value={item.quantity}
-                  onChange={(e) => onUpdate(item.id, 'quantity', parseFloat(e.target.value))}
+                  onChange={(e) => onUpdate(index, 'quantity', parseFloat(e.target.value))}
                   step="0.01"
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                   aria-label={`Position ${index + 1}: ${labels?.quantity || 'Menge'}`}
@@ -102,7 +102,7 @@ export default function InvoiceLineItems(props: {
                 <input
                   type="number"
                   value={item.unitPrice}
-                  onChange={(e) => onUpdate(item.id, 'unitPrice', parseFloat(e.target.value))}
+                  onChange={(e) => onUpdate(index, 'unitPrice', parseFloat(e.target.value))}
                   step="0.01"
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                   aria-label={`Position ${index + 1}: ${labels?.unitPrice || 'Einzelpreis'}`}
@@ -112,7 +112,7 @@ export default function InvoiceLineItems(props: {
 
             <div className="col-span-1">
               <button
-                onClick={() => onRemove(item.id)}
+                onClick={() => onRemove(index)}
                 className="text-red-600 hover:text-red-700"
                 title="Position löschen"
                 aria-label={`Position ${index + 1} löschen`}
