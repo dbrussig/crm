@@ -25,6 +25,7 @@ interface KanbanCardProps {
   onMoveRight?: () => void;
   canMoveLeft?: boolean;
   canMoveRight?: boolean;
+  isTransitioning?: boolean;
 }
 
 /**
@@ -50,11 +51,12 @@ const arePropsEqual = (prevProps: KanbanCardProps, nextProps: KanbanCardProps): 
     prevProps.latestInvoice?.state === nextProps.latestInvoice?.state &&
     prevProps.onEditLatestInvoice === nextProps.onEditLatestInvoice &&
     prevProps.canMoveLeft === nextProps.canMoveLeft &&
-    prevProps.canMoveRight === nextProps.canMoveRight
+    prevProps.canMoveRight === nextProps.canMoveRight &&
+    prevProps.isTransitioning === nextProps.isTransitioning
   );
 };
 
-export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, customerEmail, latestInvoice, onEditLatestInvoice, onClick, onMoveLeft, onMoveRight, canMoveLeft, canMoveRight }) => {
+export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, customerEmail, latestInvoice, onEditLatestInvoice, onClick, onMoveLeft, onMoveRight, canMoveLeft, canMoveRight, isTransitioning }) => {
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const showError = (text: string) => setNotice({ tone: 'error', text });
   const showInfo = (text: string) => setNotice({ tone: 'info', text });
@@ -215,7 +217,7 @@ export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, custome
       {...listeners}
       onClick={onClick}
       className={`
-        bg-white rounded-lg shadow-sm border
+        relative bg-white rounded-lg shadow-sm border
         ${needsImmediateAttention ? 'border-amber-300' : 'border-gray-200'}
         hover:shadow-md hover:border-blue-300
         cursor-pointer transition-all duration-200
@@ -242,6 +244,16 @@ export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, custome
             resolve?.(false);
           }}
         />
+      )}
+
+      {/* Loading Overlay */}
+      {isTransitioning && (
+        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
+          <div className="flex flex-col items-center gap-2">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" aria-hidden="true"></div>
+            <span className="text-xs text-slate-600 font-medium">Wird verschoben...</span>
+          </div>
+        </div>
       )}
 
       {notice && (

@@ -131,6 +131,7 @@ export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: K
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [latestInvoiceByRentalId, setLatestInvoiceByRentalId] = useState<Record<string, Invoice | undefined>>({});
   const [loading, setLoading] = useState(true);
+  const [transitioningIds, setTransitioningIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const showError = (text: string) => setNotice({ tone: 'error', text });
   const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
@@ -227,11 +228,20 @@ export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: K
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over) return;
-    if (active.id === over.id) return;
+    if (!over) {
+      setActiveId(null);
+      return;
+    }
+    if (active.id === over.id) {
+      setActiveId(null);
+      return;
+    }
 
     const activeRental = rentals.find((r) => r.id === active.id);
-    if (!activeRental) return;
+    if (!activeRental) {
+      setActiveId(null);
+      return;
+    }
 
     // Extract target status from column ID
     const targetStatus = over.id as RentalStatus;
@@ -243,14 +253,23 @@ export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: K
       return;
     }
 
+    // Set loading state
+    setTransitioningIds(prev => new Set(prev).add(String(active.id)));
+    setActiveId(null);
+
+    // Screenreader-Announcement
+    announceToScreenreader(`Verschiebe ${activeRental.productType} nach ${getRentalStatusLabel(targetStatus)}...`);
+
     // Validate transition
     try {
       await transitionStatus(activeRental.id, targetStatus);
 
       // Reload rentals
-      const updated = await fetchAllRentalRequests();
+      const [updated, allInvoices] = await Promise.all([
+        fetchAllRentalRequests(),
+        fetchAllInvoices()
+      ]);
       setRentals(updated);
-      const allInvoices = await fetchAllInvoices();
       setLatestInvoiceByRentalId(mapLatestInvoicesByRental(allInvoices));
 
       // Screenreader-Announcement
@@ -269,12 +288,13 @@ export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: K
         `Fehler: ${errorMessage}`,
         'assertive'
       );
-
-      // Reset rentals (no change)
-      return;
+    } finally {
+      setTransitioningIds(prev => {
+        const next = new Set(prev);
+        next.delete(String(active.id));
+        return next;
+      });
     }
-
-    setActiveId(null);
   };
 
   // Handle keyboard navigation (Move left/right)
@@ -291,13 +311,19 @@ export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: K
       return;
     }
 
+    // Set loading state
+    setTransitioningIds(prev => new Set(prev).add(rentalId));
+    announceToScreenreader(`Verschiebe ${rental.productType} nach ${getRentalStatusLabel(targetStatus)}...`);
+
     try {
       await transitionStatus(rentalId, targetStatus);
 
-      // Reload rentals
-      const updated = await fetchAllRentalRequests();
+      // Reload rentals in parallel
+      const [updated, allInvoices] = await Promise.all([
+        fetchAllRentalRequests(),
+        fetchAllInvoices()
+      ]);
       setRentals(updated);
-      const allInvoices = await fetchAllInvoices();
       setLatestInvoiceByRentalId(mapLatestInvoicesByRental(allInvoices));
 
       // Screenreader-Announcement
@@ -316,6 +342,12 @@ export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: K
         `Fehler: ${errorMessage}`,
         'assertive'
       );
+    } finally {
+      setTransitioningIds(prev => {
+        const next = new Set(prev);
+        next.delete(rentalId);
+        return next;
+      });
     }
   };
 
@@ -547,6 +579,7 @@ export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: K
                         onMoveRight={() => handleMoveCard(rental.id, 'right')}
                         canMoveLeft={canMoveCard(rental.status, 'left')}
                         canMoveRight={canMoveCard(rental.status, 'right')}
+                        isTransitioning={transitioningIds.has(rental.id)}
                       />
                     ))}
 
