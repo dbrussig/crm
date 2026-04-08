@@ -20,6 +20,14 @@ import { useInvoiceExport } from '../hooks/useInvoiceExport';
 import { useInvoiceDirtyTracking } from '../hooks/useInvoiceDirtyTracking';
 import AutoSaveIndicator from './AutoSaveIndicator';
 import InvoiceLineItems from './InvoiceLineItems';
+import InvoiceHeaderFields from './invoice/InvoiceHeaderFields';
+import InvoiceCustomerBlock from './invoice/InvoiceCustomerBlock';
+import InvoiceDatesBlock from './invoice/InvoiceDatesBlock';
+import InvoiceDepositBlock from './invoice/InvoiceDepositBlock';
+import InvoiceTextBlocks from './invoice/InvoiceTextBlocks';
+import InvoicePaymentsBlock from './invoice/InvoicePaymentsBlock';
+import InvoiceTotalsSummary from './invoice/InvoiceTotalsSummary';
+import InvoiceActions from './invoice/InvoiceActions';
 
 // ─── Inline Status Hook ───────────────────────────────────────────
 
