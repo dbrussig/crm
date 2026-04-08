@@ -5,9 +5,10 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, FormProvider } from 'react-hook-form';
 import { ChevronDown, Download, Eye, FileText, Mail, Save, Send, X } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
+import type { InvoiceFormValues } from './invoice/types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
 import { INVOICE_LAYOUTS, getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
@@ -28,6 +29,8 @@ import InvoicePaymentsBlock from './invoice/InvoicePaymentsBlock';
 import InvoiceTotalsSummary from './invoice/InvoiceTotalsSummary';
 import InvoiceActions from './invoice/InvoiceActions';
 import { Card } from './invoice/Card';
+
+export type { InvoiceFormValues };
 
 // ─── Inline Status Hook ───────────────────────────────────────────
 
@@ -565,6 +568,15 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto p-4 space-y-6">
 
+        {/* Workflow Bar - prominent at top */}
+        <div className="mb-2">
+          <InvoiceWorkflowBar 
+            currentType={invoiceType} 
+            nextActionLabel={workflowActionLabel} 
+            onAdvance={handleWorkflowAdvance}
+          />
+        </div>
+
         {/* Inline Status */}
         {inlineStatus && (
           <div className={[
@@ -604,27 +616,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
         {/* Karte 2: Empfänger */}
         <Card title="Empfänger">
-          <InvoiceCustomerBlock
-            customers={customers}
-            selectedCustomerId={selectedCustomerId}
-            onCustomerChange={setSelectedCustomerId}
-            salutation={salutation}
-            onSalutationChange={(v: string) => setValue('salutation', v)}
-            buyerName={buyerName}
-            onBuyerNameChange={(v: string) => {
-              setValue('buyerName', v);
-              if (showValidationErrors) clearStatus();
-            }}
-            buyerAddress={buyerAddress}
-            onBuyerAddressChange={(v: string) => {
-              setValue('buyerAddress', v);
-              if (showValidationErrors) clearStatus();
-            }}
-            showValidationErrors={showValidationErrors}
-            clearStatus={clearStatus}
-            hasBuyerName={hasBuyerName}
-            hasBuyerAddress={hasBuyerAddress}
-          />
+          <InvoiceCustomerBlock customers={customers} />
         </Card>
 
         {/* Verknüpfte Zahlungen */}
