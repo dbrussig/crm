@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useState, useEffect } from 'react';
-import { ArrowRight, Eye, FileText, Mail, Pencil, Send, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, Eye, FileText, Mail, Pencil, Send, Trash2 } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, MailTransportSettings } from '../types';
 import {
   fetchAllInvoices,
@@ -26,6 +26,7 @@ interface InvoiceListProps {
   onEdit: (invoice: Invoice) => void;
   onDelete?: (invoiceId: string) => void;
   onSend?: (invoiceId: string) => void;
+  onMarkAccepted?: (invoiceId: string) => void;
   onConvertToOrder?: (invoiceId: string) => void;
   onConvertToInvoice?: (invoiceId: string) => void;
 }
@@ -37,6 +38,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   onEdit,
   onDelete,
   onSend,
+  onMarkAccepted,
   onConvertToOrder,
   onConvertToInvoice,
 }) => {
@@ -602,6 +604,25 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                             <Send size={14} aria-hidden="true" />
                           </button>
                         )}
+
+                        {/* Auftrag manuell als angenommen markieren */}
+                        {invoice.invoiceType === 'Auftrag' &&
+                          onMarkAccepted &&
+                          (invoice.state === 'entwurf' || invoice.state === 'gesendet') && (
+                            <button
+                              onClick={() =>
+                                void runAction(`accept:${invoice.id}`, async () => {
+                                  await onMarkAccepted(invoice.id);
+                                })
+                              }
+                              className={actionButtonClass}
+                              disabled={Boolean(busyActionKey)}
+                              title="Auftrag als angenommen markieren"
+                              aria-label={`Auftrag ${invoice.invoiceNo} als angenommen markieren`}
+                            >
+                              <Check size={14} aria-hidden="true" />
+                            </button>
+                          )}
 
                         {/* Konvertieren */}
                         {invoice.invoiceType === 'Angebot' && onConvertToOrder && (
