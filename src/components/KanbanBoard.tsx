@@ -129,6 +129,7 @@ const getAdjacentStatus = (currentStatus: RentalStatus, direction: 'left' | 'rig
 export default function KanbanBoard({ customers, onCardClick, onOpenInvoice }: KanbanBoardProps) {
   const [rentals, setRentals] = useState<RentalRequest[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [latestInvoiceByRentalId, setLatestInvoiceByRentalId] = useState<Record<string, Invoice | undefined>>({});
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const showError = (text: string) => setNotice({ tone: 'error', text });
