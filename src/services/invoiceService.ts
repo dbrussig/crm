@@ -73,10 +73,13 @@ function deriveFollowUpInvoiceNo(sourceNo: string, targetType: InvoiceType): str
   return null;
 }
 
-async function genInvoiceNo(type: InvoiceType, now = new Date()): Promise<string> {
+async function genInvoiceNo(type: InvoiceType, now = new Date(), maxAttempts = 10): Promise<string> {
   const yyyy = now.getFullYear();
   const prefix = getInvoicePrefix(type);
   const all = await getAllInvoices();
+
+  // Build set of existing numbers for quick lookup
+  const existingNos = new Set(all.map((inv) => String(inv.invoiceNo || '').trim().toUpperCase()));
 
   // Angebote may exist as legacy "AN" prefix; new format is always AB/AU/RE-YYYY-SEQ.
   const scanPrefixes = type === 'Angebot' ? ['AB', 'AN'] : [prefix];
@@ -95,8 +98,29 @@ async function genInvoiceNo(type: InvoiceType, now = new Date()): Promise<string
     }
   }
 
-  const next = maxSeq + 1;
-  return `${prefix}-${yyyy}-${String(next).padStart(3, '0')}`;
+  // Try to find a unique number
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const next = maxSeq + attempt + 1;
+    const candidate = `${prefix}-${yyyy}-${String(next).padStart(3, '0')}`;
+    if (!existingNos.has(candidate.toUpperCase())) {
+      return candidate;
+    }
+  }
+
+  // Fallback: use timestamp suffix
+  const ts = Date.now().toString().slice(-6);
+  return `${prefix}-${yyyy}-${ts}`;
+}
+
+async function isInvoiceNoDuplicate(no: string, excludeId?: string): Promise<boolean> {
+  const all = await getAllInvoices();
+  const normalized = String(no || '').trim().toUpperCase();
+  if (!normalized) return false;
+
+  return all.some((inv) => {
+    if (excludeId && inv.id === excludeId) return false;
+    return String(inv.invoiceNo || '').trim().toUpperCase() === normalized;
+  });
 }
 
 export async function fetchInvoiceTemplate(type: InvoiceType): Promise<InvoiceTemplate | null> {
@@ -365,11 +389,23 @@ export async function saveInvoice(invoice: Partial<Invoice>, items: InvoiceItem[
   if (!invoice.id) {
     const id = `invoice_${now}`;
     const tpl = await fetchInvoiceTemplate(invoice.invoiceType || 'Angebot');
+
+    // Generate or validate invoice number
+    let invoiceNo = invoice.invoiceNo;
+    if (!invoiceNo) {
+      invoiceNo = await genInvoiceNo(invoice.invoiceType || 'Angebot');
+    }
+
+    // Check for duplicates
+    if (await isInvoiceNoDuplicate(invoiceNo)) {
+      throw new Error(`Belegnummer "${invoiceNo}" existiert bereits. Bitte wählen Sie eine andere Nummer.`);
+    }
+
     const inv: Invoice = {
       id,
       rentalRequestId: invoice.rentalRequestId,
       invoiceType: invoice.invoiceType || 'Angebot',
-      invoiceNo: invoice.invoiceNo || await genInvoiceNo(invoice.invoiceType || 'Angebot'),
+      invoiceNo,
       invoiceDate: invoice.invoiceDate || now,
       dueDate: invoice.dueDate,
       state: invoice.state || 'entwurf',
@@ -395,6 +431,13 @@ export async function saveInvoice(invoice: Partial<Invoice>, items: InvoiceItem[
     };
     await addInvoice(inv, items);
     return id;
+  }
+
+  // For updates, check if new invoiceNo conflicts with another invoice
+  if (invoice.invoiceNo) {
+    if (await isInvoiceNoDuplicate(invoice.invoiceNo, invoice.id)) {
+      throw new Error(`Belegnummer "${invoice.invoiceNo}" existiert bereits. Bitte wählen Sie eine andere Nummer.`);
+    }
   }
 
   await updateInvoice(invoice.id, invoice as Partial<Invoice>, items);
