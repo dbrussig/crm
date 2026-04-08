@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { AISettings, Customer, GmailAttachmentSummary, GoogleOAuthSettings, InboxImportResult, Invoice, InvoiceItem, MailTransportSettings, RentalRequest, RentalStatus } from './types';
 import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources, updateInvoice } from './services/sqliteService';
 import { MessageBox } from './components/MessageBox';
@@ -25,7 +26,7 @@ import Vermietungszubehoer from './components/Vermietungszubehoer';
 import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
 import { formatDisplayRef } from './utils/displayId';
 import { getDashboardFinancials, type DashboardFinancials } from './services/dashboardService';
-import { createFollowUpInvoiceWithStatusSync } from './services/workflowService';
+import { createFollowUpInvoiceWithStatusSync, createOrderFromQuote, createInvoiceFromOrder } from './services/workflowService';
 
 type View =
   | 'dashboard'
@@ -41,12 +42,14 @@ type View =
   | 'einstellungen';
 
 export default function App() {
+  const queryClient = useQueryClient();
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const [appNotice, setAppNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedRentalId, setSelectedRentalId] = useState<string | null>(null);
-  const [kanbanKey, setKanbanKey] = useState(0);
 
   // Invoices UI state
   const [editingInvoice, setEditingInvoice] = useState<Partial<Invoice> | null>(null);
@@ -55,7 +58,6 @@ export default function App() {
     rentalId?: string;
     nextRentalStatus?: RentalStatus;
   } | null>(null);
-  const [invoiceListKey, setInvoiceListKey] = useState(0);
   const [dashboardRentals, setDashboardRentals] = useState<RentalRequest[]>([]);
   const [dashboardInvoices, setDashboardInvoices] = useState<Invoice[]>([]);
   const [dashboardResourceTotal, setDashboardResourceTotal] = useState(0);
@@ -251,7 +253,7 @@ export default function App() {
     if (activeView === 'dashboard') {
       void loadDashboardData();
     }
-  }, [activeView, kanbanKey, invoiceListKey]);
+  }, [activeView]);
 
   useEffect(() => {
     // Persist for services that use default client id.
@@ -266,7 +268,7 @@ export default function App() {
   const openInvoiceEditorById = async (invoiceId: string) => {
     const loaded = await fetchInvoiceById(invoiceId);
     if (!loaded) {
-      alert('Beleg nicht gefunden');
+      setAppNotice({ tone: 'error', text: 'Beleg nicht gefunden' });
       return;
     }
     setEditingInvoiceContext(null);
@@ -275,15 +277,6 @@ export default function App() {
     setActiveView('beleg_editor');
   };
 
-  const convertInvoiceAndSync = async (
-    invoiceId: string,
-    targetType: 'Auftrag' | 'Rechnung'
-  ) => {
-    const next = await createFollowUpInvoiceWithStatusSync(invoiceId, targetType);
-    if (next.rentalStatusUpdated) setKanbanKey((k) => k + 1);
-    setInvoiceListKey((k) => k + 1);
-    await openInvoiceEditorById(next.nextInvoiceId);
-  };
 
   const onRentalRequestCreate = async (data: {
     customerId: string;
@@ -465,6 +458,27 @@ export default function App() {
 
       {/* Main content */}
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 mt-14 lg:mt-0">
+        {appNotice && (
+          <div
+            className={[
+              'mb-4 rounded-lg border px-4 py-3 text-sm whitespace-pre-line',
+              appNotice.tone === 'error'
+                ? 'border-red-200 bg-red-50 text-red-800'
+                : 'border-slate-200 bg-white text-slate-800',
+            ].join(' ')}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>{appNotice.text}</div>
+              <button
+                className="text-slate-600 hover:text-slate-900"
+                onClick={() => setAppNotice(null)}
+                aria-label="Hinweis schließen"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
         {activeView === 'dashboard' && (
           <div className="max-w-7xl">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1071,11 +1085,9 @@ export default function App() {
             <h2 className="text-2xl font-bold text-slate-900 mb-4">Vorgänge</h2>
             <div className="h-[calc(100vh-140px)]">
               <KanbanBoard
-                key={kanbanKey}
                 customers={customers}
                 onCardClick={(r) => setSelectedRentalId(r.id)}
                 onOpenInvoice={async (invoiceId) => {
-                  setActiveView('belege');
                   await openInvoiceEditorById(invoiceId);
                 }}
               />
@@ -1142,7 +1154,6 @@ export default function App() {
             </div>
 
             <InvoiceList
-              key={invoiceListKey}
               customers={customers}
               mailTransportSettings={mailTransportSettings}
               onCreate={() => {
@@ -1161,18 +1172,28 @@ export default function App() {
                 })();
               }}
               onConvertToOrder={async (invoiceId) => {
-                await convertInvoiceAndSync(invoiceId, 'Auftrag');
+                const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Auftrag');
+                if (next.rentalStatusUpdated) {
+                  queryClient.invalidateQueries({ queryKey: ['rentals'] });
+                }
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                await openInvoiceEditorById(next.nextInvoiceId);
               }}
               onConvertToInvoice={async (invoiceId) => {
-                await convertInvoiceAndSync(invoiceId, 'Rechnung');
+                const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Rechnung');
+                if (next.rentalStatusUpdated) {
+                  queryClient.invalidateQueries({ queryKey: ['rentals'] });
+                }
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                await openInvoiceEditorById(next.nextInvoiceId);
               }}
               onMarkSent={async (invoiceId) => {
                 await updateInvoice(invoiceId, { state: 'gesendet' });
-                setInvoiceListKey((k) => k + 1);
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
               }}
               onMarkAccepted={async (invoiceId) => {
                 await updateInvoice(invoiceId, { state: 'angenommen' });
-                setInvoiceListKey((k) => k + 1);
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
               }}
             />
           </div>
@@ -1205,7 +1226,7 @@ export default function App() {
                 if (editingInvoiceContext?.rentalId && editingInvoiceContext.nextRentalStatus) {
                   try {
                     await transitionStatus(editingInvoiceContext.rentalId, editingInvoiceContext.nextRentalStatus);
-                    setKanbanKey((k) => k + 1);
+                    queryClient.invalidateQueries({ queryKey: ['rentals'] });
                   } catch (e: any) {
                     if (wasCreate) {
                       try {
@@ -1215,24 +1236,37 @@ export default function App() {
                       }
                     }
                     const msg = e?.error || e?.message || 'Status konnte nicht automatisch gesetzt werden.';
-                    alert(`${msg}${wasCreate ? '\n\nDer neu erstellte Beleg wurde zur Konsistenz wieder entfernt.' : ''}`);
+                    setAppNotice({
+                      tone: 'error',
+                      text: `${msg}${wasCreate ? '\n\nDer neu erstellte Beleg wurde zur Konsistenz wieder entfernt.' : ''}`,
+                    });
                     return;
                   }
                 }
-                setInvoiceListKey((k) => k + 1);
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
                 setEditingInvoiceContext(null);
                 setEditingInvoice(null);
                 setActiveView('belege');
               }}
               onConvertToOrder={async (invoiceId) => {
-                await convertInvoiceAndSync(invoiceId, 'Auftrag');
+                const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Auftrag');
+                if (next.rentalStatusUpdated) {
+                  queryClient.invalidateQueries({ queryKey: ['rentals'] });
+                }
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                await openInvoiceEditorById(next.nextInvoiceId);
               }}
               onConvertToInvoice={async (invoiceId) => {
-                await convertInvoiceAndSync(invoiceId, 'Rechnung');
+                const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Rechnung');
+                if (next.rentalStatusUpdated) {
+                  queryClient.invalidateQueries({ queryKey: ['rentals'] });
+                }
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                await openInvoiceEditorById(next.nextInvoiceId);
               }}
               onReissue={async (invoiceId) => {
                 const nextId = await reissueInvoice(invoiceId);
-                setInvoiceListKey((k) => k + 1);
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
                 await openInvoiceEditorById(nextId);
               }}
               onClose={() => {
@@ -1316,8 +1350,8 @@ export default function App() {
                 customers={customers}
                 mailTransportSettings={mailTransportSettings}
                 onClose={() => setSelectedRentalId(null)}
-                onRefresh={() => setKanbanKey((k) => k + 1)}
-              onPrepareInvoiceDraft={({ rentalId, invoice, items, nextRentalStatus }) => {
+                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['rentals'] })}
+                onPrepareInvoiceDraft={({ rentalId, invoice, items, nextRentalStatus }) => {
                   setEditingInvoiceContext({ rentalId, nextRentalStatus });
                   setEditingInvoice(invoice);
                   setEditingInvoiceItems(items);

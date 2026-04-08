@@ -27,6 +27,7 @@ import {
   isGmailAuthenticated
 } from '../services/googleGmailService';
 import CustomerForm from './CustomerForm';
+import ConfirmModal from './ConfirmModal';
 
 interface MessageBoxProps {
   customers: Customer[];
@@ -93,6 +94,32 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
   const [selectedGmailThread, setSelectedGmailThread] = useState<GmailThreadFormatted | null>(null);
   const [isSearchingGmail, setIsSearchingGmail] = useState(false);
 
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
+  const showInfo = (text: string) => setNotice({ tone: 'info', text });
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
+
   // Produktvorschlag bei Text-Eingabe
   useEffect(() => {
     if (newMessage.length > 10) {
@@ -144,7 +171,7 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
 	    };
 
     if (!isAIAvailable(config)) {
-      alert('AI ist nicht konfiguriert. Bitte API-Key in den Einstellungen setzen.');
+      showError('AI ist nicht konfiguriert. Bitte API-Key in den Einstellungen setzen.');
       return;
     }
 
@@ -164,34 +191,34 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
       // Placeholder für Demo
       setTimeout(() => {
         setIsAIProcessing(false);
-        alert('AI Vorschlag erfolgt (Placeholder - API noch nicht konfiguriert)');
+        showInfo('AI Vorschlag erfolgt (Placeholder - API noch nicht konfiguriert)');
       }, 1000);
     } catch (error) {
       console.error('AI Vorschlag fehlgeschlagen:', error);
       setIsAIProcessing(false);
-      alert('AI Vorschlag fehlgeschlagen. Bitte versuchen Sie es erneut.');
+      showError('AI Vorschlag fehlgeschlagen. Bitte versuchen Sie es erneut.');
     }
   };
 
   // Vorgang erstellen
   const handleCreateRentalRequest = async () => {
     if (!newMessage.trim()) {
-      alert('Bitte geben Sie eine Nachricht ein.');
+      showError('Bitte geben Sie eine Nachricht ein.');
       return;
     }
 
     if (!selectedCustomerId && !showNewCustomerForm) {
-      alert('Bitte wählen Sie einen Kunden aus oder legen Sie einen neuen an.');
+      showError('Bitte wählen Sie einen Kunden aus oder legen Sie einen neuen an.');
       return;
     }
 
     if (!productSuggestion) {
-      alert('Konnte kein Produkt aus der Nachricht erkennen. Bitte wählen Sie manuell.');
+      showError('Konnte kein Produkt aus der Nachricht erkennen. Bitte wählen Sie manuell.');
       return;
     }
 
     if (!extractedData.rentalStart || !extractedData.rentalEnd) {
-      alert('Bitte geben Sie Mietstart und Mietende an.');
+      showError('Bitte geben Sie Mietstart und Mietende an.');
       return;
     }
 
@@ -206,7 +233,7 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
       });
     } catch (e) {
       console.error('Failed to create rental request:', e);
-      alert('Konnte Vorgang nicht erstellen.');
+      showError('Konnte Vorgang nicht erstellen.');
       return;
     }
 
@@ -239,7 +266,7 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
   // Handler: Kunden aus extrahierten Daten erstellen
   const handleCreateCustomerFromExtraction = async () => {
     if (!extractedCustomerInfo.firstName || !extractedCustomerInfo.lastName) {
-      alert('Keine ausreichenden Kundendaten extrahiert');
+      showError('Keine ausreichenden Kundendaten extrahiert');
       return;
     }
 
@@ -275,7 +302,7 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
       announceToScreenreader(`Kunde ${newCustomer.firstName} ${newCustomer.lastName} erstellt`, 'assertive');
     } catch (error) {
       logger.error('Fehler beim Erstellen des Kunden aus Extraktion:', error);
-      alert('Fehler beim Erstellen des Kunden');
+      showError('Fehler beim Erstellen des Kunden');
     }
   };
 
@@ -321,22 +348,33 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
   const handleOpenEmail = () => {
     const subject = encodeURIComponent('Re: Anfrage Dachbox');
     const body = encodeURIComponent(replySuggestion);
-    const approved = window.confirm(
-      'Bitte E-Mail-Inhalt vor dem Versand manuell pruefen. Der Entwurf wird jetzt geoeffnet und kann angepasst werden. Fortfahren?'
-    );
-    if (!approved) return;
-    window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`, '_blank');
+    void (async () => {
+      const approved = await requestConfirm({
+        title: 'E-Mail Entwurf öffnen?'
+        ,
+        message:
+          'Bitte E-Mail-Inhalt vor dem Versand manuell pruefen. Der Entwurf wird jetzt geoeffnet und kann angepasst werden. Fortfahren?'
+        ,
+        confirmLabel: 'Öffnen'
+        ,
+        cancelLabel: 'Abbrechen'
+        ,
+        danger: false,
+      });
+      if (!approved) return;
+      window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`, '_blank');
+    })();
   };
 
   // Handler: Gmail durchsuchen
   const handleSearchGmail = async () => {
     if (!extractedCustomerInfo.email) {
-      alert('Keine E-Mail-Adresse extrahiert. Bitte geben Sie eine Nachricht mit E-Mail-Adresse ein.');
+      showError('Keine E-Mail-Adresse extrahiert. Bitte geben Sie eine Nachricht mit E-Mail-Adresse ein.');
       return;
     }
 
     if (!(await isGmailAuthenticated())) {
-      alert('Gmail API ist nicht authentifiziert. Bitte testen Sie die Verbindung in den Einstellungen.');
+      showError('Gmail API ist nicht authentifiziert. Bitte testen Sie die Verbindung in den Einstellungen.');
       return;
     }
 
@@ -349,7 +387,7 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
       announceToScreenreader(`${threads.length} Konversationen in Gmail gefunden`, 'assertive');
     } catch (error) {
       logger.error('Gmail Suche fehlgeschlagen:', error);
-      alert('Gmail Suche fehlgeschlagen. Bitte prüfen Sie die Verbindung.');
+      showError('Gmail Suche fehlgeschlagen. Bitte prüfen Sie die Verbindung.');
     } finally {
       setIsSearchingGmail(false);
     }
@@ -363,6 +401,28 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
 
   return (
     <div className="flex flex-col h-full bg-white">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
       {/* Header */}
       <div className="border-b border-gray-200 p-4">
         <h2 className="text-xl font-semibold text-gray-900">Nachrichtenbox</h2>
@@ -447,7 +507,7 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
               disabled={isAIProcessing || !newMessage.trim()}
               className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
               aria-label="Künstliche Intelligenz Vorschlag generieren"
-              aria-busy={isAIProcessing}
+              aria-busy={isAIProcessing ? 'true' : 'false'}
             >
               {isAIProcessing ? 'AI analysiert...' : '✨ AI Vorschlag (optional)'}
             </button>
@@ -547,7 +607,7 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
                       announceToScreenreader(`Kunde ${c.firstName} ${c.lastName} erstellt`, 'assertive');
                     } catch (e) {
                       console.error('Failed to create customer from Nachrichtenbox:', e);
-                      alert('Kunde konnte nicht erstellt werden.');
+                      showError('Kunde konnte nicht erstellt werden.');
                     }
                   }}
                 />
@@ -669,7 +729,7 @@ export const MessageBox: React.FC<MessageBoxProps> = ({ customers, onCustomerCre
                 disabled={isSearchingGmail}
                 className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2"
                 aria-label="Gmail nach Konversationen dieses Kunden durchsuchen"
-                aria-busy={isSearchingGmail}
+                aria-busy={isSearchingGmail ? 'true' : 'false'}
               >
                 <span>📧</span>
                 {isSearchingGmail ? 'Suche in Gmail...' : 'Gmail durchsuchen'}

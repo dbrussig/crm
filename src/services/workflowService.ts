@@ -3,6 +3,24 @@ import { createFollowUpInvoiceFromInvoice, fetchInvoiceById, removeInvoice } fro
 import { transitionStatus } from './rentalService';
 import { updateInvoice } from './sqliteService';
 
+/**
+ * Creates an order (Auftrag) from a quote (Angebot) and syncs rental status.
+ * Returns the new invoice ID.
+ */
+export async function createOrderFromQuote(invoiceId: string): Promise<string> {
+  const result = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Auftrag');
+  return result.nextInvoiceId;
+}
+
+/**
+ * Creates an invoice (Rechnung) from an order (Auftrag) and syncs rental status.
+ * Returns the new invoice ID.
+ */
+export async function createInvoiceFromOrder(invoiceId: string): Promise<string> {
+  const result = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Rechnung');
+  return result.nextInvoiceId;
+}
+
 export async function createFollowUpInvoiceWithStatusSync(
   invoiceId: string,
   targetType: 'Auftrag' | 'Rechnung'

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Customer, GoogleOAuthSettings, MailTransportSettings } from '../types';
 import { syncCustomerToGoogle, deleteGoogleContact } from '../services/googleContactsService';
 import { getDatabaseStats } from '../services/indexedDBService';
@@ -28,6 +28,7 @@ import {
 import CustomerForm from './CustomerForm';
 import { openGenericCompose } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
+import ConfirmModal from './ConfirmModal';
 
 interface CustomerListProps {
   customers: Customer[];
@@ -71,6 +72,32 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const [lastGmailByCustomerId, setLastGmailByCustomerId] = useState<Record<string, number>>({});
   const [docAggByCustomerId, setDocAggByCustomerId] = useState<Record<string, { count: number; bytes: number }>>({});
   const [docAggTotal, setDocAggTotal] = useState<{ count: number; bytes: number }>({ count: 0, bytes: 0 });
+
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  const showError = (text: string) => setNotice({ tone: 'error', text });
+  const showInfo = (text: string) => setNotice({ tone: 'info', text });
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
 
   // Load database stats on mount
   useEffect(() => {
@@ -259,14 +286,23 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const handleComposeCustomerEmail = async (customer: Customer) => {
     const to = (customer.email || '').trim();
     if (!to) {
-      alert('Keine E-Mail-Adresse beim Kunden hinterlegt.');
+      showError('Keine E-Mail-Adresse beim Kunden hinterlegt.');
       return;
     }
 
-    const approved = window.confirm(
-      `E-Mail-Entwurf für ${customer.firstName} ${customer.lastName} öffnen?\n\n` +
-      'Hinweis: Vor dem Versand bitte Inhalt immer manuell prüfen und bei Bedarf anpassen.'
-    );
+    const approved = await requestConfirm({
+      title: 'E-Mail-Entwurf öffnen?'
+      ,
+      message:
+        `E-Mail-Entwurf für ${customer.firstName} ${customer.lastName} öffnen?\n\n` +
+        'Hinweis: Vor dem Versand bitte Inhalt immer manuell prüfen und bei Bedarf anpassen.'
+      ,
+      confirmLabel: 'Öffnen'
+      ,
+      cancelLabel: 'Abbrechen'
+      ,
+      danger: false,
+    });
     if (!approved) return;
 
     await openGenericCompose({
@@ -284,15 +320,15 @@ const CustomerList: React.FC<CustomerListProps> = ({
     try {
       const backup = await createBackup('Manuelles Backup');
       await loadBackups();
-      alert(
+      showInfo(
         `✅ Backup erfolgreich erstellt!\n\n` +
-        `Datum: ${formatBackupDate(backup.timestamp)}\n` +
-        `Kunden: ${backup.customerCount}\n` +
-        `Größe: ${formatFileSize(backup.fileSize)}`
+          `Datum: ${formatBackupDate(backup.timestamp)}\n` +
+          `Kunden: ${backup.customerCount}\n` +
+          `Größe: ${formatFileSize(backup.fileSize)}`
       );
     } catch (error) {
       console.error('Backup error:', error);
-      alert('❌ Fehler beim Erstellen des Backups: ' + (error as Error).message);
+      showError('❌ Fehler beim Erstellen des Backups: ' + (error as Error).message);
     } finally {
       setIsLoadingBackup(false);
     }
@@ -300,43 +336,60 @@ const CustomerList: React.FC<CustomerListProps> = ({
 
   // Restore from backup
   const handleRestoreBackup = async (backupId: string) => {
-    if (!window.confirm(
-      'Möchten Sie wirklich dieses Backup wiederherstellen?\n\n' +
-      'Alle aktuellen Änderungen gehen verloren!'
-    )) {
-      return;
-    }
+    const ok = await requestConfirm({
+      title: 'Backup wiederherstellen?'
+      ,
+      message:
+        'Möchten Sie wirklich dieses Backup wiederherstellen?\n\n' +
+        'Alle aktuellen Änderungen gehen verloren!'
+      ,
+      confirmLabel: 'Wiederherstellen'
+      ,
+      cancelLabel: 'Abbrechen'
+      ,
+      danger: true,
+    });
+    if (!ok) return;
 
     setIsLoadingBackup(true);
     try {
       const importCount = await restoreBackup(backupId);
-      alert(
+      showInfo(
         `✅ Backup erfolgreich wiederhergestellt!\n\n` +
-        `${importCount} Kunden wurden wiederhergestellt.\n\n` +
-        'Die Seite wird jetzt neu geladen...'
+          `${importCount} Kunden wurden wiederhergestellt.\n\n` +
+          'Die Seite wird jetzt neu geladen...'
       );
       // Reload page to refresh data
       window.location.reload();
     } catch (error) {
       console.error('Restore error:', error);
-      alert('❌ Fehler beim Wiederherstellen des Backups: ' + (error as Error).message);
+      showError('❌ Fehler beim Wiederherstellen des Backups: ' + (error as Error).message);
       setIsLoadingBackup(false);
     }
   };
 
   // Delete backup
   const handleDeleteBackup = (backupId: string) => {
-    if (!window.confirm('Möchten Sie dieses Backup wirklich löschen?')) {
-      return;
-    }
-
     (async () => {
+      const ok = await requestConfirm({
+        title: 'Backup löschen?'
+        ,
+        message: 'Möchten Sie dieses Backup wirklich löschen?'
+        ,
+        confirmLabel: 'Löschen'
+        ,
+        cancelLabel: 'Abbrechen'
+        ,
+        danger: true,
+      });
+      if (!ok) return;
+
       const success = await deleteBackup(backupId);
       if (success) {
         await loadBackups();
-        alert('✅ Backup erfolgreich gelöscht');
+        showInfo('✅ Backup erfolgreich gelöscht');
       } else {
-        alert('❌ Fehler beim Löschen des Backups');
+        showError('❌ Fehler beim Löschen des Backups');
       }
     })();
   };
@@ -353,22 +406,33 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const handleImportBackupBundle = async (file?: File | null) => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.zip')) {
-      alert('Bitte eine ZIP-Datei waehlen (Backup-Bundle).');
+      showError('Bitte eine ZIP-Datei waehlen (Backup-Bundle).');
       return;
     }
-    const ok = window.confirm(
-      'Backup-Bundle importieren?\n\n' +
-      'Achtung: Dies ueberschreibt den kompletten lokalen Datenbestand (Kunden, Vorgaenge, Dokumente, ...).'
-    );
+    const ok = await requestConfirm({
+      title: 'Backup-Bundle importieren?'
+      ,
+      message:
+        'Backup-Bundle importieren?\n\n' +
+        'Achtung: Dies ueberschreibt den kompletten lokalen Datenbestand (Kunden, Vorgaenge, Dokumente, ...).'
+      ,
+      confirmLabel: 'Importieren'
+      ,
+      cancelLabel: 'Abbrechen'
+      ,
+      danger: true,
+    });
     if (!ok) return;
 
     setBundleBusy(true);
     try {
       const res = await importBackupBundleFromFile(file);
-      alert(`✅ Import abgeschlossen.\n\nKunden: ${res.customerCount}\nDokumente: ${res.docImported}/${res.docCount}\n\nDie App wird jetzt neu geladen.`);
+      showInfo(
+        `✅ Import abgeschlossen.\n\nKunden: ${res.customerCount}\nDokumente: ${res.docImported}/${res.docCount}\n\nDie App wird jetzt neu geladen.`
+      );
       window.location.reload();
     } catch (e: any) {
-      alert('❌ Import fehlgeschlagen: ' + (e?.message || String(e)));
+      showError('❌ Import fehlgeschlagen: ' + (e?.message || String(e)));
     } finally {
       setBundleBusy(false);
       if (bundleInputRef.current) bundleInputRef.current.value = '';
@@ -377,16 +441,16 @@ const CustomerList: React.FC<CustomerListProps> = ({
 
   const handleCreateICloudBackup = async () => {
     if (!isICloudBackupSupported()) {
-      alert('iCloud-Backups sind nur in der Desktop-App verfügbar.');
+      showError('iCloud-Backups sind nur in der Desktop-App verfügbar.');
       return;
     }
     setICloudBusy(true);
     try {
       const backupId = await createICloudBackup();
       await loadICloudBackups();
-      alert(`✅ iCloud-Backup erstellt: ${backupId}`);
+      showInfo(`✅ iCloud-Backup erstellt: ${backupId}`);
     } catch (error) {
-      alert('❌ iCloud-Backup fehlgeschlagen: ' + ((error as Error).message || String(error)));
+      showError('❌ iCloud-Backup fehlgeschlagen: ' + ((error as Error).message || String(error)));
     } finally {
       setICloudBusy(false);
     }
@@ -396,24 +460,24 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const handleSyncToGoogle = async (customer: Customer) => {
     // Check if Google OAuth is configured
     if (!googleOAuthSettings?.enabled || !googleOAuthSettings?.clientId) {
-      alert(
+      showError(
         'Google OAuth ist nicht konfiguriert.\n\n' +
-        'Bitte gehen Sie zu den Einstellungen (⚙️) und tragen Sie Ihre Google OAuth Client ID ein.'
+          'Bitte gehen Sie zu den Einstellungen (⚙️) und tragen Sie Ihre Google OAuth Client ID ein.'
       );
       return;
     }
 
     if (!googleInitialized) {
-      alert('Google OAuth wird noch initialisiert... Bitte warten Sie einen Moment.');
+      showInfo('Google OAuth wird noch initialisiert... Bitte warten Sie einen Moment.');
       return;
     }
 
     // Check if customer already has a Google resource ID
     if (customer.googleContactResourceId) {
-      alert(
+      showInfo(
         `Dieser Kunde wurde bereits zu Google Kontakten hinzugefügt.\n\n` +
-        `Google-Kontakt-Ref: ${formatDisplayRef(customer.googleContactResourceId, 'GCT')}\n\n` +
-        `Wenn Sie den Kontakt aktualisieren möchten, öffnen Sie ihn bitte direkt in Google Kontakten.`
+          `Google-Kontakt-Ref: ${formatDisplayRef(customer.googleContactResourceId, 'GCT')}\n\n` +
+          `Wenn Sie den Kontakt aktualisieren möchten, öffnen Sie ihn bitte direkt in Google Kontakten.`
       );
       return;
     }
@@ -427,25 +491,25 @@ const CustomerList: React.FC<CustomerListProps> = ({
           googleContactResourceId: result.resourceName
         });
 
-        alert(
+        showInfo(
           `✅ Erfolg!\n\n` +
-          `Der Kunde "${customer.firstName} ${customer.lastName}" wurde erfolgreich zu Google Kontakten hinzugefügt.\n\n` +
-          `Kontakt-Ref: ${formatDisplayRef(result.resourceName, 'GCT')}`
+            `Der Kunde "${customer.firstName} ${customer.lastName}" wurde erfolgreich zu Google Kontakten hinzugefügt.\n\n` +
+            `Kontakt-Ref: ${formatDisplayRef(result.resourceName, 'GCT')}`
         );
       } else {
-        alert(
+        showError(
           `❌ Fehler!\n\n` +
-          `Der Kunde konnte nicht zu Google Kontakten hinzugefügt werden.\n\n` +
-          `Fehler: ${result.error}\n\n` +
-          `Bitte überprüfen Sie Ihre OAuth-Berechtigungen.`
+            `Der Kunde konnte nicht zu Google Kontakten hinzugefügt werden.\n\n` +
+            `Fehler: ${result.error}\n\n` +
+            `Bitte überprüfen Sie Ihre OAuth-Berechtigungen.`
         );
       }
     } catch (error: any) {
       console.error('Google sync error:', error);
-      alert(
+      showError(
         `❌ Fehler!\n\n` +
-        `Ein unerwarteter Fehler ist aufgetreten.\n\n` +
-        `${error.message || 'Unknown error'}`
+          `Ein unerwarteter Fehler ist aufgetreten.\n\n` +
+          `${error.message || 'Unknown error'}`
       );
     }
   };
@@ -495,6 +559,50 @@ const CustomerList: React.FC<CustomerListProps> = ({
 
   return (
     <div className="space-y-6">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
+
+      {notice && (
+        <div
+          className={[
+            'rounded-xl border px-4 py-3 text-sm whitespace-pre-line',
+            notice.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-slate-200 bg-white text-slate-800',
+          ].join(' ')}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>{notice.text}</div>
+            <button
+              className="text-slate-600 hover:text-slate-900"
+              onClick={() => setNotice(null)}
+              aria-label="Hinweis schließen"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

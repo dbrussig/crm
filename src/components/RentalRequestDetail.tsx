@@ -4,7 +4,7 @@
  * Mit allen Actions: Verfügbarkeit prüfen, Angebot erstellen, etc.
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RentalRequest, Customer, Invoice, InvoiceItem, InvoiceType, Payment, RentalStatus, MailTransportSettings } from '../types';
 import {
   fetchAllRentalRequests,
@@ -29,6 +29,7 @@ import { findActiveResourcesForType } from '../services/resourceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
+import ConfirmModal from './ConfirmModal';
 import { getCompanyProfile } from '../config/companyProfile';
 import { useAutoSave } from '../hooks/useAutoSave';
 import AutoSaveIndicator from './AutoSaveIndicator';
@@ -63,6 +64,16 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [newStartDate, setNewStartDate] = useState('');
   const [newEndDate, setNewEndDate] = useState('');
@@ -88,6 +99,22 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
 
   // Availability check result
   const [availabilityResult, setAvailabilityResult] = useState<any>(null);
+
+  const showError = (text: string) => setNotice({ tone: 'error', text });
+  const showInfo = (text: string) => setNotice({ tone: 'info', text });
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
   const [payments, setPayments] = useState<Payment[]>([]);
   const [paymentAssignBusyId, setPaymentAssignBusyId] = useState<string | null>(null);
   const [linkedInvoices, setLinkedInvoices] = useState<Invoice[]>([]);
@@ -408,18 +435,18 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   // Handle Price Override
   const handlePriceOverride = async () => {
     if (!rental || !overridePrice) {
-      alert('Bitte geben Sie einen Preis ein.');
+      showError('Bitte geben Sie einen Preis ein.');
       return;
     }
 
     const newPrice = parseFloat(overridePrice);
     if (isNaN(newPrice) || newPrice < 0) {
-      alert('Bitte geben Sie einen gültigen Preis ein (positive Zahl).');
+      showError('Bitte geben Sie einen gültigen Preis ein (positive Zahl).');
       return;
     }
 
     if (!overrideReason.trim()) {
-      alert('Bitte geben Sie einen Grund für die Preisänderung an (z.B. "Sonderpreis", "Stammkunde", "Saison").');
+      showError('Bitte geben Sie einen Grund für die Preisänderung an (z.B. "Sonderpreis", "Stammkunde", "Saison").');
       return;
     }
 
@@ -448,22 +475,23 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       setOverridePrice('');
       setOverrideReason('');
 
-      alert(`Preis erfolgreich geändert: ${originalPrice.toFixed(2)}€ → ${newPrice.toFixed(2)}€`);
+      showInfo(`Preis erfolgreich geändert: ${originalPrice.toFixed(2)}€ → ${newPrice.toFixed(2)}€`);
     } catch (error) {
       console.error('Failed to update price:', error);
-      alert('Fehler beim Speichern des Preises: ' + (error instanceof Error ? error.message : String(error)));
+      showError('Fehler beim Speichern des Preises: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
   const handleTransitionAction = async (nextStatus: RentalStatus, onSuccess?: (timestamp: number) => void) => {
     try {
-      const ts = Date.now();
-      await transitionStatus(rental.id, nextStatus);
+      setActionLoading(true);
+      const raw = await transitionStatus(rentalId, nextStatus);
+      const ts = typeof raw === 'number' ? raw : Date.now();
       setRental((prev) => (prev ? { ...prev, status: nextStatus } : prev));
       onSuccess?.(ts);
       onRefresh?.();
     } catch (e: any) {
-      alert(e?.error || e?.message || 'Status konnte nicht gesetzt werden.');
+      showError(e?.error || e?.message || 'Status konnte nicht gesetzt werden.');
     }
   };
 
@@ -498,7 +526,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
           .filter((id) => Boolean(String(id || '').trim()));
 
         if (candidates.length === 0) {
-          alert('Kein Kalender für dieses Produkt konfiguriert. Bitte im Menü "Kalender" eine Kalender-Referenz zur Ressource zuordnen.');
+          showError('Kein Kalender für dieses Produkt konfiguriert. Bitte im Menü "Kalender" eine Kalender-Referenz zur Ressource zuordnen.');
           return;
         }
 
@@ -518,7 +546,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       }
 
       if (!calendarId) {
-        alert('Kalender-Referenz ist nicht gesetzt. Bitte im Menü "Kalender" eine Kalender-Referenz zur Ressource zuordnen.');
+        showError('Kalender-Referenz ist nicht gesetzt. Bitte im Menü "Kalender" eine Kalender-Referenz zur Ressource zuordnen.');
         return;
       }
 
@@ -543,7 +571,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       onRefresh?.();
     } catch (error: any) {
       console.error('Availability check failed:', error);
-      alert(error.error || 'Verfügbarkeitsprüfung fehlgeschlagen');
+      showError(error.error || 'Verfügbarkeitsprüfung fehlgeschlagen');
     } finally {
       setActionLoading(false);
     }
@@ -552,7 +580,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   const handlePrepareDocumentDraft = (invoiceType: InvoiceType) => {
     if (!rental || !customer || !onPrepareInvoiceDraft) return;
     if (invoiceType === 'Angebot' && rental.availabilityStatus !== 'frei') {
-      alert('Bitte zuerst die Verfügbarkeit auf "frei" setzen.');
+      showError('Bitte zuerst die Verfügbarkeit auf "frei" setzen.');
       return;
     }
 
@@ -619,7 +647,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
     // Copy to clipboard
     await navigator.clipboard.writeText(template);
 
-    alert('Text in Zwischenablage kopiert!');
+    showInfo('Text in Zwischenablage kopiert!');
   };
 
   const isRoofRackRelevant = rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox M';
@@ -645,7 +673,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       setMissingInfo(calculateMissingInfo(updated));
     } catch (e) {
       console.error('Failed to update roof rack option:', e);
-      alert('Konnte Option nicht speichern.');
+      showError('Konnte Option nicht speichern.');
     } finally {
       setActionLoading(false);
     }
@@ -662,7 +690,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       setMissingInfo(nextMissing);
     } catch (e) {
       console.error('Failed to update AHK:', e);
-      alert('Konnte AHK-Info nicht speichern.');
+      showError('Konnte AHK-Info nicht speichern.');
     } finally {
       setActionLoading(false);
     }
@@ -677,7 +705,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       onClose();
     } catch (e: any) {
       console.error('Failed to archive rental:', e);
-      alert(e?.error || e?.message || 'Konnte Vorgang nicht archivieren.');
+      showError(e?.error || e?.message || 'Konnte Vorgang nicht archivieren.');
     } finally {
       setActionLoading(false);
       setConfirmArchive(false);
@@ -698,10 +726,10 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       };
       setRental(updated);
       setCommentDirty(false);
-      alert('Kommentar gespeichert.');
+      showInfo('Kommentar gespeichert.');
     } catch (e: any) {
       console.error('Failed to save comment:', e);
-      alert(e?.error || e?.message || 'Kommentar konnte nicht gespeichert werden.');
+      showError(e?.error || e?.message || 'Kommentar konnte nicht gespeichert werden.');
     } finally {
       setActionLoading(false);
     }
@@ -732,7 +760,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       }
     } catch (e) {
       console.error('Failed to update reling type:', e);
-      alert('Konnte Reling-Typ nicht speichern.');
+      showError('Konnte Reling-Typ nicht speichern.');
     } finally {
       setActionLoading(false);
     }
@@ -748,7 +776,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       if (nextRaw) {
         const parsed = Number(nextRaw);
         if (!Number.isFinite(parsed) || parsed <= 0) {
-          alert('Bitte eine gültige Fahrzeugbreite in mm eingeben (z. B. 1180 oder 1270).');
+          showError('Bitte eine gültige Fahrzeugbreite in mm eingeben (z. B. 1180 oder 1270).');
           return;
         }
         nextWidth = Math.round(parsed);
@@ -760,10 +788,10 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       await updateRentalRequest(rental.id, { vehicleWidthMm: nextWidth });
       setRental(updated);
       setVehicleWidthInput(nextWidth ? String(nextWidth) : '');
-      alert('Fahrzeugbreite gespeichert.');
+      showInfo('Fahrzeugbreite gespeichert.');
     } catch (e) {
       console.error('Failed to update vehicle width:', e);
-      alert('Konnte Fahrzeugbreite nicht speichern.');
+      showError('Konnte Fahrzeugbreite nicht speichern.');
     } finally {
       setActionLoading(false);
     }
@@ -801,22 +829,36 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       setTsnInput(nextTsn);
 
       if (customer) {
-        const customerUpdated: Customer = {
-          ...customer,
-          assignedVehicleMake: nextVehicleMake || customer.assignedVehicleMake,
-          assignedVehicleModel: nextVehicleModel || customer.assignedVehicleModel,
-          assignedHsn: nextHsn || customer.assignedHsn,
-          assignedTsn: nextTsn || customer.assignedTsn,
-          roofRackDecisionUpdatedAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-        await updateCustomer(customerUpdated);
-        setCustomer(customerUpdated);
+        const shouldUpdateCustomer = await requestConfirm({
+          title: 'Kundenprofil aktualisieren?'
+          ,
+          message: 'Sollen die Fahrzeugdaten auch im Kundenprofil gespeichert werden?'
+          ,
+          confirmLabel: 'Speichern'
+          ,
+          cancelLabel: 'Nein'
+          ,
+          danger: false,
+        });
+
+        if (shouldUpdateCustomer) {
+          const customerUpdated: Customer = {
+            ...customer,
+            assignedVehicleMake: nextVehicleMake || undefined,
+            assignedVehicleModel: nextVehicleModel || undefined,
+            assignedHsn: nextHsn || undefined,
+            assignedTsn: nextTsn || undefined,
+            updatedAt: Date.now(),
+          } as any;
+          await updateCustomer(customerUpdated);
+          setCustomer(customerUpdated);
+        }
       }
-      alert('Fahrzeugdaten gespeichert.');
+
+      showInfo('Fahrzeugdaten gespeichert.');
     } catch (e) {
       console.error('Failed to update vehicle data:', e);
-      alert('Konnte Fahrzeugdaten nicht speichern.');
+      showError('Konnte Fahrzeugdaten nicht speichern.');
     } finally {
       setActionLoading(false);
     }
@@ -824,121 +866,102 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
 
   const handleApplyCustomerProfile = async () => {
     if (!rental || !customer) return;
-    setActionLoading(true);
-    try {
-      const nextVehicleMake = String(customer.assignedVehicleMake || '').trim();
-      const nextVehicleModel = String(customer.assignedVehicleModel || '').trim();
-      const nextHsn = String(customer.assignedHsn || '').trim().toUpperCase();
-      const nextTsn = String(customer.assignedTsn || '').trim().toUpperCase();
-      const nextRelingType = (customer.assignedRelingType || undefined) as RentalRequest['relingType'];
-      let nextRoofRackKey = sanitizeRoofRackKey(String(customer.assignedRoofRackInventoryKey || '').trim());
-      let skippedRoofRack = false;
+    const nextMake = String((customer as any).assignedVehicleMake || '').trim();
+    const nextModel = String((customer as any).assignedVehicleModel || '').trim();
+    const nextHsn = String((customer as any).assignedHsn || '').trim().toUpperCase();
+    const nextTsn = String((customer as any).assignedTsn || '').trim().toUpperCase();
+    const nextRoofRackKey = sanitizeRoofRackKey(String((customer as any).assignedRoofRackInventoryKey || '').trim());
 
-      if (nextRoofRackKey) {
-        const conflict = await findRoofRackConflict({
-          ...rental,
-          roofRackInventoryKey: nextRoofRackKey,
-        });
-        if (conflict && conflict.conflictId !== rental.id) {
-          nextRoofRackKey = '';
-          skippedRoofRack = true;
-        }
-      }
-
-      const updated: RentalRequest = {
-        ...rental,
-        vehicleMake: nextVehicleMake || undefined,
-        vehicleModel: nextVehicleModel || undefined,
-        hsn: nextHsn || undefined,
-        tsn: nextTsn || undefined,
-        relingType: nextRelingType || rental.relingType,
-        roofRackInventoryKey: nextRoofRackKey || undefined,
-      };
-      const nextMissing = calculateMissingInfo(updated);
-      await updateRentalRequest(rental.id, {
-        vehicleMake: nextVehicleMake || undefined,
-        vehicleModel: nextVehicleModel || undefined,
-        hsn: nextHsn || undefined,
-        tsn: nextTsn || undefined,
-        relingType: nextRelingType || rental.relingType,
-        roofRackInventoryKey: nextRoofRackKey || undefined,
-        missingInfo: nextMissing,
-      });
-      setRental(updated);
-      setMissingInfo(nextMissing);
-      setVehicleMakeInput(nextVehicleMake);
-      setVehicleModelInput(nextVehicleModel);
-      setHsnInput(nextHsn);
-      setTsnInput(nextTsn);
-      setRoofRackKey(nextRoofRackKey);
-      setRoofRackDirty(false);
-
-      if (skippedRoofRack) {
-        alert('Kundenprofil übernommen. Dachträger-Bundle wurde wegen Konflikt nicht gesetzt.');
-      } else {
-        alert('Kundenprofil in den Vorgang übernommen.');
-      }
-    } catch (e) {
-      console.error('Failed to apply customer profile:', e);
-      alert('Kundenprofil konnte nicht übernommen werden.');
-    } finally {
-      setActionLoading(false);
+    if (!nextMake && !nextModel && !nextHsn && !nextTsn && !nextRoofRackKey) {
+      showError('Im Kundenprofil sind keine Fahrzeug-/Dachträger-Daten hinterlegt.');
+      return;
     }
+
+    setVehicleMakeInput(nextMake);
+    setVehicleModelInput(nextModel);
+    setHsnInput(nextHsn);
+    setTsnInput(nextTsn);
+    if (nextRoofRackKey) {
+      setRoofRackKey(nextRoofRackKey);
+      setRoofRackDirty(true);
+    }
+    showInfo('Kundenprofil übernommen.');
   };
 
   const handleSaveRoofRackKey = async () => {
     if (!rental) return;
     setActionLoading(true);
+
     try {
-      const nextRaw = roofRackKey.trim();
-      const validation = validateRoofRackAssignment({
+      const nextRaw = sanitizeRoofRackKey(roofRackKey.trim());
+      const rentalForCheck: RentalRequest = {
         ...rental,
         roofRackInventoryKey: nextRaw || undefined,
-      });
+      };
+
+      const validation = validateRoofRackAssignment(rentalForCheck);
       if (!validation.ok) {
-        alert(validation.errors.join('\n'));
+        showError(validation.errors.join('\n'));
         return;
       }
 
       const conflict = await findRoofRackConflict({
         ...rental,
-        roofRackInventoryKey: validation.normalizedKey || undefined,
+        roofRackInventoryKey: nextRaw || undefined,
       });
+
       if (conflict) {
-        alert(
-          `Dachträger-Bundle ist bereits belegt in Vorgang ${conflict.conflictId} (${new Date(conflict.conflictStart).toLocaleDateString('de-DE')} - ${new Date(conflict.conflictEnd).toLocaleDateString('de-DE')}).`
-        );
-        return;
+        const ok = await requestConfirm({
+          title: 'Dachträger belegt'
+          ,
+          message:
+            `Dachträger-Bundle ist bereits belegt in Vorgang ${conflict.conflictId} (${new Date(conflict.conflictStart).toLocaleDateString('de-DE')} - ${new Date(conflict.conflictEnd).toLocaleDateString('de-DE')}).\n\nTrotzdem zuweisen?`
+          ,
+          confirmLabel: 'Trotzdem zuweisen'
+          ,
+          cancelLabel: 'Abbrechen'
+          ,
+          danger: true,
+        });
+        if (!ok) return;
       }
 
-      const nextKey = validation.normalizedKey;
-      await updateRentalRequest(rental.id, { roofRackInventoryKey: nextKey || undefined });
-      const updated: RentalRequest = {
-        ...rental,
-        roofRackInventoryKey: nextKey || undefined,
-      };
+      await updateRentalRequest(rental.id, { roofRackInventoryKey: nextRaw || undefined });
+      const updated: RentalRequest = { ...rental, roofRackInventoryKey: nextRaw || undefined };
       setRental(updated);
-      setRoofRackKey(nextKey);
+      setRoofRackKey(nextRaw);
       setRoofRackDirty(false);
+
       if (customer) {
-        const customerUpdated: Customer = {
-          ...customer,
-          assignedVehicleMake: rental.vehicleMake || customer.assignedVehicleMake,
-          assignedVehicleModel: rental.vehicleModel || customer.assignedVehicleModel,
-          assignedHsn: rental.hsn || customer.assignedHsn,
-          assignedTsn: rental.tsn || customer.assignedTsn,
-          assignedRelingType: (rental.relingType as any) || customer.assignedRelingType,
-          assignedRoofRackInventoryKey: nextKey || undefined,
-          roofRackDecisionUpdatedAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-        await updateCustomer(customerUpdated);
-        setCustomer(customerUpdated);
+        const shouldUpdateCustomer = await requestConfirm({
+          title: 'Kundenprofil aktualisieren?'
+          ,
+          message: 'Sollen die Dachträger-Daten auch im Kundenprofil gespeichert werden?'
+          ,
+          confirmLabel: 'Speichern'
+          ,
+          cancelLabel: 'Nein'
+          ,
+          danger: false,
+        });
+
+        if (shouldUpdateCustomer) {
+          const customerUpdated: Customer = {
+            ...customer,
+            assignedRoofRackInventoryKey: nextRaw || undefined,
+            assignedRelingType: (rental.relingType as any) || (customer as any).assignedRelingType,
+            roofRackDecisionUpdatedAt: Date.now(),
+            updatedAt: Date.now(),
+          } as any;
+          await updateCustomer(customerUpdated);
+          setCustomer(customerUpdated);
+        }
       }
-      alert('Dachträger-Zuordnung gespeichert.');
+
+      showInfo('Dachträger-Zuordnung gespeichert.');
     } catch (e) {
       console.error('Failed to update roof rack key:', e);
-      alert('Konnte Dachträger-Zuordnung nicht speichern.');
+      showError('Konnte Dachträger-Zuordnung nicht speichern.');
     } finally {
       setActionLoading(false);
     }
@@ -947,7 +970,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   const handleReschedule = async () => {
     if (!rental) return;
     if (!newStartDate || !newEndDate) {
-      alert('Bitte beide Daten eingeben.');
+      showError('Bitte beide Daten eingeben.');
       return;
     }
 
@@ -957,19 +980,19 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
     const returnTs = combineLocalDateAndTime(newEndDate, newEndTime);
 
     if (Number.isNaN(start) || Number.isNaN(end)) {
-      alert('Bitte gültige Start- und Enddaten eingeben.');
+      showError('Bitte gültige Start- und Enddaten eingeben.');
       return;
     }
     if (start >= end) {
-      alert('Ende muss nach Start liegen.');
+      showError('Ende muss nach Start liegen.');
       return;
     }
     if (Number.isNaN(pickupTs) || Number.isNaN(returnTs)) {
-      alert('Bitte gültige Uhrzeiten für Abholung und Rückgabe eingeben.');
+      showError('Bitte gültige Uhrzeiten für Abholung und Rückgabe eingeben.');
       return;
     }
     if (pickupTs >= returnTs) {
-      alert('Rückgabe muss nach Abholung liegen.');
+      showError('Rückgabe muss nach Abholung liegen.');
       return;
     }
 
@@ -1028,14 +1051,14 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
       setNewEndTime('18:00');
 
       if (calendarSyncError) {
-        alert('Zeitraum gespeichert. Kalender-Eintrag konnte nicht aktualisiert werden.');
+        showInfo('Zeitraum gespeichert. Kalender-Eintrag konnte nicht aktualisiert werden.');
       } else {
-        alert('Zeitraum und Kalender erfolgreich geändert!');
+        showInfo('Zeitraum und Kalender erfolgreich geändert!');
       }
       onRefresh?.();
     } catch (e: any) {
       console.error('Failed to reschedule rental:', e);
-      alert(e?.error || e?.message || 'Konnte Zeitraum nicht ändern.');
+      showError(e?.error || e?.message || 'Konnte Zeitraum nicht ändern.');
     } finally {
       setActionLoading(false);
     }
@@ -1044,6 +1067,41 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        {confirmModal && (
+          <ConfirmModal
+            title={confirmModal.title}
+            message={confirmModal.message}
+            confirmLabel={confirmModal.confirmLabel}
+            cancelLabel={confirmModal.cancelLabel}
+            danger={confirmModal.danger}
+            onConfirm={() => {
+              const resolve = confirmResolveRef.current;
+              confirmResolveRef.current = null;
+              setConfirmModal(null);
+              resolve?.(true);
+            }}
+            onCancel={() => {
+              const resolve = confirmResolveRef.current;
+              confirmResolveRef.current = null;
+              setConfirmModal(null);
+              resolve?.(false);
+            }}
+          />
+        )}
+        {confirmArchive && (
+          <ConfirmModal
+            title="Vorgang wirklich löschen?"
+            message="Der Vorgang wird archiviert und aus den Vorgängen entfernt."
+            confirmLabel="Ja, archivieren"
+            cancelLabel="Abbrechen"
+            danger
+            onConfirm={() => {
+              void handleArchive();
+            }}
+            onCancel={() => setConfirmArchive(false)}
+          />
+        )}
+
         {/* Header */}
         <div className="border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
@@ -1058,9 +1116,9 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(rental.id);
-                      alert('ID kopiert.');
+                      showInfo('ID kopiert.');
                     } catch {
-                      alert('Konnte ID nicht kopieren.');
+                      showError('Konnte ID nicht kopieren.');
                     }
                   }}
                   aria-label="Interne ID kopieren"
@@ -1094,26 +1152,21 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
 
         {/* Content */}
         <div className="px-6 py-4 space-y-6">
-          {confirmArchive && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-              <div className="text-sm font-semibold text-red-900">Vorgang wirklich löschen?</div>
-              <div className="text-sm text-red-800 mt-1">
-                Der Vorgang wird archiviert und aus den Vorgängen entfernt.
-              </div>
-              <div className="mt-3 flex items-center gap-2">
+          {notice && (
+            <div
+              className={[
+                'rounded-lg border px-4 py-3 text-sm whitespace-pre-line',
+                notice.tone === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-slate-200 bg-slate-50 text-slate-800',
+              ].join(' ')}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>{notice.text}</div>
                 <button
-                  className="px-3 py-2 rounded-md bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-60"
-                  onClick={handleArchive}
-                  disabled={actionLoading}
+                  className="text-slate-600 hover:text-slate-900"
+                  onClick={() => setNotice(null)}
+                  aria-label="Hinweis schließen"
                 >
-                  Ja, archivieren
-                </button>
-                <button
-                  className="px-3 py-2 rounded-md border border-red-200 text-red-900 text-sm hover:bg-red-100 disabled:opacity-60"
-                  onClick={() => setConfirmArchive(false)}
-                  disabled={actionLoading}
-                >
-                  Abbrechen
+                  ✕
                 </button>
               </div>
             </div>
@@ -1127,47 +1180,55 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
               </div>
               <div className="mt-3 space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-indigo-900 mb-1">
+                  <label className="block text-sm font-medium text-indigo-900 mb-1" htmlFor="reschedule-start-date">
                     Neues Startdatum
                   </label>
                   <input
+                    id="reschedule-start-date"
                     type="date"
                     value={newStartDate}
                     onChange={(e) => setNewStartDate(e.target.value)}
                     className="w-full px-3 py-2 border border-indigo-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Neues Startdatum"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-indigo-900 mb-1">
+                  <label className="block text-sm font-medium text-indigo-900 mb-1" htmlFor="reschedule-start-time">
                     Abholzeit
                   </label>
                   <input
+                    id="reschedule-start-time"
                     type="time"
                     value={newStartTime}
                     onChange={(e) => setNewStartTime(e.target.value)}
                     className="w-full px-3 py-2 border border-indigo-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Abholzeit"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-indigo-900 mb-1">
+                  <label className="block text-sm font-medium text-indigo-900 mb-1" htmlFor="reschedule-end-date">
                     Neues Enddatum
                   </label>
                   <input
+                    id="reschedule-end-date"
                     type="date"
                     value={newEndDate}
                     onChange={(e) => setNewEndDate(e.target.value)}
                     className="w-full px-3 py-2 border border-indigo-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Neues Enddatum"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-indigo-900 mb-1">
+                  <label className="block text-sm font-medium text-indigo-900 mb-1" htmlFor="reschedule-end-time">
                     Rückgabezeit
                   </label>
                   <input
+                    id="reschedule-end-time"
                     type="time"
                     value={newEndTime}
                     onChange={(e) => setNewEndTime(e.target.value)}
                     className="w-full px-3 py-2 border border-indigo-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Rückgabezeit"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -1210,10 +1271,11 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
               </div>
               <div className="mt-3 space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-amber-900 mb-1">
+                  <label className="block text-sm font-medium text-amber-900 mb-1" htmlFor="price-override-value">
                     Neuer Preis (€)
                   </label>
                   <input
+                    id="price-override-value"
                     type="number"
                     step="0.01"
                     min="0"
@@ -1221,16 +1283,19 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                     onChange={(e) => setOverridePrice(e.target.value)}
                     placeholder={getCurrentPrice() > 0 ? getCurrentPrice().toFixed(2) : '0.00'}
                     className="w-full px-3 py-2 border border-amber-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    aria-label="Neuer Preis in Euro"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-amber-900 mb-1">
+                  <label className="block text-sm font-medium text-amber-900 mb-1" htmlFor="price-override-reason">
                     Grund für die Preisänderung *
                   </label>
                   <select
+                    id="price-override-reason"
                     value={overrideReason}
                     onChange={(e) => setOverrideReason(e.target.value)}
                     className="w-full px-3 py-2 border border-amber-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    title="Grund für die Preisänderung"
                   >
                     <option value="">-- Bitte wählen --</option>
                     <option value="Sonderpreis">Sonderpreis</option>
@@ -1635,7 +1700,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       ].join(' ')}
                       onClick={() => handleSetAhkPresent('ja')}
                       disabled={actionLoading}
-                      aria-pressed={rental.ahkPresent === 'ja'}
+                      aria-pressed={rental.ahkPresent === 'ja' ? 'true' : 'false'}
                     >
                       Ja
                     </button>
@@ -1649,7 +1714,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       ].join(' ')}
                       onClick={() => handleSetAhkPresent('nein')}
                       disabled={actionLoading}
-                      aria-pressed={rental.ahkPresent === 'nein'}
+                      aria-pressed={rental.ahkPresent === 'nein' ? 'true' : 'false'}
                     >
                       Nein
                     </button>
@@ -1663,7 +1728,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       ].join(' ')}
                       onClick={() => handleSetAhkPresent('unklar')}
                       disabled={actionLoading}
-                      aria-pressed={rental.ahkPresent === 'unklar' || !rental.ahkPresent}
+                      aria-pressed={rental.ahkPresent === 'unklar' || !rental.ahkPresent ? 'true' : 'false'}
                       title="Zurücksetzen (unklar)"
                     >
                       Unklar
@@ -1718,7 +1783,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                                   prev.map((x) => (x.id === p.id ? { ...x, invoiceId: nextInvoiceId } : x))
                                 );
                               } catch (error) {
-                                alert('Konnte Rechnungszuordnung nicht speichern: ' + (error instanceof Error ? error.message : String(error)));
+                                showError('Konnte Rechnungszuordnung nicht speichern: ' + (error instanceof Error ? error.message : String(error)));
                               } finally {
                                 setPaymentAssignBusyId(null);
                               }
@@ -1739,13 +1804,23 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                       <button
                         className="shrink-0 px-3 py-1.5 rounded-md border border-gray-200 text-xs hover:bg-gray-50 disabled:opacity-60"
                         onClick={async () => {
-                          const ok = confirm('Diese Zahlung wirklich löschen?');
+                          const ok = await requestConfirm({
+                            title: 'Zahlung löschen?'
+                            ,
+                            message: 'Diese Zahlung wirklich löschen?'
+                            ,
+                            confirmLabel: 'Löschen'
+                            ,
+                            cancelLabel: 'Abbrechen'
+                            ,
+                            danger: true,
+                          });
                           if (!ok) return;
                           try {
                             await deletePayment(p.id);
                             setPayments((prev) => prev.filter((x) => x.id !== p.id));
                           } catch (e) {
-                            alert('Konnte Zahlung nicht löschen: ' + (e instanceof Error ? e.message : String(e)));
+                            showError('Konnte Zahlung nicht löschen: ' + (e instanceof Error ? e.message : String(e)));
                           }
                         }}
                         disabled={paymentAssignBusyId === p.id}
@@ -1889,7 +1964,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                           onClick={() => {
                             const toEmail = (customer?.email || '').trim();
                             if (!toEmail) {
-                              alert('Keine Kunden-E-Mail hinterlegt.');
+                              showError('Keine Kunden-E-Mail hinterlegt.');
                               return;
                             }
                             openInvoiceCompose({
@@ -2004,12 +2079,22 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                   </button>
                   <button
                     onClick={async () => {
-                      const ok = confirm('Angebot als abgelehnt markieren?');
+                      const ok = await requestConfirm({
+                        title: 'Angebot ablehnen?'
+                        ,
+                        message: 'Angebot als abgelehnt markieren?'
+                        ,
+                        confirmLabel: 'Ja, ablehnen'
+                        ,
+                        cancelLabel: 'Abbrechen'
+                        ,
+                        danger: true,
+                      });
                       if (!ok) return;
                       await handleTransitionAction('abgelehnt', (ts) => {
                         setRental((prev) => (prev ? { ...prev, rejectedAt: ts } : prev));
                       });
-                      alert('Angebot als abgelehnt gespeichert.');
+                      showInfo('Angebot als abgelehnt gespeichert.');
                     }}
                     title="Angebot als abgelehnt markieren"
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
@@ -2041,7 +2126,17 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                     const warningText = unpaidInvoice
                       ? `\n\n⚠️ Hinweis: Rechnung ${unpaidInvoice.invoiceNo} ist noch nicht als bezahlt markiert (Status: ${unpaidInvoice.state}).`
                       : '';
-                    const ok = confirm(`Vorgang als abgeschlossen markieren?${warningText}`);
+                    const ok = await requestConfirm({
+                      title: 'Vorgang abschließen?'
+                      ,
+                      message: `Vorgang als abgeschlossen markieren?${warningText}`
+                      ,
+                      confirmLabel: 'Abschließen'
+                      ,
+                      cancelLabel: 'Abbrechen'
+                      ,
+                      danger: false,
+                    });
                     if (!ok) return;
                     await handleTransitionAction('abgeschlossen', (ts) => {
                       setRental((prev) => (prev ? { ...prev, completedAt: ts } : prev));

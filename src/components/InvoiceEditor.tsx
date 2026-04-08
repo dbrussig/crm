@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { Download, Eye, FileText, Mail, Save, Send, X } from 'lucide-react';
+import { ChevronDown, Download, Eye, FileText, Mail, Save, Send, X } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
 import { downloadInvoicePDF, openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
@@ -17,6 +17,8 @@ import { getPaymentsByInvoice } from '../services/sqliteService';
 import InvoiceWorkflowBar from './InvoiceWorkflowBar';
 import { useAutoSave } from '../hooks/useAutoSave';
 import AutoSaveIndicator from './AutoSaveIndicator';
+import InvoiceLineItems from './InvoiceLineItems';
+import ConfirmModal from './ConfirmModal';
 
 interface InvoiceEditorProps {
   invoice?: Partial<Invoice>;
@@ -49,6 +51,53 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [inlineStatus, setInlineStatus] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const depositReceivedAmountRef = useRef<HTMLInputElement | null>(null);
+
+  const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const moreActionsWrapRef = useRef<HTMLDivElement | null>(null);
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+  }) => {
+    setConfirmModal(opts);
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+    });
+  };
+
+  useEffect(() => {
+    if (!moreActionsOpen) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const el = moreActionsWrapRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && el.contains(e.target)) return;
+      setMoreActionsOpen(false);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreActionsOpen(false);
+    };
+
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [moreActionsOpen]);
 
   // Beleg-Daten
   const [invoiceType, setInvoiceType] = useState<InvoiceType>(initialInvoice?.invoiceType || 'Angebot');
@@ -514,7 +563,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   });
 
   // Speichern
-  const handleSave = () => {
+  const handleSave = async () => {
     setShowValidationErrors(true);
     if (!canSave) {
       setInlineStatus({ tone: 'error', text: 'Bitte Name und Adresse im Kundenblock ausfüllen.' });
@@ -526,7 +575,13 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     const hasNamedItems = items.some((it) => it.name.trim().length > 0);
     const allZeroPrice = items.every((it) => !it.unitPrice || it.unitPrice === 0);
     if (hasNamedItems && allZeroPrice) {
-      const ok = confirm('⚠️ Alle Positionen haben den Preis 0,00 €.\n\nTrotzdem speichern?');
+      const ok = await requestConfirm({
+        title: 'Speichern bestätigen',
+        message: '⚠️ Alle Positionen haben den Preis 0,00 €.\n\nTrotzdem speichern?',
+        confirmLabel: 'Trotzdem speichern',
+        cancelLabel: 'Abbrechen',
+        danger: false,
+      });
       if (!ok) return;
     }
 
@@ -677,6 +732,27 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-white">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = confirmResolveRef.current;
+            confirmResolveRef.current = null;
+            setConfirmModal(null);
+            resolve?.(false);
+          }}
+        />
+      )}
       {/* Header */}
       <div className="border-b border-gray-200 p-4">
         <div className="flex items-center justify-between">
@@ -686,18 +762,24 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             {getStatusBadge()}
             {onClose && (
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (isDirty) {
-                    const ok = confirm('Ungespeicherte Änderungen verwerfen und schließen?');
+                    const ok = await requestConfirm({
+                      title: 'Änderungen verwerfen?',
+                      message: 'Ungespeicherte Änderungen verwerfen und schließen?',
+                      confirmLabel: 'Verwerfen',
+                      cancelLabel: 'Abbrechen',
+                      danger: true,
+                    });
                     if (!ok) return;
                   }
                   onClose();
                 }}
-                className="text-gray-400 hover:text-gray-500"
-                title="Editor schließen"
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                title="Schließen"
               >
-                <span className="sr-only">Schließen</span>
-                <X className="h-6 w-6" aria-hidden="true" />
+                <X size={16} aria-hidden="true" />
+                Schließen
               </button>
             )}
           </div>
@@ -770,13 +852,19 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 type="button"
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
                 title="Setzt Default-Texte fuer dieses Layout (Zahlung, Footer, etc.)"
-                onClick={() => {
-                  const ok = confirm('Default-Texte fuer dieses Layout anwenden?\n\nBestehende Texte werden ueberschrieben.');
+                onClick={async () => {
+                  const ok = await requestConfirm({
+                    title: 'Default-Texte anwenden?',
+                    message: 'Default-Texte fuer dieses Layout anwenden?\n\nBestehende Texte werden ueberschrieben.',
+                    confirmLabel: 'Anwenden',
+                    cancelLabel: 'Abbrechen',
+                    danger: false,
+                  });
                   if (!ok) return;
                   applyLayoutDefaults({ force: true });
                 }}
               >
-                Defaults
+                Default-Texte anwenden
               </button>
             </div>
           </div>
@@ -958,116 +1046,18 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         )}
 
-        {/* Positionen */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-gray-900">Positionen</h3>
-            <button
-              onClick={addPosition}
-              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
-              title="Neue Position hinzufügen"
-            >
-              + Position
-            </button>
-          </div>
-
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            {/* Header */}
-            <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-700">
-              <div className="col-span-1">#</div>
-              <div className="col-span-5">{subtotalProfile?.labels?.description || 'Beschreibung'}</div>
-              {showQty && <div className="col-span-2">{subtotalProfile?.labels?.quantity || 'Menge'}</div>}
-              {showUnitPrice && <div className="col-span-2">{subtotalProfile?.labels?.unitPrice || 'EP (€)'}</div>}
-              <div className="col-span-1"></div>
-            </div>
-
-            {/* Positionen */}
-            {items.map((item, index) => (
-              <div key={item.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-200 items-start">
-                <div className="col-span-1 text-sm text-gray-500">{index + 1}</div>
-
-                <div className="col-span-5">
-                  <textarea
-                    value={item.name}
-                    onChange={(e) => updatePosition(item.id, 'name', e.target.value)}
-                    rows={2}
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Beschreibung"
-                    aria-label={`Position ${index + 1}: Beschreibung`}
-                  />
-                  <div className="mt-1 flex gap-2">
-                    {showUnit && (
-                      <input
-                        type="text"
-                        value={item.unit}
-                        onChange={(e) => updatePosition(item.id, 'unit', e.target.value)}
-                        className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
-                        placeholder={subtotalProfile?.labels?.unit || 'Einheit'}
-                        aria-label={`Position ${index + 1}: ${subtotalProfile?.labels?.unit || 'Einheit'}`}
-                      />
-                    )}
-                    {showTax && (
-                      <input
-                        type="number"
-                        value={item.taxPercent}
-                        onChange={(e) => updatePosition(item.id, 'taxPercent', parseFloat(e.target.value))}
-                        step="0.01"
-                        className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
-                        placeholder={subtotalProfile?.labels?.tax || 'USt.'}
-                        aria-label={`Position ${index + 1}: ${subtotalProfile?.labels?.tax || 'USt.'}`}
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {showQty && (
-                  <div className="col-span-2">
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => updatePosition(item.id, 'quantity', parseFloat(e.target.value))}
-                      step="0.01"
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                      aria-label={`Position ${index + 1}: ${subtotalProfile?.labels?.quantity || 'Menge'}`}
-                    />
-                  </div>
-                )}
-
-                {showUnitPrice && (
-                  <div className="col-span-2">
-                    <input
-                      type="number"
-                      value={item.unitPrice}
-                      onChange={(e) => updatePosition(item.id, 'unitPrice', parseFloat(e.target.value))}
-                      step="0.01"
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                      aria-label={`Position ${index + 1}: ${subtotalProfile?.labels?.unitPrice || 'Einzelpreis'}`}
-                    />
-                  </div>
-                )}
-
-                <div className="col-span-1">
-                  <button
-                    onClick={() => removePosition(item.id)}
-                    className="text-red-600 hover:text-red-700"
-                    title="Position löschen"
-                    aria-label={`Position ${index + 1} löschen`}
-                  >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-
-                {showLineTotal && (
-                  <div className="col-span-11 col-start-2 mt-2 text-right text-sm text-gray-600">
-                    {subtotalProfile?.labels?.lineTotal || 'Betrag'}: {(item.unitPrice * item.quantity).toFixed(2)} €
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <InvoiceLineItems
+          items={items}
+          labels={subtotalProfile?.labels}
+          showQty={showQty}
+          showUnit={showUnit}
+          showUnitPrice={showUnitPrice}
+          showTax={showTax}
+          showLineTotal={showLineTotal}
+          onAdd={addPosition}
+          onRemove={removePosition}
+          onUpdate={updatePosition}
+        />
 
         {/* Summen */}
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
@@ -1271,7 +1261,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         {/* Footer Buttons */}
         <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-gray-200 bg-white/95 px-4 pb-4 pt-4 backdrop-blur">
           <div className="flex items-center justify-between gap-2">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={handleSave}
               className={primaryButtonClass}
@@ -1281,6 +1271,17 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               <Save size={14} aria-hidden="true" />
               Speichern
             </button>
+
+            {onSend && initialInvoice?.id && state === 'entwurf' && (
+              <button
+                onClick={() => onSend(initialInvoice.id!)}
+                className={secondaryButtonClass}
+                title="Belegstatus auf gesendet setzen"
+              >
+                <Send size={14} aria-hidden="true" />
+                Senden
+              </button>
+            )}
 
             {invoiceType === 'Rechnung' && (
               <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-white">
@@ -1328,35 +1329,84 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               PDF ansehen
             </button>
 
-            <button
-              onClick={handleSavePdf}
-              className={secondaryButtonClass}
-              title="PDF lokal speichern"
-              disabled={!template}
-            >
-              <FileText size={14} aria-hidden="true" />
-              PDF speichern
-            </button>
+            <div className="relative" ref={moreActionsWrapRef}>
+              <button
+                type="button"
+                onClick={() => setMoreActionsOpen((v) => !v)}
+                className={secondaryButtonClass}
+                title="Weitere Aktionen"
+                aria-haspopup="menu"
+                aria-expanded={moreActionsOpen ? 'true' : 'false'}
+              >
+                Mehr Aktionen
+                <ChevronDown size={14} aria-hidden="true" />
+              </button>
 
-            <button
-              onClick={handleMailCustomer}
-              className={secondaryButtonClass}
-              title="Öffnet Gmail-Entwurf (PDF bitte über 'PDF speichern' erstellen und anhängen)."
-              disabled={!template}
-            >
-              <Mail size={14} aria-hidden="true" />
-              Mail
-            </button>
+              {moreActionsOpen && (
+                <div
+                  className="absolute left-0 bottom-full mb-2 w-64 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreActionsOpen(false);
+                      void handleSavePdf();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                    disabled={!template}
+                    title="PDF lokal speichern"
+                  >
+                    <FileText size={14} aria-hidden="true" />
+                    PDF speichern
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreActionsOpen(false);
+                      void handleMailCustomer();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                    disabled={!template}
+                    title="Öffnet Gmail-Entwurf (PDF bitte über 'PDF speichern' erstellen und anhängen)."
+                  >
+                    <Mail size={14} aria-hidden="true" />
+                    Mail
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreActionsOpen(false);
+                      handleDownloadHtml();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                    disabled={!template}
+                    title="Optional: druckbare HTML-Datei herunterladen"
+                  >
+                    <Download size={14} aria-hidden="true" />
+                    HTML herunterladen
+                  </button>
 
-            <button
-              onClick={handleDownloadHtml}
-              className={secondaryButtonClass}
-              title="Optional: druckbare HTML-Datei herunterladen"
-              disabled={!template}
-            >
-              <Download size={14} aria-hidden="true" />
-              HTML
-            </button>
+                  {invoiceType === 'Rechnung' && onReissue && initialInvoice?.id && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreActionsOpen(false);
+                        onReissue(initialInvoice.id!);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+                      title="Storniert die alte Rechnung und erstellt einen Folgebeleg mit Suffix -2/-3/..."
+                    >
+                      Rechnung neu generieren
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1368,28 +1418,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               />
             )}
 
-            {/* Rechnung neu generieren */}
-            {invoiceType === 'Rechnung' && onReissue && initialInvoice?.id && (
-              <button
-                onClick={() => onReissue(initialInvoice.id!)}
-                className="inline-flex items-center gap-2 rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                title="Storniert die alte Rechnung und erstellt einen Folgebeleg mit Suffix -2/-3/..."
-              >
-                Rechnung neu generieren
-              </button>
-            )}
-
-            {/* Senden */}
-            {onSend && initialInvoice?.id && state === 'entwurf' && (
-              <button
-                onClick={() => onSend(initialInvoice.id!)}
-                className={secondaryButtonClass}
-                title="Belegstatus auf gesendet setzen"
-              >
-                <Send size={14} aria-hidden="true" />
-                Senden
-              </button>
-            )}
+            
           </div>
         </div>
         </div>
