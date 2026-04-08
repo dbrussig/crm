@@ -27,6 +27,7 @@ import InvoiceTextBlocks from './invoice/InvoiceTextBlocks';
 import InvoicePaymentsBlock from './invoice/InvoicePaymentsBlock';
 import InvoiceTotalsSummary from './invoice/InvoiceTotalsSummary';
 import InvoiceActions from './invoice/InvoiceActions';
+import { Card } from './invoice/Card';
 
 // ─── Inline Status Hook ───────────────────────────────────────────
 
@@ -526,13 +527,13 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // ═══════════════════════════════════════════════════════════════
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-slate-50">
       {confirmDialog}
 
       {/* Header */}
-      <div className="border-b border-gray-200 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">Beleg Editor</h2>
+      <div className="border-b border-slate-200 bg-white px-4 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-slate-900">Beleg Editor</h2>
           <div className="flex items-center gap-3">
             <AutoSaveIndicator state={saveState} />
             <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[state]}`}>
@@ -551,7 +552,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   }
                   onClose();
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm hover:bg-slate-50 text-slate-700"
                 title="Schließen"
               >
                 <X size={16} aria-hidden="true" /> Schließen
@@ -561,7 +562,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto p-4 space-y-6">
 
         {/* Inline Status */}
         {inlineStatus && (
@@ -573,53 +575,57 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         )}
 
-        {/* Header Fields */}
-        <InvoiceHeaderFields
-          invoiceType={invoiceType}
-          onTypeChange={setInvoiceType}
-          typeDisabled={!!initialInvoice?.id}
-          invoiceNo={invoiceNo}
-          onInvoiceNoChange={(v: string) => setValue('invoiceNo', v)}
-          invoiceNoDisabled={!!initialInvoice?.id}
-          layoutId={layoutId}
-          onLayoutChange={setLayoutId}
-          onApplyDefaults={async () => {
-            const ok = await requestConfirm({
-              title: 'Default-Texte anwenden?',
-              message: 'Default-Texte fuer dieses Layout anwenden?\n\nBestehende Texte werden ueberschrieben.',
-              confirmLabel: 'Anwenden', cancelLabel: 'Abbrechen', danger: false,
-            });
-            if (!ok) return;
-            applyLayoutDefaults({ force: true });
-          }}
-          invoiceDate={invoiceDate}
-          onDateChange={(v: string) => setValue('invoiceDate', v)}
-          dueDate={dueDate}
-          onDueDateChange={(v: string) => setValue('dueDate', v)}
-        />
+        {/* Karte 1: Kopfdaten */}
+        <Card title="Kopfdaten">
+          <InvoiceHeaderFields
+            invoiceType={invoiceType}
+            onTypeChange={setInvoiceType}
+            typeDisabled={!!initialInvoice?.id}
+            invoiceNo={invoiceNo}
+            onInvoiceNoChange={(v: string) => setValue('invoiceNo', v)}
+            invoiceNoDisabled={!!initialInvoice?.id}
+            layoutId={layoutId}
+            onLayoutChange={setLayoutId}
+            onApplyDefaults={async () => {
+              const ok = await requestConfirm({
+                title: 'Default-Texte anwenden?',
+                message: 'Default-Texte fuer dieses Layout anwenden?\n\nBestehende Texte werden ueberschrieben.',
+                confirmLabel: 'Anwenden', cancelLabel: 'Abbrechen', danger: false,
+              });
+              if (!ok) return;
+              applyLayoutDefaults({ force: true });
+            }}
+            invoiceDate={invoiceDate}
+            onDateChange={(v: string) => setValue('invoiceDate', v)}
+            dueDate={dueDate}
+            onDueDateChange={(v: string) => setValue('dueDate', v)}
+          />
+        </Card>
 
-        {/* Customer Block */}
-        <InvoiceCustomerBlock
-          customers={customers}
-          selectedCustomerId={selectedCustomerId}
-          onCustomerChange={setSelectedCustomerId}
-          salutation={salutation}
-          onSalutationChange={(v: string) => setValue('salutation', v)}
-          buyerName={buyerName}
-          onBuyerNameChange={(v: string) => {
-            setValue('buyerName', v);
-            if (showValidationErrors) clearStatus();
-          }}
-          buyerAddress={buyerAddress}
-          onBuyerAddressChange={(v: string) => {
-            setValue('buyerAddress', v);
-            if (showValidationErrors) clearStatus();
-          }}
-          showValidationErrors={showValidationErrors}
-          clearStatus={clearStatus}
-          hasBuyerName={hasBuyerName}
-          hasBuyerAddress={hasBuyerAddress}
-        />
+        {/* Karte 2: Empfänger */}
+        <Card title="Empfänger">
+          <InvoiceCustomerBlock
+            customers={customers}
+            selectedCustomerId={selectedCustomerId}
+            onCustomerChange={setSelectedCustomerId}
+            salutation={salutation}
+            onSalutationChange={(v: string) => setValue('salutation', v)}
+            buyerName={buyerName}
+            onBuyerNameChange={(v: string) => {
+              setValue('buyerName', v);
+              if (showValidationErrors) clearStatus();
+            }}
+            buyerAddress={buyerAddress}
+            onBuyerAddressChange={(v: string) => {
+              setValue('buyerAddress', v);
+              if (showValidationErrors) clearStatus();
+            }}
+            showValidationErrors={showValidationErrors}
+            clearStatus={clearStatus}
+            hasBuyerName={hasBuyerName}
+            hasBuyerAddress={hasBuyerAddress}
+          />
+        </Card>
 
         {/* Verknüpfte Zahlungen */}
         {initialInvoice?.id && (
@@ -681,38 +687,42 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         )}
 
-        {/* Positionen */}
-        <InvoiceLineItems
-          items={fields as InvoiceItem[]}
-          showQty={showQty} showUnit={showUnit} showUnitPrice={showUnitPrice}
-          showTax={showTax} showLineTotal={showLineTotal}
-          onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition}
-        />
+        {/* Karte 3: Positionen - ohne Padding für volle Tabellenbreite */}
+        <Card title="Positionen" noPadding>
+          <InvoiceLineItems
+            items={fields as InvoiceItem[]}
+            showQty={showQty} showUnit={showUnit} showUnitPrice={showUnitPrice}
+            showTax={showTax} showLineTotal={showLineTotal}
+            onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition}
+          />
+        </Card>
 
-        {/* Summen */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Zwischensumme:</span>
-              <span className="font-medium">{totals.subtotal.toFixed(2)} €</span>
-            </div>
-            {totals.hasTax && (
+        {/* Karte 4: Summen & Vorschau - rechtsbündig wie Kassenbeleg */}
+        <div className="flex justify-end">
+          <Card className="w-full max-w-sm">
+            <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">USt. ({totals.singleTaxRate != null ? `${totals.singleTaxRate}%` : `${totals.effectiveTaxRate}%`}):</span>
-                <span className="font-medium">{totals.tax.toFixed(2)} €</span>
+                <span className="text-slate-600">Zwischensumme:</span>
+                <span className="font-medium">{totals.subtotal.toFixed(2)} €</span>
               </div>
-            )}
-            {isDepositSupportedType && depositEnabled && depositText && depositAmountPreview > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Anzahlung ({depositPercent || 0}%):</span>
-                <span className="font-medium">{depositAmountPreview.toFixed(2)} €</span>
+              {totals.hasTax && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">USt. ({totals.singleTaxRate != null ? `${totals.singleTaxRate}%` : `${totals.effectiveTaxRate}%`}):</span>
+                  <span className="font-medium">{totals.tax.toFixed(2)} €</span>
+                </div>
+              )}
+              {isDepositSupportedType && depositEnabled && depositText && depositAmountPreview > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Anzahlung ({depositPercent || 0}%):</span>
+                  <span className="font-medium">{depositAmountPreview.toFixed(2)} €</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-200">
+                <span>Gesamtbetrag:</span>
+                <span>{grandTotalPreview.toFixed(2)} €</span>
               </div>
-            )}
-            <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-300">
-              <span>Gesamtbetrag:</span>
-              <span>{grandTotalPreview.toFixed(2)} €</span>
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Anzahlung */}
@@ -835,86 +845,87 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </details>
         )}
 
-        {/* Footer Buttons */}
-        <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-gray-200 bg-white/95 px-4 pb-4 pt-4 backdrop-blur">
+        </div>{/* End max-w-5xl container */}
+      </div>
+
+      {/* Sticky Footer */}
+      <div className="sticky bottom-0 z-20 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="max-w-5xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
-              <button onClick={handleSave} className={primaryBtn} title="Beleg speichern" disabled={!canSave}>
-                <Save size={14} aria-hidden="true" /> Speichern
+              <button 
+                onClick={handleSave} 
+                className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60" 
+                title="Beleg speichern" 
+                disabled={!canSave}
+              >
+                <Save size={14} aria-hidden="true" /> Beleg Speichern
               </button>
               {onSend && initialInvoice?.id && state === 'entwurf' && (
-                <button onClick={() => onSend(initialInvoice.id!)} className={secondaryBtn} title="Belegstatus auf gesendet setzen">
+                <button 
+                  onClick={() => onSend(initialInvoice.id!)} 
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60" 
+                  title="Belegstatus auf gesendet setzen"
+                >
                   <Send size={14} aria-hidden="true" /> Senden
                 </button>
               )}
-              {invoiceType === 'Rechnung' && (
-                <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-white">
-                  <button type="button"
-                    onClick={() => {
-                      setDepositReceivedEnabled((v) => {
-                        const next = !v;
-                        if (next) setTimeout(() => depositReceivedAmountRef.current?.focus(), 0);
-                        return next;
-                      });
-                    }}
-                    className={`px-2 py-1 rounded text-sm border ${depositReceivedEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
-                    aria-pressed={depositReceivedEnabled ? 'true' : 'false'}
-                    title="Fuegt in der Rechnung einen Hinweis hinzu, dass die Kaution dankend erhalten wurde.">
-                    Kautionsbestaetigung
-                  </button>
-                  <input ref={depositReceivedAmountRef} type="number" step="0.01" min="0"
-                    className="w-28 px-2 py-1 border border-gray-300 rounded text-sm" placeholder="Wert"
-                    value={depositReceivedAmount || ''}
-                    onChange={(e) => setDepositReceivedAmount(Number(e.target.value))}
-                    disabled={!depositReceivedEnabled} aria-label="Kaution Wert in Euro" />
-                </div>
-              )}
-              <button onClick={exportHandlers.handlePreviewPdf} className={secondaryBtn}
-                title="PDF Vorschau öffnen" disabled={!template}>
-                <Eye size={14} aria-hidden="true" /> PDF ansehen
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={exportHandlers.handlePreviewPdf} 
+                className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                title="PDF Vorschau öffnen" 
+                disabled={!template}
+              >
+                <Eye size={14} aria-hidden="true" /> Vorschau
               </button>
               <div className="relative" ref={moreActions.wrapRef}>
-                <button type="button" onClick={() => moreActions.setOpen((v) => !v)}
-                  className={secondaryBtn} title="Weitere Aktionen"
-                  aria-haspopup="menu" aria-expanded={moreActions.open ? 'true' : 'false'}>
-                  Mehr Aktionen <ChevronDown size={14} aria-hidden="true" />
+                <button 
+                  type="button" 
+                  onClick={() => moreActions.setOpen((v) => !v)}
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60" 
+                  title="Weitere Aktionen"
+                  aria-haspopup="menu" 
+                  aria-expanded={moreActions.open ? 'true' : 'false'}
+                >
+                  Mehr... <ChevronDown size={14} aria-hidden="true" />
                 </button>
                 {moreActions.open && (
-                  <div className="absolute left-0 bottom-full mb-2 w-64 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden" role="menu">
-                    <button type="button" role="menuitem"
+                  <div className="absolute right-0 bottom-full mb-2 w-56 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden" role="menu">
+                    <button 
+                      type="button" 
+                      role="menuitem"
                       onClick={() => { moreActions.setOpen(false); void exportHandlers.handleSavePdf(); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                      disabled={!template} title="PDF lokal speichern">
-                      <FileText size={14} aria-hidden="true" /> PDF speichern
+                      disabled={!template} 
+                      title="PDF lokal speichern"
+                    >
+                      <FileText size={14} aria-hidden="true" /> Als PDF speichern
                     </button>
-                    <button type="button" role="menuitem"
+                    <button 
+                      type="button" 
+                      role="menuitem"
                       onClick={() => { moreActions.setOpen(false); void exportHandlers.handleMailCustomer(); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                      disabled={!template} title="Öffnet Gmail-Entwurf">
-                      <Mail size={14} aria-hidden="true" /> Mail
+                      disabled={!template} 
+                      title="Öffnet Gmail-Entwurf"
+                    >
+                      <Mail size={14} aria-hidden="true" /> Per Mail senden
                     </button>
-                    <button type="button" role="menuitem"
+                    <button 
+                      type="button" 
+                      role="menuitem"
                       onClick={() => { moreActions.setOpen(false); exportHandlers.handleDownloadHtml(); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                      disabled={!template} title="druckbare HTML-Datei herunterladen">
-                      <Download size={14} aria-hidden="true" /> HTML herunterladen
+                      disabled={!template} 
+                      title="druckbare HTML-Datei herunterladen"
+                    >
+                      <Download size={14} aria-hidden="true" /> HTML Download
                     </button>
-                    {invoiceType === 'Rechnung' && onReissue && initialInvoice?.id && (
-                      <button type="button" role="menuitem"
-                        onClick={() => { moreActions.setOpen(false); onReissue(initialInvoice.id!); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
-                        title="Storniert die alte Rechnung und erstellt einen Folgebeleg">
-                        Rechnung neu generieren
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {initialInvoice?.id && (
-                <InvoiceWorkflowBar currentType={invoiceType} nextActionLabel={workflowActionLabel} onAdvance={handleWorkflowAdvance} />
-              )}
             </div>
           </div>
         </div>
