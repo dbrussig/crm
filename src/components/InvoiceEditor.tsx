@@ -60,7 +60,13 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     buyerAddress: string;
     salutation: string;
     introText: string;
+    servicePeriodStart: string;
+    servicePeriodEnd: string;
+    depositPercent: number;
     depositText: string;
+    depositEnabled: boolean;
+    depositReceivedEnabled: boolean;
+    depositReceivedAmount: number;
     paymentTerms: string;
     paymentInfo: string;
     paypalText: string;
@@ -80,7 +86,29 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       buyerAddress: initialInvoice?.buyerAddress || '',
       salutation: initialInvoice?.salutation || '',
       introText: (initialInvoice as any)?.introText || '',
+      servicePeriodStart: (initialInvoice as any)?.servicePeriodStart
+        ? new Date((initialInvoice as any).servicePeriodStart).toISOString().substring(0, 10)
+        : '',
+      servicePeriodEnd: (initialInvoice as any)?.servicePeriodEnd
+        ? new Date((initialInvoice as any).servicePeriodEnd).toISOString().substring(0, 10)
+        : '',
+      depositPercent:
+        typeof (initialInvoice as any)?.depositPercent === 'number' ? (initialInvoice as any).depositPercent : 0,
       depositText: (initialInvoice as any)?.depositText || '',
+      depositEnabled: (() => {
+        const explicit = (initialInvoice as any)?.depositEnabled;
+        if (typeof explicit === 'boolean') return explicit;
+        const hasLegacyDeposit =
+          typeof (initialInvoice as any)?.depositPercent === 'number' &&
+          Number((initialInvoice as any)?.depositPercent) > 0 &&
+          Boolean(String((initialInvoice as any)?.depositText || '').trim());
+        return Boolean(initialInvoice?.id && hasLegacyDeposit);
+      })(),
+      depositReceivedEnabled: Boolean((initialInvoice as any)?.depositReceivedEnabled),
+      depositReceivedAmount:
+        typeof (initialInvoice as any)?.depositReceivedAmount === 'number'
+          ? Number((initialInvoice as any).depositReceivedAmount)
+          : 0,
       paymentTerms: initialInvoice?.paymentTerms || '',
       paymentInfo: initialInvoice?.paymentInfo || '',
       paypalText: (initialInvoice as any)?.paypalText || '',
@@ -162,7 +190,13 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const buyerAddress = watch('buyerAddress');
   const salutation = watch('salutation');
   const introText = watch('introText');
+  const servicePeriodStart = watch('servicePeriodStart');
+  const servicePeriodEnd = watch('servicePeriodEnd');
+  const depositPercent = watch('depositPercent');
   const depositText = watch('depositText');
+  const depositEnabled = watch('depositEnabled');
+  const depositReceivedEnabled = watch('depositReceivedEnabled');
+  const depositReceivedAmount = watch('depositReceivedAmount');
   const paymentTerms = watch('paymentTerms');
   const paymentInfo = watch('paymentInfo');
   const paypalText = watch('paypalText');
@@ -172,37 +206,21 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const agbLink = watch('agbLink');
 
   // Text / Zeitraum / Anzahlung
-  const [servicePeriodStart, setServicePeriodStart] = useState<string>(
-    (initialInvoice as any)?.servicePeriodStart
-      ? new Date((initialInvoice as any).servicePeriodStart).toISOString().substring(0, 10)
-      : ''
-  );
-  const [servicePeriodEnd, setServicePeriodEnd] = useState<string>(
-    (initialInvoice as any)?.servicePeriodEnd
-      ? new Date((initialInvoice as any).servicePeriodEnd).toISOString().substring(0, 10)
-      : ''
-  );
+  const setDepositEnabled = (next: boolean | ((prev: boolean) => boolean)) => {
+    const prev = Boolean(getValues('depositEnabled'));
+    const resolved = typeof next === 'function' ? (next as (p: boolean) => boolean)(prev) : next;
+    setValue('depositEnabled', resolved);
+  };
 
-  const [depositPercent, setDepositPercent] = useState<number>(
-    typeof (initialInvoice as any)?.depositPercent === 'number' ? (initialInvoice as any).depositPercent : 0
-  );
-  const [depositEnabled, setDepositEnabled] = useState<boolean>(() => {
-    const explicit = (initialInvoice as any)?.depositEnabled;
-    if (typeof explicit === 'boolean') return explicit;
-    const hasLegacyDeposit =
-      typeof (initialInvoice as any)?.depositPercent === 'number' &&
-      Number((initialInvoice as any)?.depositPercent) > 0 &&
-      Boolean(String((initialInvoice as any)?.depositText || '').trim());
-    return Boolean(initialInvoice?.id && hasLegacyDeposit);
-  });
-  const [depositReceivedEnabled, setDepositReceivedEnabled] = useState<boolean>(
-    Boolean((initialInvoice as any)?.depositReceivedEnabled)
-  );
-  const [depositReceivedAmount, setDepositReceivedAmount] = useState<number>(
-    typeof (initialInvoice as any)?.depositReceivedAmount === 'number'
-      ? Number((initialInvoice as any).depositReceivedAmount)
-      : 0
-  );
+  const setDepositPercent = (next: number) => setValue('depositPercent', next);
+
+  const setDepositReceivedEnabled = (next: boolean | ((prev: boolean) => boolean)) => {
+    const prev = Boolean(getValues('depositReceivedEnabled'));
+    const resolved = typeof next === 'function' ? (next as (p: boolean) => boolean)(prev) : next;
+    setValue('depositReceivedEnabled', resolved);
+  };
+
+  const setDepositReceivedAmount = (next: number) => setValue('depositReceivedAmount', next);
 
   // Template
   const [template, setTemplate] = useState<InvoiceTemplate | null>(null);
@@ -1062,7 +1080,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   id="invoice-period-start"
                   type="date"
                   value={servicePeriodStart}
-                  onChange={(e) => setServicePeriodStart(e.target.value)}
+                  onChange={(e) => setValue('servicePeriodStart', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -1072,7 +1090,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   id="invoice-period-end"
                   type="date"
                   value={servicePeriodEnd}
-                  onChange={(e) => setServicePeriodEnd(e.target.value)}
+                  onChange={(e) => setValue('servicePeriodEnd', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
