@@ -384,6 +384,8 @@ export default function Vermietungszubehoer() {
             className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
             value={category}
             onChange={(e) => setCategory(e.target.value as 'alle' | AccessoryCategory)}
+            aria-label="Kategorie filtern"
+            title="Kategorie filtern"
           >
             <option value="alle">Alle Kategorien</option>
             {CATEGORY_OPTIONS.map((c) => (
@@ -516,6 +518,8 @@ export default function Vermietungszubehoer() {
                         const next = e.target.value;
                         setSelectedRentalByAccessory((prev) => ({ ...prev, [item.id]: next }));
                       }}
+                      aria-label="Vorgang für Verknüpfung wählen"
+                      title="Vorgang für Verknüpfung wählen"
                     >
                       <option value="">Vorgang wählen für Verknüpfung...</option>
                       {openRentals.map((r) => (
@@ -560,6 +564,8 @@ export default function Vermietungszubehoer() {
                 className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
                 value={form.category}
                 onChange={(e) => setForm((p) => ({ ...p, category: e.target.value as AccessoryCategory }))}
+                aria-label="Kategorie wählen"
+                title="Kategorie wählen"
               >
                 {CATEGORY_OPTIONS.map((c) => (
                   <option key={c} value={c}>
@@ -653,7 +659,13 @@ export default function Vermietungszubehoer() {
                   {photoBusy && <span className="text-xs text-slate-500">wird verarbeitet...</span>}
                 </div>
                 <div className="mt-2 flex items-center gap-3">
-                  <input type="file" accept="image/*" onChange={(e) => void handleItemPhotoChange(e.target.files)} />
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={(e) => void handleItemPhotoChange(e.target.files)}
+                    aria-label="Foto hochladen"
+                    title="Foto hochladen"
+                  />
                   {form.photoDataUrl && (
                     <button
                       type="button"
