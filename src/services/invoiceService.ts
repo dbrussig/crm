@@ -167,6 +167,20 @@ export async function createFollowUpInvoiceFromInvoice(
   const allExisting = await getAllInvoices();
   const existingNos = new Set(allExisting.map((i) => String(i.invoiceNo || '').trim().toUpperCase()));
   const preferredNo = deriveFollowUpInvoiceNo(src.invoice.invoiceNo, targetType);
+
+  // If target already exists for this rental/type/derived number, reuse it.
+  if (preferredNo) {
+    const preferredExisting = allExisting.find((inv) =>
+      inv.invoiceType === targetType &&
+      String(inv.invoiceNo || '').trim().toUpperCase() === String(preferredNo).trim().toUpperCase() &&
+      String(inv.rentalRequestId || '') === String(src.invoice.rentalRequestId || '')
+    );
+    if (preferredExisting) {
+      await updateInvoice(sourceInvoiceId, { replacesInvoiceId: preferredExisting.id });
+      return preferredExisting.id;
+    }
+  }
+
   const preferredUnique = preferredNo && !existingNos.has(String(preferredNo).trim().toUpperCase()) ? preferredNo : null;
 
   const next: Invoice = {
@@ -217,13 +231,8 @@ export async function createFollowUpInvoiceFromInvoice(
   }));
 
   await addInvoice(next, nextItems);
-  // Best-effort: store backlink on source invoice (for navigation/audit).
-  const sourceUpdates: Partial<Invoice> =
-    (src.invoice.invoiceType === 'Auftrag' && targetType === 'Rechnung') ||
-    (src.invoice.invoiceType === 'Angebot' && targetType === 'Auftrag')
-      ? { replacesInvoiceId: newId, state: 'archiviert' }
-      : { replacesInvoiceId: newId };
-  await updateInvoice(sourceInvoiceId, sourceUpdates);
+  // Backlink only. Archiving is explicit user action.
+  await updateInvoice(sourceInvoiceId, { replacesInvoiceId: newId });
   return newId;
 }
 

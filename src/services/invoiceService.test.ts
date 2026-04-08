@@ -84,4 +84,20 @@ describe('createFollowUpInvoiceFromInvoice', () => {
     expect(id).toBe('inv_order_1');
     expect(mocks.addInvoiceMock).not.toHaveBeenCalled();
   });
+
+  it('reuses existing follow-up by derived number+rental when backlink is missing', async () => {
+    const source = makeInvoice({ rentalRequestId: 'rental_1', replacesInvoiceId: undefined });
+    const existingOrder = makeInvoice({
+      id: 'inv_order_existing',
+      rentalRequestId: 'rental_1',
+      invoiceType: 'Auftrag',
+      invoiceNo: 'AU-2026-034',
+    });
+    mocks.getAllInvoicesMock.mockResolvedValue([source, existingOrder]);
+
+    const id = await createFollowUpInvoiceFromInvoice('inv_source', 'Auftrag');
+
+    expect(id).toBe('inv_order_existing');
+    expect(mocks.addInvoiceMock).not.toHaveBeenCalled();
+  });
 });
