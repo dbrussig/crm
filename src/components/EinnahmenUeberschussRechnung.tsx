@@ -95,8 +95,15 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
     return paymentMethodsConfig.find(m => m.id === methodId)?.label || methodId;
   };
 
-  // Direkt aus Payments (tatsächlich eingegangene Zahlungen)
+  // Direkt aus Payments (tatsächlich eingegangene Zahlungen, Kaution und Duplikate ausschließen)
+  const seenPaymentIds = new Set<string>();
   const incomePayments = payments
+    .filter(p => {
+      if (p.kind === 'Kaution') return false;
+      if (seenPaymentIds.has(p.id)) return false;
+      seenPaymentIds.add(p.id);
+      return true;
+    })
     .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
     .map(p => {
       // Rechnung direkt oder über den verknüpften Vorgang finden
