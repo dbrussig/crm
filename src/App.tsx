@@ -337,12 +337,12 @@ export default function App() {
     }
 
     const calendarId = res?.googleCalendarId || '';
-    const deposit = (data.productType === 'Heckbox' || data.productType === 'Dachbox XL' || data.productType === 'Dachbox M')
+    const deposit = (data.productType === 'Heckbox' || data.productType === 'Dachbox XL' || data.productType === 'Dachbox L' || data.productType === 'Dachbox M')
       ? 150
       : (res?.deposit ?? undefined);
 
     const includeRoofRack =
-      data.productType === 'Dachbox XL' || data.productType === 'Dachbox M'
+      data.productType === 'Dachbox XL' || data.productType === 'Dachbox L' || data.productType === 'Dachbox M'
         ? true
         : undefined;
 
@@ -1010,7 +1010,7 @@ export default function App() {
                     if (datesChanged) {
                       // Recalculate price snapshot similar to initial creation (uses website pricing).
                       const includeRoofRack =
-                        existingRental.productType === 'Dachbox XL' || existingRental.productType === 'Dachbox M'
+                        existingRental.productType === 'Dachbox XL' || existingRental.productType === 'Dachbox L' || existingRental.productType === 'Dachbox M'
                           ? Boolean(existingRental.includeRoofRack ?? true)
                           : undefined;
                       const price = calculateWebsitePrice({

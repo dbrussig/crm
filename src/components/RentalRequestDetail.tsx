@@ -650,7 +650,7 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
     showInfo('Text in Zwischenablage kopiert!');
   };
 
-  const isRoofRackRelevant = rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox M';
+  const isRoofRackRelevant = rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox L' || rental.productType === 'Dachbox M';
   const includeRoofRack = isRoofRackRelevant ? Boolean(rental.includeRoofRack ?? true) : true;
   const isAhkRelevant = rental.productType === 'Heckbox' || rental.productType === 'Fahrradträger';
 

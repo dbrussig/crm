@@ -15,8 +15,8 @@ import ConfirmModal from './ConfirmModal';
 type CategoryId = 'alle' | 'dachboxen' | 'fahrradtraeger' | 'heckboxen' | 'huepfburgen';
 
 const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string; types: ProductType[] }> = [
-  { id: 'alle', label: 'Alle', icon: '📋', types: ['Dachbox XL', 'Dachbox M', 'Fahrradträger', 'Heckbox', 'Hüpfburg'] },
-  { id: 'dachboxen', label: 'Dachboxen', icon: '📦', types: ['Dachbox XL', 'Dachbox M'] },
+  { id: 'alle', label: 'Alle', icon: '📋', types: ['Dachbox XL', 'Dachbox L', 'Dachbox M', 'Fahrradträger', 'Heckbox', 'Hüpfburg'] },
+  { id: 'dachboxen', label: 'Dachboxen', icon: '📦', types: ['Dachbox XL', 'Dachbox L', 'Dachbox M'] },
   { id: 'fahrradtraeger', label: 'Fahrradträger', icon: '🚴', types: ['Fahrradträger'] },
   { id: 'heckboxen', label: 'Heckboxen', icon: '🚗', types: ['Heckbox'] },
   { id: 'huepfburgen', label: 'Hüpfburgen', icon: '🏰', types: ['Hüpfburg'] },
@@ -29,7 +29,7 @@ function euro(n: number | undefined) {
 }
 
 function defaultDepositForType(type: ProductType): number {
-  if (type === 'Heckbox' || type === 'Dachbox XL' || type === 'Dachbox M') return 150;
+  if (type === 'Heckbox' || type === 'Dachbox XL' || type === 'Dachbox L' || type === 'Dachbox M') return 150;
   return 0;
 }
 

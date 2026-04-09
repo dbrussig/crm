@@ -14,7 +14,7 @@ const SQUAREBAR_712300_WIDTH_MM = 1270;
 const DEFAULT_OPEN_RELING_BUNDLE = 'THULE-OPEN-710410+712300';
 
 function isDachbox(rental: RentalRequest): boolean {
-  return rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox M';
+  return rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox L' || rental.productType === 'Dachbox M';
 }
 
 function requiresRoofRackBundle(rental: RentalRequest): boolean {
@@ -301,7 +301,7 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
       const cust = await getCustomerById(rental.customerId).catch(() => null);
       const customerName = cust ? `${cust.firstName || ''} ${cust.lastName || ''}`.trim() : '';
       const amount = rental.priceOverride ? rental.priceOverride.overridePrice : rental.priceSnapshot;
-      const reling = (rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox M') ? relingLabel(rental.relingType) : '';
+      const reling = (rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox L' || rental.productType === 'Dachbox M') ? relingLabel(rental.relingType) : '';
       const vehicle = [rental.vehicleMake, rental.vehicleModel].filter(Boolean).join(' ');
 
       const eventStartTs = Number(rental.pickupDate || rental.rentalStart || 0);
@@ -341,7 +341,7 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
       const cust = await getCustomerById(rental.customerId).catch(() => null);
       const customerName = cust ? `${cust.firstName || ''} ${cust.lastName || ''}`.trim() : '';
       const amount = rental.priceOverride ? rental.priceOverride.overridePrice : rental.priceSnapshot;
-      const reling = (rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox M') ? relingLabel(rental.relingType) : '';
+      const reling = (rental.productType === 'Dachbox XL' || rental.productType === 'Dachbox L' || rental.productType === 'Dachbox M') ? relingLabel(rental.relingType) : '';
       const vehicle = [rental.vehicleMake, rental.vehicleModel].filter(Boolean).join(' ');
       const eventStartTs = Number(rental.pickupDate || rental.rentalStart || 0);
       const eventEndTs = Number(rental.returnDate || rental.rentalEnd || 0);

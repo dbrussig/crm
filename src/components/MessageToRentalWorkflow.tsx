@@ -241,7 +241,7 @@ export const MessageToRentalWorkflow: React.FC<MessageToRentalWorkflowProps> = (
       </div>
 
       {/* Fahrzeugdaten (nur bei Dachbox) */}
-      {(productType === 'Dachbox XL' || productType === 'Dachbox M') && (
+      {(productType === 'Dachbox XL' || productType === 'Dachbox L' || productType === 'Dachbox M') && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
           <h4 className="text-sm font-medium text-blue-900 mb-2">Fahrzeugdaten</h4>
 
@@ -381,7 +381,7 @@ export const MessageToRentalWorkflow: React.FC<MessageToRentalWorkflowProps> = (
               if (!rentalStart) newErrors.rentalStart = 'Mietstart erforderlich';
               if (!rentalEnd) newErrors.rentalEnd = 'Mietende erforderlich';
 
-              if ((productType === 'Dachbox XL' || productType === 'Dachbox M') && !vehicleMake) {
+              if ((productType === 'Dachbox XL' || productType === 'Dachbox L' || productType === 'Dachbox M') && !vehicleMake) {
                 newErrors.vehicleMake = 'Fahrzeugmarke erforderlich';
               }
 

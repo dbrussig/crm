@@ -91,7 +91,7 @@ async function loadRentals(): Promise<RentalRequest[]> {
   // - Deposit: Heckbox + Dachboxen => 150 EUR (if not set)
   return raw.map((r) => {
     const needsDefaultDeposit =
-      (r.productType === 'Heckbox' || r.productType === 'Dachbox XL' || r.productType === 'Dachbox M') &&
+      (r.productType === 'Heckbox' || r.productType === 'Dachbox XL' || r.productType === 'Dachbox L' || r.productType === 'Dachbox M') &&
       (r.deposit === undefined || r.deposit === null || Number.isNaN(Number(r.deposit)));
     return {
       ...r,
