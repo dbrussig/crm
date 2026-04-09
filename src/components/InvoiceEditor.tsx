@@ -114,32 +114,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   // ─── Form ──────────────────────────────────────────────────────
 
-  const methods = useForm<{
-    invoiceNo: string;
-    invoiceDate: string;
-    dueDate: string;
-    currency: string;
-    companyId: string;
-    buyerName: string;
-    buyerAddress: string;
-    salutation: string;
-    introText: string;
-    servicePeriodStart: string;
-    servicePeriodEnd: string;
-    depositPercent: number;
-    depositText: string;
-    depositEnabled: boolean;
-    depositReceivedEnabled: boolean;
-    depositReceivedAmount: number;
-    paymentTerms: string;
-    paymentInfo: string;
-    paypalText: string;
-    footerText: string;
-    taxNote: string;
-    agbText: string;
-    agbLink: string;
-    items: InvoiceItem[];
-  }>({
+  const methods = useForm<InvoiceFormValues>({
     defaultValues: {
       invoiceNo: initialInvoice?.invoiceNo || '',
       invoiceDate: initialInvoice?.invoiceDate
@@ -169,6 +144,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       taxNote: initialInvoice?.taxNote || '',
       agbText: initialInvoice?.agbText || '',
       agbLink: initialInvoice?.agbLink || '',
+      pickupDate: initialInvoice?.pickupDate || '',
+      pickupTime: initialInvoice?.pickupTime || '',
+      returnDate: initialInvoice?.returnDate || '',
+      returnTime: initialInvoice?.returnTime || '',
       items: initialItems.length > 0 ? initialItems : [{ id: 'temp_1', invoiceId: '', name: '', orderIndex: 0, unitPrice: 0, quantity: 1, taxPercent: 0, unit: 'Stück', createdAt: Date.now() }],
     },
   });
@@ -278,6 +257,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       depositReceivedEnabled: v.depositReceivedEnabled, depositReceivedAmount: v.depositReceivedAmount,
       paymentTerms: v.paymentTerms, paymentInfo: v.paymentInfo, paypalText: v.paypalText,
       footerText: v.footerText, taxNote: v.taxNote, agbText: v.agbText, agbLink: v.agbLink,
+      pickupDate: v.pickupDate || undefined,
+      pickupTime: v.pickupTime || undefined,
+      returnDate: v.returnDate || undefined,
+      returnTime: v.returnTime || undefined,
       layoutId, createdAt: Date.now(), updatedAt: Date.now(),
     };
   };
@@ -291,7 +274,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   const { isDirty, setIsDirty, resetDirtyBaseline } = useInvoiceDirtyTracking({
     onDirtyChange,
-    getValues: getValues as () => Record<string, unknown>,
+    getValues: getValues as unknown as () => Record<string, unknown>,
     fields: fields as InvoiceItem[],
     externalState: { invoiceType, state, selectedCustomerId: companyId, layoutId },
     formVersion: _formVersion,

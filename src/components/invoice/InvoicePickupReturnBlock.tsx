@@ -1,11 +1,12 @@
-import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import type { InvoiceFormValues } from './types';
 
 export default function InvoicePickupReturnBlock() {
-  const { register } = useFormContext<InvoiceFormValues>();
-  const [pickupEnabled, setPickupEnabled] = useState(false);
-  const [returnEnabled, setReturnEnabled] = useState(false);
+  const { register, watch, setValue } = useFormContext<InvoiceFormValues>();
+  const pickupDate = watch('pickupDate');
+  const returnDate = watch('returnDate');
+  const pickupEnabled = Boolean(pickupDate);
+  const returnEnabled = Boolean(returnDate);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -16,7 +17,7 @@ export default function InvoicePickupReturnBlock() {
             id="pickup-enabled"
             type="checkbox"
             checked={pickupEnabled}
-            onChange={(e) => setPickupEnabled(e.target.checked)}
+            onChange={(e) => { if (!e.target.checked) { setValue('pickupDate', ''); setValue('pickupTime', ''); } else { setValue('pickupDate', new Date().toISOString().slice(0, 10)); } }}
             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
           />
           <label htmlFor="pickup-enabled" className="text-sm font-medium text-gray-700 cursor-pointer">
@@ -55,7 +56,7 @@ export default function InvoicePickupReturnBlock() {
             id="return-enabled"
             type="checkbox"
             checked={returnEnabled}
-            onChange={(e) => setReturnEnabled(e.target.checked)}
+            onChange={(e) => { if (!e.target.checked) { setValue('returnDate', ''); setValue('returnTime', ''); } else { setValue('returnDate', new Date().toISOString().slice(0, 10)); } }}
             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
           />
           <label htmlFor="return-enabled" className="text-sm font-medium text-gray-700 cursor-pointer">

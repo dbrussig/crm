@@ -439,6 +439,12 @@ export interface Invoice {
   depositReceivedEnabled?: boolean;
   depositReceivedAmount?: number;
 
+  // Abholung & Rückgabe
+  pickupDate?: string;   // ISO date string "YYYY-MM-DD"
+  pickupTime?: string;   // "HH:MM"
+  returnDate?: string;   // ISO date string "YYYY-MM-DD"
+  returnTime?: string;   // "HH:MM"
+
   // Optional linkage for follow-up documents (Folgebeleg/Storno/Reissue).
   reissuedFromInvoiceId?: string; // new invoice references old
   replacesInvoiceId?: string; // old invoice references new (best-effort)
