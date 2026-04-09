@@ -566,6 +566,15 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const handleDeleteCustomer = async (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
 
+    const ok = await requestConfirm({
+      title: 'Kunde löschen',
+      message: `Soll „${customer ? `${customer.firstName} ${customer.lastName}`.trim() : 'dieser Kunde'}" wirklich gelöscht werden? Diese Aktion kann nicht rückgängig gemacht werden.`,
+      confirmLabel: 'Löschen',
+      cancelLabel: 'Abbrechen',
+      danger: true,
+    });
+    if (!ok) return;
+
     // Delete from Google if synced
     if (customer?.googleContactResourceId) {
       try {
