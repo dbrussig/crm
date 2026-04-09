@@ -106,7 +106,7 @@ async function genInvoiceNo(type: InvoiceType, now = new Date(), maxAttempts = 1
   // Try to find a unique number
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const next = maxSeq + attempt + 1;
-    const candidate = `${prefix}-${yyyy}-${String(next).padStart(3, '0')}`;
+    const candidate = `${prefix}-${yyyy}-${next}`;
     if (!existingNos.has(candidate.toUpperCase())) {
       return candidate;
     }

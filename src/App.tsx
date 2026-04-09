@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AISettings, Customer, GmailAttachmentSummary, GoogleOAuthSettings, InboxImportResult, Invoice, InvoiceItem, MailTransportSettings, Payment, RentalRequest, RentalStatus } from './types';
-import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources, updateInvoice, getAllPayments } from './services/sqliteService';
+import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources, updateInvoice, getAllPayments, migrateInvoiceNosStripLeadingZeros } from './services/sqliteService';
 import { MessageBox } from './components/MessageBox';
 import KanbanBoard from './components/KanbanBoard';
 import CustomerList from './components/CustomerList';
@@ -228,6 +228,7 @@ export default function App() {
 
   useEffect(() => {
     void runDesktopAutoUpdate();
+    void migrateInvoiceNosStripLeadingZeros();
   }, []);
 
   useEffect(() => {

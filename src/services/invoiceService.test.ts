@@ -67,7 +67,7 @@ describe('createFollowUpInvoiceFromInvoice', () => {
     await createFollowUpInvoiceFromInvoice('inv_source', 'Auftrag');
 
     const created: Invoice = mocks.addInvoiceMock.mock.calls[0][0];
-    expect(created.invoiceNo).toMatch(/^AU-\d{4}-\d{3,}$/);
+    expect(created.invoiceNo).toMatch(/^AU-\d{4}-\d+$/);
   });
 
   it('reuses existing follow-up if source already has matching replacement', async () => {

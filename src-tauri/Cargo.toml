@@ -1,6 +1,6 @@
 [package]
 name = "mietpark-crm-desktop"
-version = "0.3.20"
+version = "0.3.21"
 description = "CRM Buddy Desktop App"
 authors = ["Daniel Brussig"]
 edition = "2021"

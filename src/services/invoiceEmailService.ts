@@ -11,8 +11,9 @@ function buildBody(invoice: Invoice, opts?: { customerName?: string }): string {
   const greeting = name ? `Hallo ${name},` : 'Hallo,';
   return (
     `${greeting}\n\n` +
-    `anbei ${invoice.invoiceType} ${invoice.invoiceNo}.\n\n` +
-    `Viele Gruesse\n` +
+    `bitte finden Sie anbei die ${invoice.invoiceType} ${invoice.invoiceNo}.\n\n` +
+    `Besten Dank und vielen Dank für Ihr Vertrauen.\n\n` +
+    `Viele Grüße\n` +
     `${c.companyName}\n` +
     `${c.website}`
   );

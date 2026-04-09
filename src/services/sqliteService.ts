@@ -595,6 +595,18 @@ export async function deleteAccessory(id: string): Promise<void> {
   await saveAccessories((await loadAccessories()).filter((a) => a.id !== id));
 }
 
+// Migration: Belegnummern ohne führende Nullen (einmalig beim App-Start)
+export async function migrateInvoiceNosStripLeadingZeros(): Promise<void> {
+  const RE = /^([A-Z]+-\d{4}-)0+(\d+)$/;
+  const invoices = await loadInvoices();
+  const toFix = invoices.filter((inv) => RE.test(String(inv.invoiceNo || '')));
+  if (toFix.length === 0) return;
+  for (const inv of toFix) {
+    const stripped = String(inv.invoiceNo).replace(RE, '$1$2');
+    await updateInvoice(inv.id, { invoiceNo: stripped });
+  }
+}
+
 // Invoices
 export async function getAllInvoices(): Promise<Invoice[]> {
   return (await loadInvoices()).sort((a, b) => b.invoiceDate - a.invoiceDate);
