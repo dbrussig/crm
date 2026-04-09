@@ -1150,23 +1150,33 @@ export default function App() {
           <div className="max-w-7xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-slate-900">Belege</h2>
-              <button
-                className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
-                onClick={() => {
-                  setEditingInvoiceContext(null);
-                  setEditingInvoice({});
-                  setEditingInvoiceItems([]);
-                  setActiveView('beleg_editor');
-                }}
-              >
-                + Neuer Beleg
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  id="csv-export-trigger"
+                  className="px-3 py-2 rounded-md bg-green-600 text-white text-sm hover:bg-green-700"
+                  onClick={() => document.dispatchEvent(new CustomEvent('export-csv'))}
+                >
+                  Export CSV
+                </button>
+                <button
+                  className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
+                  onClick={() => {
+                    setEditingInvoiceContext(null);
+                    setEditingInvoice({});
+                    setEditingInvoiceItems([]);
+                    setActiveView('beleg_editor');
+                  }}
+                >
+                  + Neuer Beleg
+                </button>
+              </div>
             </div>
 
             <InvoiceList
               customers={customers}
               mailTransportSettings={mailTransportSettings}
               reloadTrigger={invoiceListReloadTrigger}
+              onExportCSV={() => document.dispatchEvent(new CustomEvent('export-csv'))}
               onCreate={() => {
                 setEditingInvoiceContext(null);
                 setEditingInvoice({});

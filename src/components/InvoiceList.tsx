@@ -30,6 +30,7 @@ interface InvoiceListProps {
   onMarkAccepted?: (invoiceId: string) => void;
   onConvertToOrder?: (invoiceId: string) => void;
   onConvertToInvoice?: (invoiceId: string) => void;
+  onExportCSV?: () => void;
   reloadTrigger?: number;
 }
 
@@ -44,6 +45,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   onMarkAccepted,
   onConvertToOrder,
   onConvertToInvoice,
+  onExportCSV,
   reloadTrigger,
 }) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -61,7 +63,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   // Sortierung
   const [sortBy, setSortBy] = useState<'date' | 'number' | 'amount'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [viewMode, setViewMode] = useState<'schnell' | 'erweitert'>('schnell');
+  const [viewMode] = useState<'erweitert'>('erweitert');
   const [busyActionKey, setBusyActionKey] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; no: string } | null>(null);
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
@@ -105,6 +107,13 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
     };
     void loadInvoices();
   }, [reloadTrigger]);
+
+  // CSV Export Event Listener
+  useEffect(() => {
+    const handleExport = () => void handleExportCSV();
+    document.addEventListener('export-csv', handleExport);
+    return () => document.removeEventListener('export-csv', handleExport);
+  }, [filteredInvoices, amountByInvoiceId]);
 
   // Filter & Sort invoices
   useEffect(() => {
@@ -409,30 +418,9 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
         </div>
       )}
 
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="inline-flex rounded-md border border-slate-200 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setViewMode('schnell')}
-              className={['px-3 py-1.5 text-xs', viewMode === 'schnell' ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'].join(' ')}
-            >
-              Schnell
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('erweitert')}
-              className={['px-3 py-1.5 text-xs border-l border-slate-200', viewMode === 'erweitert' ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'].join(' ')}
-            >
-              Erweitert
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Filter Bar */}
-      <div className={['mb-6 grid gap-4', viewMode === 'erweitert' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'].join(' ')}>
+      <div className="mb-6 grid gap-4 grid-cols-1 md:grid-cols-4">
         {/* Type Filter */}
         <div>
           <label htmlFor="filter-type" className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
@@ -469,54 +457,42 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
         {/* Search */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Suche</label>
+          <label htmlFor="filter-search" className="block text-sm font-medium text-gray-700 mb-1">Kunde</label>
           <input
+            id="filter-search"
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Nr., Kunde..."
+            placeholder="Kunde"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           />
         </div>
 
         {/* Sort */}
-        {viewMode === 'erweitert' && (
-          <div>
-            <label htmlFor="filter-sort" className="block text-sm font-medium text-gray-700 mb-1">Sortierung</label>
-            <select
-              id="filter-sort"
-              value={`${sortBy}-${sortOrder}`}
-              onChange={(e) => {
-                const [sort, order] = e.target.value.split('-') as [typeof sortBy, typeof sortOrder];
-                setSortBy(sort);
-                setSortOrder(order);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-            >
-              <option value="date-desc">Datum (neueste zuerst)</option>
-              <option value="date-asc">Datum (älteste zuerst)</option>
-              <option value="number-asc">Nr. (aufsteigend)</option>
-              <option value="number-desc">Nr. (absteigend)</option>
-            </select>
-          </div>
-        )}
+        <div>
+          <label htmlFor="filter-sort" className="block text-sm font-medium text-gray-700 mb-1">Sortierung</label>
+          <select
+            id="filter-sort"
+            value={`${sortBy}-${sortOrder}`}
+            onChange={(e) => {
+              const [sort, order] = e.target.value.split('-') as [typeof sortBy, typeof sortOrder];
+              setSortBy(sort);
+              setSortOrder(order);
+            }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="date-desc">Datum (neueste zuerst)</option>
+            <option value="date-asc">Datum (älteste zuerst)</option>
+            <option value="number-asc">Nr. (aufsteigend)</option>
+            <option value="number-desc">Nr. (absteigend)</option>
+          </select>
+        </div>
       </div>
 
-      {/* Actions */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm text-gray-600">
-          {filteredInvoices.length} Belege
-          {totalSum > 0 && ` • Summe: ${totalSum.toFixed(2)} €`}
-        </div>
-
-        <button
-          onClick={handleExportCSV}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
-          title="Tabelle als CSV exportieren"
-        >
-          <FileText size={14} aria-hidden="true" />
-          Export CSV
-        </button>
+      {/* Summary */}
+      <div className="mb-4 text-sm text-gray-600">
+        {filteredInvoices.length} Belege
+        {totalSum > 0 && ` • Summe: ${totalSum.toFixed(2)} €`}
       </div>
 
       {/* Table */}
