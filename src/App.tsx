@@ -1285,30 +1285,33 @@ export default function App() {
                 setInvoiceListReloadTrigger(prev => prev + 1);
               }}
               onConvertToOrder={async (invoiceId) => {
-                const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Auftrag');
-                if (next.rentalStatusUpdated) {
-                  queryClient.invalidateQueries({ queryKey: ['rentals'] });
+                try {
+                  const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Auftrag');
+                  if (next.rentalStatusUpdated) {
+                    queryClient.invalidateQueries({ queryKey: ['rentals'] });
+                  }
+                  queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                  await openInvoiceEditorById(next.nextInvoiceId);
+                } catch (e: any) {
+                  setAppNotice({ tone: 'error', text: e?.message || e?.error || 'Fehler beim Erstellen des Auftrags.' });
                 }
-                queryClient.invalidateQueries({ queryKey: ['invoices'] });
-                await openInvoiceEditorById(next.nextInvoiceId);
               }}
               onConvertToInvoice={async (invoiceId) => {
-                const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Rechnung');
-                if (next.rentalStatusUpdated) {
-                  queryClient.invalidateQueries({ queryKey: ['rentals'] });
+                try {
+                  const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Rechnung');
+                  if (next.rentalStatusUpdated) {
+                    queryClient.invalidateQueries({ queryKey: ['rentals'] });
+                  }
+                  queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                  await openInvoiceEditorById(next.nextInvoiceId);
+                } catch (e: any) {
+                  setAppNotice({ tone: 'error', text: e?.message || e?.error || 'Fehler beim Erstellen der Rechnung.' });
                 }
-                queryClient.invalidateQueries({ queryKey: ['invoices'] });
-                await openInvoiceEditorById(next.nextInvoiceId);
               }}
               onReissue={async (invoiceId) => {
                 const nextId = await reissueInvoice(invoiceId);
                 queryClient.invalidateQueries({ queryKey: ['invoices'] });
                 await openInvoiceEditorById(nextId);
-              }}
-              onClose={() => {
-                setEditingInvoiceContext(null);
-                setEditingInvoice(null);
-                setActiveView('belege');
               }}
             />
           </div>

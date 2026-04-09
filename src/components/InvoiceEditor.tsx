@@ -6,7 +6,7 @@
 
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { useForm, useFieldArray, FormProvider } from 'react-hook-form';
-import { ChevronDown, Download, Eye, FileText, Mail, Save, Send, X } from 'lucide-react';
+import { ChevronDown, Download, Eye, FileText, Mail, Save, Send } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import type { InvoiceFormValues } from './invoice/types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
@@ -96,7 +96,6 @@ interface InvoiceEditorProps {
   onConvertToOrder?: (invoiceId: string) => void;
   onConvertToInvoice?: (invoiceId: string) => void;
   onReissue?: (invoiceId: string) => void;
-  onClose?: () => void;
 }
 
 export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
@@ -108,7 +107,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   onConvertToOrder,
   onConvertToInvoice,
   onReissue,
-  onClose,
 }) => {
   const company = useMemo(() => getCompanyProfile(), []);
 
@@ -282,7 +280,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   };
 
   const buildInvoiceData = (): Partial<Invoice> => {
-    const { id, createdAt, updatedAt, ...rest } = buildInvoice();
+    const { createdAt, updatedAt, ...rest } = buildInvoice();
     return rest;
   };
 
@@ -542,25 +540,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           <h2 className="text-xl font-semibold text-slate-900">Beleg Editor</h2>
           <div className="flex items-center gap-3">
             <AutoSaveIndicator state={saveState} />
-            {onClose && (
-              <button
-                onClick={async () => {
-                  if (isDirty) {
-                    const ok = await requestConfirm({
-                      title: 'Änderungen verwerfen?',
-                      message: 'Ungespeicherte Änderungen verwerfen und schließen?',
-                      confirmLabel: 'Verwerfen', cancelLabel: 'Abbrechen', danger: true,
-                    });
-                    if (!ok) return;
-                  }
-                  onClose();
-                }}
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm hover:bg-slate-50 text-slate-700"
-                title="Schließen"
-              >
-                <X size={16} aria-hidden="true" /> Schließen
-              </button>
-            )}
           </div>
         </div>
       </div>
