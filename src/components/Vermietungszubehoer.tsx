@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AccessoryCategory, RentalAccessory, RelingType, RentalRequest } from '../types';
+import type { AccessoryCategory, RentalAccessory, RelingType } from '../types';
 import { createAccessory, fetchAllAccessories, modifyAccessory, removeAccessory } from '../services/accessoryService';
-import { getAllRentalRequests, updateRentalRequest } from '../services/sqliteService';
-import { formatDisplayRef } from '../utils/displayId';
 import ConfirmModal from './ConfirmModal';
 
 const CATEGORY_OPTIONS: AccessoryCategory[] = ['Bundle', 'Dachträger', 'Fußsatz', 'Querträger', 'Kit', 'Sonstiges'];
 const RELING_OPTIONS: RelingType[] = ['offen', 'geschlossen', 'keine'];
-const CLOSED_STATUSES = new Set<RentalRequest['status']>(['archiviert', 'abgeschlossen', 'abgelehnt', 'storniert', 'noshow']);
 
 function normalizeKey(v: string): string {
   return String(v || '').trim().replace(/\s+/g, ' ').toUpperCase();
@@ -81,7 +78,6 @@ const INITIAL_FORM: AccessoryForm = {
 
 export default function Vermietungszubehoer() {
   const [items, setItems] = useState<RentalAccessory[]>([]);
-  const [rentals, setRentals] = useState<RentalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
@@ -116,24 +112,6 @@ export default function Vermietungszubehoer() {
   const [form, setForm] = useState<AccessoryForm>(INITIAL_FORM);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
-  const [selectedRentalByAccessory, setSelectedRentalByAccessory] = useState<Record<string, string>>({});
-
-  const openRentals = useMemo(
-    () => rentals.filter((r) => !CLOSED_STATUSES.has(r.status)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-    [rentals]
-  );
-
-  const usageMap = useMemo(() => {
-    const m = new Map<string, RentalRequest[]>();
-    for (const r of openRentals) {
-      const key = normalizeKey(r.roofRackInventoryKey || '');
-      if (!key) continue;
-      const current = m.get(key) || [];
-      current.push(r);
-      m.set(key, current);
-    }
-    return m;
-  }, [openRentals]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -150,9 +128,8 @@ export default function Vermietungszubehoer() {
   async function load() {
     setLoading(true);
     try {
-      const [allItems, allRentals] = await Promise.all([fetchAllAccessories(), getAllRentalRequests()]);
+      const allItems = await fetchAllAccessories();
       setItems(allItems);
-      setRentals(allRentals);
     } finally {
       setLoading(false);
     }
@@ -265,36 +242,6 @@ export default function Vermietungszubehoer() {
     }
   }
 
-  async function linkAccessoryToRental(accessory: RentalAccessory) {
-    const rentalId = selectedRentalByAccessory[accessory.id];
-    if (!rentalId) {
-      showError('Bitte zuerst einen Vorgang auswählen.');
-      return;
-    }
-    const rental = openRentals.find((r) => r.id === rentalId);
-    if (!rental) {
-      showError('Vorgang nicht gefunden.');
-      return;
-    }
-
-    try {
-      await updateRentalRequest(rentalId, { roofRackInventoryKey: normalizeKey(accessory.inventoryKey) });
-      await load();
-      showInfo(`Vorgang ${rentalId} wurde mit ${accessory.inventoryKey} verknüpft.`);
-    } catch (e: any) {
-      showError(e?.message || 'Verknüpfung fehlgeschlagen.');
-    }
-  }
-
-  async function unlinkAccessoryFromRental(accessory: RentalAccessory, rentalId: string) {
-    try {
-      await updateRentalRequest(rentalId, { roofRackInventoryKey: undefined });
-      await load();
-    } catch (e: any) {
-      showError(e?.message || 'Lösen der Verknüpfung fehlgeschlagen.');
-    }
-  }
-
   if (loading) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
@@ -397,9 +344,6 @@ export default function Vermietungszubehoer() {
         )}
 
         {filtered.map((item) => {
-          const key = normalizeKey(item.inventoryKey);
-          const linkedRentals = usageMap.get(key) || [];
-
           return (
             <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="grid grid-cols-1 lg:grid-cols-[120px_1fr] gap-4">
@@ -467,64 +411,14 @@ export default function Vermietungszubehoer() {
 
                   <div className="text-sm text-slate-700">{item.notes || 'Keine Notizen'}</div>
 
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    <div className="rounded-md border border-slate-200 p-3">
-                      <div className="text-xs font-semibold text-slate-700 mb-2">Kompatibilität</div>
-                      <div className="text-xs text-slate-600">
-                        Reling: {(item.compatibleRelingTypes || []).length ? item.compatibleRelingTypes?.join(', ') : 'nicht gesetzt'}
-                      </div>
-                      <div className="text-xs text-slate-600">
-                        Fahrzeugbreite: {item.minVehicleWidthCm || '-'} bis {item.maxVehicleWidthCm || '-'} cm
-                      </div>
+                  <div className="rounded-md border border-slate-200 p-3">
+                    <div className="text-xs font-semibold text-slate-700 mb-2">Kompatibilität</div>
+                    <div className="text-xs text-slate-600">
+                      Reling: {(item.compatibleRelingTypes || []).length ? item.compatibleRelingTypes?.join(', ') : 'nicht gesetzt'}
                     </div>
-
-                    <div className="rounded-md border border-slate-200 p-3">
-                      <div className="text-xs font-semibold text-slate-700 mb-2">
-                        Verknüpfte Vorgänge ({linkedRentals.length})
-                      </div>
-                      {linkedRentals.length === 0 && <div className="text-xs text-slate-500">Aktuell keine aktive Verknüpfung.</div>}
-                      {linkedRentals.map((r) => (
-                        <div key={r.id} className="flex items-center justify-between text-xs text-slate-700 mb-1">
-                          <span>
-                            {formatDisplayRef(r.id)} · {r.productType} · {formatDate(r.rentalStart)} - {formatDate(r.rentalEnd)}
-                          </span>
-                          <button
-                            type="button"
-                            className="text-red-700 hover:underline"
-                            onClick={() => unlinkAccessoryFromRental(item, r.id)}
-                          >
-                            lösen
-                          </button>
-                        </div>
-                      ))}
+                    <div className="text-xs text-slate-600">
+                      Fahrzeugbreite: {item.minVehicleWidthCm || '-'} bis {item.maxVehicleWidthCm || '-'} cm
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center">
-                    <select
-                      className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
-                      value={selectedRentalByAccessory[item.id] || ''}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setSelectedRentalByAccessory((prev) => ({ ...prev, [item.id]: next }));
-                      }}
-                      aria-label="Vorgang für Verknüpfung wählen"
-                      title="Vorgang für Verknüpfung wählen"
-                    >
-                      <option value="">Vorgang wählen für Verknüpfung...</option>
-                      {openRentals.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {formatDisplayRef(r.id)} · {r.productType} · {formatDate(r.rentalStart)} - {formatDate(r.rentalEnd)}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
-                      onClick={() => linkAccessoryToRental(item)}
-                    >
-                      Mit Vorgang verknüpfen
-                    </button>
                   </div>
                 </div>
               </div>
