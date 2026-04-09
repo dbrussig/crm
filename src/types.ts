@@ -152,7 +152,7 @@ export interface MailTransportSettings {
 }
 
 // CRM
-export type ProductType = 'Dachbox XL' | 'Dachbox M' | 'Fahrradträger' | 'Heckbox' | 'Hüpfburg';
+export type ProductType = 'Dachbox XL' | 'Dachbox L' | 'Dachbox M' | 'Fahrradträger' | 'Heckbox' | 'Hüpfburg';
 export type RentalStatus =
   | 'neu'
   | 'info_fehlt'
