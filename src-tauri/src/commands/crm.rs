@@ -186,3 +186,18 @@ pub fn delete_customer_document(app: tauri::AppHandle, docId: String) -> Result<
 pub fn delete_all_customer_documents(app: tauri::AppHandle) -> Result<(), String> {
     documents::delete_all_customer_documents(&app)
 }
+
+#[tauri::command]
+pub fn list_expenses(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
+    repository::list_expenses(&app)
+}
+
+#[tauri::command]
+pub fn upsert_expense(app: tauri::AppHandle, expense: Value) -> Result<(), String> {
+    repository::upsert_expense(&app, &expense)
+}
+
+#[tauri::command]
+pub fn delete_expense(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    repository::delete_expense(&app, &id)
+}

@@ -147,4 +147,18 @@ CREATE TABLE IF NOT EXISTS backup_history (
     status TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS expenses (
+    id TEXT PRIMARY KEY,
+    date INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT,
+    invoice_issuer TEXT,
+    is_recurring INTEGER NOT NULL DEFAULT 0,
+    recurring_interval TEXT,
+    attachment_json TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    raw_json TEXT NOT NULL
+);
 "#;

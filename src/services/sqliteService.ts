@@ -5,7 +5,7 @@
  * public API but back it with localStorage so the UI can run again.
  */
 
-import type { Customer, CustomerDocument, RentalRequest, Message, Resource, Invoice, InvoiceItem, Payment, DocumentCategory, RentalAccessory } from '../types';
+import type { Customer, CustomerDocument, RentalRequest, Message, Resource, Invoice, InvoiceItem, Payment, DocumentCategory, RentalAccessory, Expense } from '../types';
 import { deleteKey, loadJson, saveJson } from './_storage';
 import { idbGet, idbSet } from './idbKv';
 import { invokeDesktopCommand, isDesktopApp } from '../platform/runtime';
@@ -657,6 +657,58 @@ export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]>
     .filter((it) => it.invoiceId === invoiceId)
     .sort((a, b) => a.orderIndex - b.orderIndex);
 }
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+
+const KEY_EXPENSES = 'mietpark_crm_expenses_v1';
+
+export async function getAllExpenses(): Promise<Expense[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<Expense[]>('list_expenses', {});
+  }
+  return loadJson<Expense[]>(KEY_EXPENSES, []);
+}
+
+export async function createExpense(data: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  const now = Date.now();
+  const expense: Expense = { ...data, id: `expense_${now}`, createdAt: now, updatedAt: now };
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_expense', { expense });
+    return expense.id;
+  }
+  const all = await getAllExpenses();
+  all.push(expense);
+  await saveJson(KEY_EXPENSES, all);
+  return expense.id;
+}
+
+export async function updateExpense(id: string, updates: Partial<Omit<Expense, 'id' | 'createdAt'>>): Promise<void> {
+  const now = Date.now();
+  if (isDesktopApp()) {
+    const all = await getAllExpenses();
+    const current = all.find((e) => e.id === id);
+    if (!current) throw new Error('Ausgabe nicht gefunden');
+    const updated = { ...current, ...updates, updatedAt: now };
+    await invokeDesktopCommand('upsert_expense', { expense: updated });
+    return;
+  }
+  const all = await getAllExpenses();
+  const idx = all.findIndex((e) => e.id === id);
+  if (idx === -1) throw new Error('Ausgabe nicht gefunden');
+  all[idx] = { ...all[idx], ...updates, updatedAt: now };
+  await saveJson(KEY_EXPENSES, all);
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_expense', { id });
+    return;
+  }
+  const all = await getAllExpenses();
+  await saveJson(KEY_EXPENSES, all.filter((e) => e.id !== id));
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 // Debug helper (kept for SQLDebugPanel)
 export async function executeQuery(query: string): Promise<{ ok: boolean; result: unknown }> {

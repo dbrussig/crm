@@ -1224,6 +1224,7 @@ export default function App() {
             <EinnahmenUeberschussRechnung 
               invoices={dashboardInvoices}
               payments={dashboardPayments}
+              customers={customers}
             />
           </div>
         )}

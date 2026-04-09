@@ -176,18 +176,22 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
   // Status Badge
   const getStatusBadge = (state: InvoiceState) => {
-    const badges = {
+    const badges: Record<string, string> = {
       entwurf: 'bg-gray-100 text-gray-800',
       gesendet: 'bg-blue-100 text-blue-800',
       angenommen: 'bg-green-100 text-green-800',
+      abgelehnt: 'bg-orange-100 text-orange-800',
+      bezahlt: 'bg-emerald-100 text-emerald-800',
       storniert: 'bg-red-100 text-red-800',
       archiviert: 'bg-slate-200 text-slate-800',
     };
 
-    const labels = {
+    const labels: Record<string, string> = {
       entwurf: 'Entwurf',
       gesendet: 'Gesendet',
       angenommen: 'Angenommen',
+      abgelehnt: 'Abgelehnt',
+      bezahlt: 'Bezahlt',
       storniert: 'Storniert',
       archiviert: 'Archiviert',
     };

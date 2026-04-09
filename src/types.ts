@@ -381,7 +381,7 @@ export interface InboxImportResult {
 
 // Invoices
 export type InvoiceType = 'Angebot' | 'Auftrag' | 'Rechnung';
-export type InvoiceState = 'entwurf' | 'gesendet' | 'angenommen' | 'storniert' | 'archiviert';
+export type InvoiceState = 'entwurf' | 'gesendet' | 'angenommen' | 'abgelehnt' | 'bezahlt' | 'storniert' | 'archiviert';
 
 export interface Invoice {
   id: string;
@@ -453,4 +453,27 @@ export interface InvoiceTemplate {
   defaultAgbLink: string;
   defaultDepositPercent?: number;
   defaultDepositText?: string;
+}
+
+// EÜR - Betriebsausgaben
+export type RecurringInterval = 'monthly' | 'quarterly' | 'halfyearly' | 'yearly';
+
+export interface ExpenseAttachment {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  dataUrl: string;
+}
+
+export interface Expense {
+  id: string;
+  date: number;
+  amount: number;
+  description?: string;
+  invoiceIssuer?: string;
+  isRecurring: boolean;
+  recurringInterval?: RecurringInterval;
+  attachment?: ExpenseAttachment;
+  createdAt: number;
+  updatedAt: number;
 }

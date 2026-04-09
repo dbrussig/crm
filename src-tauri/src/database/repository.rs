@@ -583,6 +583,62 @@ fn merge_json(target: &mut Value, updates: &Value) {
     }
 }
 
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+
+pub fn list_expenses(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT raw_json FROM expenses ORDER BY date DESC")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0)).map_err(|e| e.to_string())?;
+    let mut items = Vec::new();
+    for row in rows {
+        let raw = row.map_err(|e| e.to_string())?;
+        items.push(serde_json::from_str::<Value>(&raw).map_err(|e| e.to_string())?);
+    }
+    Ok(items)
+}
+
+pub fn upsert_expense(app: &AppHandle, expense: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(expense, "id")?;
+    let date = number_field(expense, "date");
+    let amount = value_to_f64(expense.get("amount")).unwrap_or(0.0);
+    let description = string_field_optional(expense, "description");
+    let invoice_issuer = string_field_optional(expense, "invoiceIssuer");
+    let is_recurring = expense.get("isRecurring").and_then(Value::as_bool).unwrap_or(false) as i64;
+    let recurring_interval = string_field_optional(expense, "recurringInterval");
+    let attachment_json = expense.get("attachment").map(|v| v.to_string());
+    let created_at = number_field(expense, "createdAt");
+    let updated_at = number_field(expense, "updatedAt");
+    let raw_json = expense.to_string();
+
+    connection.execute(
+        "INSERT INTO expenses (id, date, amount, description, invoice_issuer, is_recurring, recurring_interval, attachment_json, created_at, updated_at, raw_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+         ON CONFLICT(id) DO UPDATE SET
+           date = excluded.date,
+           amount = excluded.amount,
+           description = excluded.description,
+           invoice_issuer = excluded.invoice_issuer,
+           is_recurring = excluded.is_recurring,
+           recurring_interval = excluded.recurring_interval,
+           attachment_json = excluded.attachment_json,
+           updated_at = excluded.updated_at,
+           raw_json = excluded.raw_json",
+        params![id, date, amount, description, invoice_issuer, is_recurring, recurring_interval, attachment_json, created_at, updated_at, raw_json],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_expense(app: &AppHandle, id: &str) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection.execute("DELETE FROM expenses WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 fn required_string(value: &Value, key: &str) -> Result<String, String> {
     value
         .get(key)
