@@ -370,6 +370,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             setValue('dueDate', base.toISOString().substring(0, 10), batchOpts);
           }
         }
+      } else {
+        // Kein Template vorhanden – Baseline trotzdem initialisieren damit Dirty-Tracking funktioniert
+        setTemplate({} as InvoiceTemplate);
       }
     };
     loadTemplate();
