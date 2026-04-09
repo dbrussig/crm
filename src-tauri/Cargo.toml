@@ -1,6 +1,6 @@
 [package]
 name = "mietpark-crm-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "Desktop-App fuer Mietpark CRM"
 authors = ["Daniel Brussig"]
 edition = "2021"
