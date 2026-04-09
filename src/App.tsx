@@ -132,7 +132,7 @@ export default function App() {
         { id: 'nachrichtenbox' as const, label: 'Nachrichtenbox', icon: '💬', group: 'Kommunikation' as const },
         { id: 'vorgaenge' as const, label: 'Vorgänge', icon: '📋', group: 'Vorgänge' as const },
         { id: 'kalender' as const, label: 'Kalender', icon: '🗓️', group: 'Vorgänge' as const },
-        { id: 'belege' as const, label: 'Belege', icon: '🧾', group: 'Abrechnung' as const },
+        { id: 'belege' as const, label: 'Belege', icon: '🧾', group: 'Vorgänge' as const },
         { id: 'euer' as const, label: 'EÜR', icon: '💰', group: 'Abrechnung' as const },
         { id: 'kunden' as const, label: 'Kunden', icon: '👥', group: 'Stammdaten' as const },
         { id: 'stammdaten' as const, label: 'Artikel', icon: '📦', group: 'Stammdaten' as const },
