@@ -11,6 +11,7 @@ export interface RentalProduct {
 
 const EXTRA_DURATIONS: RentalDurationOption[] = [
   { label: 'Tage', price: 0 },
+  { label: 'Wochen', price: 0 },
   { label: 'Pauschal', price: 0 },
 ];
 

@@ -46,6 +46,12 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
     onUpdate(index, 'quantity', count);
   };
 
+  const handleWeeksChange = (index: number, weeks: number) => {
+    const count = Math.max(1, weeks);
+    onUpdate(index, 'unit', `${count} Woche${count !== 1 ? 'n' : ''}`);
+    onUpdate(index, 'quantity', count);
+  };
+
   const parseProductKey = (item: InvoiceItem): string => {
     for (const p of RENTAL_PRODUCTS) {
       if (item.name === p.label || item.name.startsWith(p.label)) return p.key;
@@ -53,10 +59,12 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
     return DEFAULT_PRODUCT_KEY;
   };
 
-  const parseDurationMode = (unit: string): { mode: string; days: number } => {
+  const parseDurationMode = (unit: string): { mode: string; days: number; weeks: number } => {
     const daysMatch = unit.match(/^(\d+)\s*Tage?$/i);
-    if (daysMatch) return { mode: 'Tage', days: parseInt(daysMatch[1], 10) };
-    return { mode: unit, days: 1 };
+    if (daysMatch) return { mode: 'Tage', days: parseInt(daysMatch[1], 10), weeks: 1 };
+    const weeksMatch = unit.match(/^(\d+)\s*Wochen?$/i);
+    if (weeksMatch) return { mode: 'Wochen', days: 1, weeks: parseInt(weeksMatch[1], 10) };
+    return { mode: unit, days: 1, weeks: 1 };
   };
 
   return (
@@ -72,8 +80,9 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
       {items.map((item, index) => {
         const productKey = parseProductKey(item);
         const product = RENTAL_PRODUCTS.find((p) => p.key === productKey);
-        const { mode: durationMode, days: durationDays } = parseDurationMode(item.unit || DEFAULT_DURATION_LABEL);
+        const { mode: durationMode, days: durationDays, weeks: durationWeeks } = parseDurationMode(item.unit || DEFAULT_DURATION_LABEL);
         const isTageMode = durationMode === 'Tage';
+        const isWochenMode = durationMode === 'Wochen';
         const lineTotal = (item.unitPrice || 0) * (item.quantity || 1);
         const isLast = index === items.length - 1;
 
@@ -114,12 +123,15 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
               <label className="sr-only" htmlFor={`duration-${index}`}>Dauer</label>
               <select
                 id={`duration-${index}`}
-                value={isTageMode ? 'Tage' : (item.unit || DEFAULT_DURATION_LABEL)}
+                value={isTageMode ? 'Tage' : isWochenMode ? 'Wochen' : (item.unit || DEFAULT_DURATION_LABEL)}
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val === 'Tage') {
                     onUpdate(index, 'unit', `${durationDays} Tag${durationDays !== 1 ? 'e' : ''}`);
                     onUpdate(index, 'quantity', durationDays);
+                  } else if (val === 'Wochen') {
+                    onUpdate(index, 'unit', `${durationWeeks} Woche${durationWeeks !== 1 ? 'n' : ''}`);
+                    onUpdate(index, 'quantity', durationWeeks);
                   } else {
                     handleDurationChange(index, productKey, val);
                     onUpdate(index, 'quantity', 1);
@@ -144,6 +156,20 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
                     aria-label={`Position ${index + 1}: Anzahl Tage`}
                   />
                   <span className="text-xs text-slate-500">Tage</span>
+                </div>
+              )}
+              {isWochenMode && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="1"
+                    value={durationWeeks}
+                    onChange={(e) => handleWeeksChange(index, parseInt(e.target.value) || 1)}
+                    className="w-20 px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
+                    title="Anzahl Wochen"
+                    aria-label={`Position ${index + 1}: Anzahl Wochen`}
+                  />
+                  <span className="text-xs text-slate-500">Wochen</span>
                 </div>
               )}
             </div>
