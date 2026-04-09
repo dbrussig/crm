@@ -6,9 +6,10 @@
 
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { useForm, useFieldArray, FormProvider } from 'react-hook-form';
-import { ArrowRight, ChevronDown, Download, Eye, FileText, Mail, Save, Send } from 'lucide-react';
+import { ArrowRight, ChevronDown, Download, Eye, FileText, Mail, Save, Send, Truck } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import type { InvoiceFormValues } from './invoice/types';
+import InvoicePickupReturnBlock from './invoice/InvoicePickupReturnBlock';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
@@ -663,6 +664,13 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         )}
 
+        {/* Karte 2b: Abholung & Rückgabe */}
+        {layout.editorBlocks.includes('servicePeriod') && (
+          <Card title="Abholung &amp; Rückgabe">
+            <InvoicePickupReturnBlock />
+          </Card>
+        )}
+
         {/* Karte 3: Positionen */}
         <Card title="Positionen" noPadding>
           <RentalLineItems
@@ -820,39 +828,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       <div className="sticky bottom-0 z-20 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="max-w-5xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2">
-              <button 
-                onClick={handleSave} 
-                className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60" 
-                title="Beleg speichern" 
-                disabled={!canSave}
-              >
-                <Save size={14} aria-hidden="true" /> Speichern
-              </button>
-              {workflowActionLabel && initialInvoice?.id && (
-                <button
-                  type="button"
-                  onClick={handleWorkflowAdvance}
-                  disabled={workflowAdvancing}
-                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  title={workflowActionLabel}
-                >
-                  {workflowAdvancing
-                    ? <span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />
-                    : <ArrowRight size={14} aria-hidden="true" />}
-                  {workflowAdvancing ? 'Wird erstellt…' : workflowActionLabel}
-                </button>
-              )}
-              {onSend && initialInvoice?.id && state === 'entwurf' && (
-                <button 
-                  onClick={() => onSend(initialInvoice.id!)} 
-                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60" 
-                  title="Belegstatus auf gesendet setzen"
-                >
-                  <Send size={14} aria-hidden="true" /> Senden
-                </button>
-              )}
-            </div>
+            {/* Links: Vorschau + Export-Dropdown */}
             <div className="flex items-center gap-2">
               <button 
                 onClick={exportHandlers.handlePreviewPdf} 
@@ -871,7 +847,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   aria-haspopup="menu" 
                   aria-expanded={moreActions.open}
                 >
-                  Mehr... <ChevronDown size={14} aria-hidden="true" />
+                  Export <ChevronDown size={14} aria-hidden="true" />
                 </button>
                 {moreActions.open && (
                   <div className="absolute right-0 bottom-full mb-2 w-56 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden" role="menu">
@@ -908,6 +884,41 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Rechts: Senden + Speichern + Workflow-CTA */}
+            <div className="flex items-center gap-2">
+              {onSend && initialInvoice?.id && state === 'entwurf' && (
+                <button 
+                  onClick={() => onSend(initialInvoice.id!)} 
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60" 
+                  title="Belegstatus auf gesendet setzen"
+                >
+                  <Send size={14} aria-hidden="true" /> Senden
+                </button>
+              )}
+              <button 
+                onClick={handleSave} 
+                className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60" 
+                title="Beleg speichern" 
+                disabled={!canSave}
+              >
+                <Save size={14} aria-hidden="true" /> Speichern
+              </button>
+              {workflowActionLabel && initialInvoice?.id && (
+                <button
+                  type="button"
+                  onClick={handleWorkflowAdvance}
+                  disabled={workflowAdvancing}
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-indigo-500 text-white hover:bg-indigo-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  title={workflowActionLabel}
+                >
+                  {workflowAdvancing
+                    ? <span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                    : <ArrowRight size={14} aria-hidden="true" />}
+                  {workflowAdvancing ? 'Wird erstellt…' : workflowActionLabel}
+                </button>
+              )}
             </div>
           </div>
         </div>

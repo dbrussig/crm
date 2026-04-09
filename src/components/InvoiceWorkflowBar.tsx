@@ -1,5 +1,5 @@
-import { ArrowRight, CheckCircle2, Circle, Dot } from 'lucide-react';
-import { InvoiceType } from '../types';
+import { Check } from 'lucide-react';
+import type { InvoiceType } from '../types';
 
 interface InvoiceWorkflowBarProps {
   currentType: InvoiceType;
@@ -8,7 +8,11 @@ interface InvoiceWorkflowBarProps {
   disabled?: boolean;
 }
 
-const STEPS: InvoiceType[] = ['Angebot', 'Auftrag', 'Rechnung'];
+const STEPS: { id: InvoiceType; label: string }[] = [
+  { id: 'Angebot', label: 'Angebot' },
+  { id: 'Auftrag', label: 'Auftrag' },
+  { id: 'Rechnung', label: 'Rechnung' },
+];
 
 export default function InvoiceWorkflowBar({
   currentType,
@@ -16,46 +20,47 @@ export default function InvoiceWorkflowBar({
   onAdvance,
   disabled = false,
 }: InvoiceWorkflowBarProps) {
-  const currentIndex = Math.max(0, STEPS.indexOf(currentType));
-  const canAdvance = Boolean(onAdvance && nextActionLabel && currentIndex < STEPS.length - 1);
+  const currentIndex = Math.max(0, STEPS.findIndex((s) => s.id === currentType));
 
   return (
-    <div className="rounded-md border border-indigo-100 bg-indigo-50 p-3">
-      <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-indigo-700">
-        <ArrowRight size={14} aria-hidden="true" />
-        Workflow
-      </div>
-      <div className="mb-3 flex items-center gap-2 text-sm">
-        {STEPS.map((step, idx) => {
-          const done = idx < currentIndex;
-          const active = idx === currentIndex;
+    <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="flex items-center justify-between relative">
+        {/* Hintergrundlinie */}
+        <div className="absolute top-5 left-0 right-0 h-0.5 bg-gray-200">
+          <div
+            className="h-full bg-indigo-500 transition-all duration-500"
+            style={{ width: `${(currentIndex / (STEPS.length - 1)) * 100}%` }}
+          />
+        </div>
+
+        {STEPS.map((step, index) => {
+          const isActive = index === currentIndex;
+          const isCompleted = index < currentIndex;
+
           return (
-            <div key={step} className="flex items-center gap-2">
-              <span className={done ? 'text-emerald-600' : active ? 'text-indigo-700' : 'text-slate-400'}>
-                {done ? <CheckCircle2 size={16} aria-hidden="true" /> : active ? <Dot size={18} aria-hidden="true" /> : <Circle size={14} aria-hidden="true" />}
+            <div key={step.id} className="flex flex-col items-center gap-2 relative z-10">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-sm font-medium ${
+                  isCompleted
+                    ? 'bg-indigo-500 text-white'
+                    : isActive
+                    ? 'bg-indigo-500 text-white ring-4 ring-indigo-100'
+                    : 'bg-white border-2 border-gray-300 text-gray-400'
+                }`}
+              >
+                {isCompleted ? <Check className="w-5 h-5" aria-hidden="true" /> : <span>{index + 1}</span>}
+              </div>
+              <span
+                className={`text-xs font-medium ${
+                  isActive ? 'text-indigo-600' : isCompleted ? 'text-gray-700' : 'text-gray-400'
+                }`}
+              >
+                {step.label}
               </span>
-              <span className={active ? 'font-semibold text-indigo-900' : done ? 'text-emerald-700' : 'text-slate-500'}>
-                {step}
-              </span>
-              {idx < STEPS.length - 1 && <ArrowRight size={14} className="text-slate-400" aria-hidden="true" />}
             </div>
           );
         })}
       </div>
-      {canAdvance ? (
-        <button
-          type="button"
-          onClick={onAdvance}
-          disabled={disabled}
-          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-          title={nextActionLabel}
-        >
-          <ArrowRight size={14} aria-hidden="true" />
-          {nextActionLabel}
-        </button>
-      ) : (
-        <div className="text-xs text-slate-600">Finaler Schritt erreicht.</div>
-      )}
     </div>
   );
 }

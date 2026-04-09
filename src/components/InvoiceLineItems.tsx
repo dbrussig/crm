@@ -30,7 +30,7 @@ export default function InvoiceLineItems(props: {
         <h3 className="text-sm font-medium text-gray-900">Positionen</h3>
         <button
           onClick={onAdd}
-          className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+          className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 text-sm font-medium transition-colors"
           title="Neue Position hinzufügen"
         >
           + Position
@@ -47,7 +47,7 @@ export default function InvoiceLineItems(props: {
         </div>
 
         {items.map((item, index) => (
-          <div key={(item as any).rhfId || item.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-200 items-start">
+          <div key={(item as any).rhfId || item.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 items-start hover:bg-gray-50 transition-colors group">
             <div className="col-span-1 text-sm text-gray-500">{index + 1}</div>
 
             <div className="col-span-5">
@@ -55,7 +55,7 @@ export default function InvoiceLineItems(props: {
                 value={item.name}
                 onChange={(e) => onUpdate(index, 'name', e.target.value)}
                 rows={2}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-2 py-1 border-0 bg-transparent rounded text-sm hover:bg-white focus:bg-white focus:ring-1 focus:ring-indigo-300 focus:border-indigo-300 transition-colors"
                 placeholder="Beschreibung"
                 aria-label={`Position ${index + 1}: Beschreibung`}
               />
@@ -65,7 +65,7 @@ export default function InvoiceLineItems(props: {
                     type="text"
                     value={item.unit}
                     onChange={(e) => onUpdate(index, 'unit', e.target.value)}
-                    className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
+                    className="w-20 px-2 py-1 border-0 bg-transparent rounded text-xs hover:bg-white focus:bg-white focus:ring-1 focus:ring-indigo-300 transition-colors"
                     placeholder={labels?.unit || 'Einheit'}
                     aria-label={`Position ${index + 1}: ${labels?.unit || 'Einheit'}`}
                   />
@@ -76,7 +76,7 @@ export default function InvoiceLineItems(props: {
                     value={item.taxPercent}
                     onChange={(e) => onUpdate(index, 'taxPercent', parseFloat(e.target.value))}
                     step="0.01"
-                    className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
+                    className="w-20 px-2 py-1 border-0 bg-transparent rounded text-xs hover:bg-white focus:bg-white focus:ring-1 focus:ring-indigo-300 transition-colors"
                     placeholder={labels?.tax || 'USt.'}
                     aria-label={`Position ${index + 1}: ${labels?.tax || 'USt.'}`}
                   />
@@ -91,7 +91,7 @@ export default function InvoiceLineItems(props: {
                   value={item.quantity}
                   onChange={(e) => onUpdate(index, 'quantity', parseFloat(e.target.value))}
                   step="0.01"
-                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="w-full px-2 py-1 border-0 bg-transparent rounded text-sm text-right hover:bg-white focus:bg-white focus:ring-1 focus:ring-indigo-300 transition-colors"
                   aria-label={`Position ${index + 1}: ${labels?.quantity || 'Menge'}`}
                 />
               </div>
@@ -104,7 +104,7 @@ export default function InvoiceLineItems(props: {
                   value={item.unitPrice}
                   onChange={(e) => onUpdate(index, 'unitPrice', parseFloat(e.target.value))}
                   step="0.01"
-                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="w-full px-2 py-1 border-0 bg-transparent rounded text-sm text-right hover:bg-white focus:bg-white focus:ring-1 focus:ring-indigo-300 transition-colors"
                   aria-label={`Position ${index + 1}: ${labels?.unitPrice || 'Einzelpreis'}`}
                 />
               </div>
@@ -113,7 +113,7 @@ export default function InvoiceLineItems(props: {
             <div className="col-span-1">
               <button
                 onClick={() => onRemove(index)}
-                className="text-red-600 hover:text-red-700"
+                className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity"
                 title="Position löschen"
                 aria-label={`Position ${index + 1} löschen`}
               >

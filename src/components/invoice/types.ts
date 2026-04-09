@@ -33,6 +33,12 @@ export interface InvoiceFormValues {
   agbText: string;
   agbLink: string;
   
+  // Abholung & Rückgabe
+  pickupDate: string;
+  pickupTime: string;
+  returnDate: string;
+  returnTime: string;
+
   // Positionen
   items: InvoiceItem[];
   

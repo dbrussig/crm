@@ -88,6 +88,20 @@ export default function InvoiceCustomerBlock({ customers }: InvoiceCustomerBlock
         />
         {errors.buyerAddress && <p className="mt-1 text-xs text-red-600">{errors.buyerAddress.message}</p>}
       </div>
+
+      {hasBuyerName && hasBuyerAddress && (
+        <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+          <p className="text-xs font-medium text-indigo-700 mb-2">Empfänger-Vorschau</p>
+          <div className="space-y-0.5 text-sm">
+            {buyerName.trim().split('\n').map((line, i) => (
+              <p key={i} className={i === 0 ? 'text-gray-900 font-medium' : 'text-gray-600'}>{line}</p>
+            ))}
+            {buyerAddress.trim().split('\n').map((line, i) => (
+              <p key={`a${i}`} className="text-gray-600">{line}</p>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
