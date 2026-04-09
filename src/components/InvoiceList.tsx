@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { ArrowRight, Check, Eye, Mail, Send, Trash2 } from 'lucide-react';
+import { Eye, Mail, Pencil, Trash2 } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, MailTransportSettings } from '../types';
 import {
   fetchAllInvoices,
@@ -608,7 +608,18 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                     </td>
                     <td className="px-4 py-3 text-left text-sm font-medium">
                       <div className="flex items-center justify-start gap-1">
-                        {/* PDF */}
+                        {/* Bearbeiten */}
+                        <button
+                          onClick={() => onEdit(invoice)}
+                          className={actionButtonClass}
+                          disabled={Boolean(busyActionKey)}
+                          title="Bearbeiten"
+                          aria-label={`Beleg ${invoice.invoiceNo} bearbeiten`}
+                        >
+                          <Pencil size={14} aria-hidden="true" />
+                        </button>
+
+                        {/* PDF ansehen */}
                         <button
                           onClick={() => void runAction(`preview:${invoice.id}`, async () => { await openInvoicePreview(invoice); })}
                           className={actionButtonClass}
@@ -658,82 +669,6 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                         >
                           <Mail size={14} aria-hidden="true" />
                         </button>
-
-                        {/* Senden */}
-                        {onSend && invoice.state === 'entwurf' && (
-                          <button
-                            onClick={() => void runAction(`send:${invoice.id}`, async () => { await onSend(invoice.id); })}
-                            className={actionButtonClass}
-                            disabled={Boolean(busyActionKey)}
-                            title="Senden"
-                            aria-label={`Beleg ${invoice.invoiceNo} senden`}
-                          >
-                            <Send size={14} aria-hidden="true" />
-                          </button>
-                        )}
-
-                        {/* Auftrag manuell als angenommen markieren */}
-                        {invoice.invoiceType === 'Auftrag' &&
-                          onMarkAccepted &&
-                          (invoice.state === 'entwurf' || invoice.state === 'gesendet') && (
-                            <button
-                              onClick={() =>
-                                void runAction(`accept:${invoice.id}`, async () => {
-                                  await onMarkAccepted(invoice.id);
-                                })
-                              }
-                              className={actionButtonClass}
-                              disabled={Boolean(busyActionKey)}
-                              title="Auftrag als angenommen markieren"
-                              aria-label={`Auftrag ${invoice.invoiceNo} als angenommen markieren`}
-                            >
-                              <Check size={14} aria-hidden="true" />
-                            </button>
-                          )}
-
-                        {/* Auftrag manuell als gesendet markieren */}
-                        {invoice.invoiceType === 'Auftrag' &&
-                          onMarkSent &&
-                          invoice.state === 'entwurf' && (
-                            <button
-                              onClick={() =>
-                                void runAction(`markSent:${invoice.id}`, async () => {
-                                  await onMarkSent(invoice.id);
-                                })
-                              }
-                              className={actionButtonClass}
-                              disabled={Boolean(busyActionKey)}
-                              title="Auftrag als gesendet markieren"
-                              aria-label={`Auftrag ${invoice.invoiceNo} als gesendet markieren`}
-                            >
-                              <Send size={14} aria-hidden="true" />
-                            </button>
-                          )}
-
-                        {/* Konvertieren */}
-                        {invoice.invoiceType === 'Angebot' && onConvertToOrder && (
-                          <button
-                            onClick={() => void runAction(`toOrder:${invoice.id}`, async () => { await onConvertToOrder(invoice.id); })}
-                            className={actionButtonClass}
-                            disabled={Boolean(busyActionKey)}
-                            title="Zu Auftrag konvertieren"
-                            aria-label={`Angebot ${invoice.invoiceNo} zu Auftrag konvertieren`}
-                          >
-                            <ArrowRight size={14} aria-hidden="true" />
-                          </button>
-                        )}
-
-                        {invoice.invoiceType === 'Auftrag' && onConvertToInvoice && (
-                          <button
-                            onClick={() => void runAction(`orderToInvoice:${invoice.id}`, async () => { await onConvertToInvoice(invoice.id); })}
-                            className={actionButtonClass}
-                            disabled={Boolean(busyActionKey)}
-                            title="Zu Rechnung konvertieren"
-                            aria-label={`Auftrag ${invoice.invoiceNo} zu Rechnung konvertieren`}
-                          >
-                            <ArrowRight size={14} aria-hidden="true" />
-                          </button>
-                        )}
 
                         {/* Löschen */}
                         <button
