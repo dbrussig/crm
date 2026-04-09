@@ -1249,6 +1249,7 @@ export default function App() {
               invoices={dashboardInvoices}
               payments={dashboardPayments}
               customers={customers}
+              rentals={dashboardRentals}
             />
           </div>
         )}

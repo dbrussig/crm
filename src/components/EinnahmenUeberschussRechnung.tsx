@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Euro, Calendar, Paperclip, RefreshCw, Download, Eye, X, Upload, ChevronRight, FileDown } from 'lucide-react';
-import type { Invoice, Payment, Expense, ExpenseAttachment, RecurringInterval } from '../types';
+import type { Invoice, Payment, Expense, ExpenseAttachment, RecurringInterval, RentalRequest } from '../types';
 import { getAllExpenses, createExpense, updateExpense, deleteExpense } from '../services/sqliteService';
 
 interface EUeRProps {
   invoices: Invoice[];
   payments: Payment[];
   customers?: { id: string; firstName: string; lastName: string }[];
+  rentals?: RentalRequest[];
 }
 
 const YEARS = [2024, 2025, 2026, 2027, 2028];
@@ -35,7 +36,7 @@ function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-export default function EinnahmenUeberschussRechnung({ invoices, payments, customers = [] }: EUeRProps) {
+export default function EinnahmenUeberschussRechnung({ invoices, payments, customers = [], rentals = [] }: EUeRProps) {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -84,13 +85,24 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
   const incomePayments = payments
     .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
     .map(p => {
-      const inv = invoices.find(i => i.id === p.invoiceId);
-      const customerId = p.customerId || inv?.companyId || '';
-      const customerName = customerMap.get(customerId) || inv?.buyerName || 'Unbekannt';
+      // Rechnung direkt oder über den verknüpften Vorgang finden
+      const inv = invoices.find(i => i.id === p.invoiceId)
+        || (p.rentalRequestId ? invoices.find(i => (i as any).rentalRequestId === p.rentalRequestId) : undefined);
+      const rental = p.rentalRequestId ? rentals.find(r => r.id === p.rentalRequestId) : undefined;
+      const customerId = p.customerId || inv?.companyId || rental?.customerId || '';
+      const customerName = customerMap.get(customerId)
+        || inv?.buyerName
+        || (rental ? customerMap.get(rental.customerId || '') : undefined)
+        || p.payerName
+        || 'Unbekannt';
+      // invoiceNo: direkte Verknüpfung oder über Vorgang
+      const invoiceNo = inv?.invoiceNo
+        || (rental ? invoices.find(i => (i as any).rentalRequestId === rental.id)?.invoiceNo : undefined)
+        || '-';
       return {
         paymentId: p.id,
         date: p.receivedAt || p.createdAt,
-        invoiceNo: inv?.invoiceNo || '-',
+        invoiceNo,
         customerName,
         amount: Number(p.amount) || 0,
         fee: Number((p as any).fee) || 0,
