@@ -565,27 +565,31 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                         : '…'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900">
-                      {(paymentCountByInvoiceId[invoice.id] || 0) > 0 ? (
-                        <div className="flex flex-col">
-                          <span className="font-medium text-emerald-700">
-                            {(paymentTotalByInvoiceId[invoice.id] || 0).toFixed(2)} €
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {paymentCountByInvoiceId[invoice.id]} Eintrag{paymentCountByInvoiceId[invoice.id] === 1 ? '' : 'e'}
-                          </span>
-                        </div>
-                      ) : invoice.depositEnabled && invoice.depositPercent ? (
-                        <div className="flex flex-col">
-                          <span className="font-medium text-blue-700">
-                            {((amountByInvoiceId[invoice.id] || 0) * (invoice.depositPercent / 100)).toFixed(2)} €
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            Anzahlung {invoice.depositPercent}%
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                      <div className="flex flex-col gap-0.5">
+                        {(paymentCountByInvoiceId[invoice.id] || 0) > 0 && (
+                          <div>
+                            <span className="font-medium text-emerald-700">
+                              {(paymentTotalByInvoiceId[invoice.id] || 0).toFixed(2)} €
+                            </span>
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({paymentCountByInvoiceId[invoice.id]} Zahlung{paymentCountByInvoiceId[invoice.id] === 1 ? '' : 'en'})
+                            </span>
+                          </div>
+                        )}
+                        {invoice.depositEnabled && invoice.depositPercent ? (
+                          <div>
+                            <span className="font-medium text-blue-700">
+                              {((amountByInvoiceId[invoice.id] || 0) * (invoice.depositPercent / 100)).toFixed(2)} €
+                            </span>
+                            <span className="text-xs text-gray-500 ml-1">
+                              Anzahlung {invoice.depositPercent}%
+                            </span>
+                          </div>
+                        ) : null}
+                        {(paymentCountByInvoiceId[invoice.id] || 0) === 0 && !invoice.depositEnabled && (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {onStateChange ? (
