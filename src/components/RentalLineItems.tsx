@@ -128,7 +128,7 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, reso
                 ref={isLast ? firstSelectRef : undefined}
                 value={productKey}
                 onChange={(e) => handleProductChange(index, e.target.value)}
-                className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                className="w-full h-9 px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 aria-label={`Position ${index + 1}: Produkt`}
               >
                 {useResources
@@ -171,7 +171,7 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, reso
                     onUpdate(index, 'quantity', 1);
                   }
                 }}
-                className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                className="w-full h-9 px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 aria-label={`Position ${index + 1}: Dauer`}
               >
                 {(product?.durations ?? []).map((d) => (
@@ -219,7 +219,7 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, reso
                   onChange={(e) => onUpdate(index, 'unitPrice', parseFloat(e.target.value) || 0)}
                   step="0.01"
                   min="0"
-                  className="w-full pl-2 pr-6 py-1.5 border border-slate-300 rounded-md text-sm text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full h-9 pl-2 pr-6 py-1.5 border border-slate-300 rounded-md text-sm text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   aria-label={`Position ${index + 1}: Preis`}
                 />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">€</span>
