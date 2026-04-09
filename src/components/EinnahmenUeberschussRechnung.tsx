@@ -114,8 +114,12 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
         || '-';
       const amount = Number(p.amount) || 0;
       const methodId = p.method || '';
-      // Gebühr: zuerst gespeichertes fee-Feld (Gmail-Import), sonst aus Config berechnen
-      const fee = Number((p as any).fee) > 0 ? Number((p as any).fee) : calcFee(amount, methodId);
+      // Gebühr: nur gespeichertes fee-Feld verwenden wenn es explizit > 0 ist UND definiert,
+      // sonst immer aus Config berechnen (damit manuelle Zahlungen auch Gebühren erhalten)
+      const storedFee = (p as any).fee;
+      const fee = (storedFee !== undefined && storedFee !== null && Number(storedFee) > 0)
+        ? Number(storedFee)
+        : calcFee(amount, methodId);
       return {
         paymentId: p.id,
         date: p.receivedAt || p.createdAt,
