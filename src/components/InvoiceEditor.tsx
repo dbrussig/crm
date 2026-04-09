@@ -646,7 +646,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         {layout.editorBlocks.includes('servicePeriod') && (
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Mietzeitraum (optional)</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-period-start">Von</label>
                 <input id="invoice-period-start" type="date" value={servicePeriodStart}
