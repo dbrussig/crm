@@ -46,6 +46,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<ExpenseAttachment | null>(null);
   const [isFeeDrilldownOpen, setIsFeeDrilldownOpen] = useState(false);
+  const [drilldownMethodKey, setDrilldownMethodKey] = useState<string | null>(null);
   const [isRecurringChecked, setIsRecurringChecked] = useState(false);
   const [paymentMethodsConfig, setPaymentMethodsConfig] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
 
@@ -394,7 +395,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
                     <td className="px-4 py-3 text-sm text-slate-400">-</td>
                     <td className="px-4 py-3 text-sm text-amber-700 font-medium">{val.label}</td>
                     <td className="px-4 py-3 text-sm text-amber-700">
-                      <button onClick={() => setIsFeeDrilldownOpen(true)} className="flex items-center gap-1 hover:underline">
+                      <button onClick={() => { setDrilldownMethodKey(key); setIsFeeDrilldownOpen(true); }} className="flex items-center gap-1 hover:underline">
                         Zahlungsgebühren {selectedYear} <ChevronRight className="h-4 w-4" />
                       </button>
                     </td>
@@ -588,12 +589,17 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h2 className="text-lg font-semibold text-slate-900">Zahlungsgebühren {selectedYear}</h2>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Zahlungsgebühren {selectedYear}
+                {drilldownMethodKey && feesByMethod[drilldownMethodKey] && (
+                  <span className="ml-2 text-base font-normal text-amber-600">– {feesByMethod[drilldownMethodKey].label}</span>
+                )}
+              </h2>
               <button onClick={() => setIsFeeDrilldownOpen(false)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
             </div>
 
             {/* Zusammenfassung nach Zahlart */}
-            {Object.keys(feesByMethod).length > 0 && (
+            {drilldownMethodKey && Object.keys(feesByMethod).length > 1 && (
               <div className="px-6 py-4 border-b bg-amber-50">
                 <p className="text-xs font-semibold text-slate-600 mb-2 uppercase">Gebühren nach Zahlart (EÜR-Positionen)</p>
                 <div className="space-y-1">
@@ -624,9 +630,14 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {paymentFeesData.length === 0
-                    ? <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Keine Gebühren</td></tr>
-                    : paymentFeesData.map((entry, idx) => (
+                  {(() => {
+                    const filtered = drilldownMethodKey
+                      ? paymentFeesData.filter(e => (e.methodId || 'unbekannt') === drilldownMethodKey)
+                      : paymentFeesData;
+                    const filteredTotal = filtered.reduce((s, e) => s + e.fee, 0);
+                    return filtered.length === 0
+                      ? <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Keine Gebühren</td></tr>
+                      : <>{filtered.map((entry, idx) => (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-4 py-3 text-sm">{format(new Date(entry.date), 'dd.MM.yyyy', { locale: de })}</td>
                         <td className="px-4 py-3 text-sm text-slate-600">{entry.methodLabel || '-'}</td>
@@ -636,15 +647,11 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
                         <td className="px-4 py-3 text-sm text-amber-600 font-medium text-right">{entry.fee.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td>
                       </tr>
                     ))}
-                </tbody>
-                {paymentFeesData.length > 0 && (
-                  <tfoot className="bg-slate-50">
-                    <tr>
+                    <tr className="bg-slate-50">
                       <td colSpan={4} className="px-4 py-3 text-sm font-medium text-slate-700">Summe</td>
-                      <td className="px-4 py-3 text-sm font-bold text-amber-600 text-right">{totalPaymentFees.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td>
-                    </tr>
-                  </tfoot>
-                )}
+                      <td colSpan={2} className="px-4 py-3 text-sm font-bold text-amber-600 text-right">{filteredTotal.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td>
+                    </tr></>;})()}
+                </tbody>
               </table>
             </div>
           </div>
