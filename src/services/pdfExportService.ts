@@ -351,6 +351,12 @@ async function renderMietparkHtml(opts: {
   const headerLineTotal = 'Betrag';
   const totalLabel = 'Gesamtbetrag';
 
+  const unitLabel = (unit: string, qty: number): string => {
+    const match = unit.match(/^(\d+)\s+(.+)$/);
+    if (match && Number(match[1]) === qty) return match[2];
+    return unit;
+  };
+
   const rows = items
     .map((it) => {
       const qty = Number(it.quantity) || 0;
@@ -377,7 +383,7 @@ async function renderMietparkHtml(opts: {
           ${qtySub}
         </td>
         ${showQty ? `<td class="num">${esc(qty.toLocaleString('de-DE'))}</td>` : ''}
-        ${showUnit ? `<td class="num">${esc(it.unit || '')}</td>` : ''}
+        ${showUnit ? `<td class="num">${esc(unitLabel(it.unit || '', qty))}</td>` : ''}
         ${showUnitPrice ? `<td class="num">${euro(up)}</td>` : ''}
         ${showTax ? `<td class="num">${esc(String(Number(it.taxPercent) || 0))}%</td>` : ''}
         ${showLineTotal ? `<td class="num">${euro(line)}</td>` : ''}
