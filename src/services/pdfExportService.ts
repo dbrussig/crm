@@ -739,6 +739,7 @@ async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Prom
     let page = 0;
     while (offset < sourceHeight) {
       const remaining = sourceHeight - offset;
+      if (remaining < 20) break;
       let sliceHeight = Math.min(pageHeightInSourcePx, remaining);
       if (remaining > pageHeightInSourcePx) {
         const idealCutY = offset + sliceHeight;
@@ -829,7 +830,7 @@ function closeInvoicePreviewOverlay() {
   invoicePreviewOverlayEl = null;
 }
 
-function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean): boolean {
+function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean, invoiceRef?: Invoice): boolean {
   if (typeof document === 'undefined') return false;
 
   closeInvoicePreviewOverlay();
@@ -930,7 +931,14 @@ function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean)
     }
   };
 
-  savePdfBtn.addEventListener('click', openPrintWindow);
+  savePdfBtn.addEventListener('click', () => {
+    closeInvoicePreviewOverlay();
+    if (invoiceRef) {
+      exportAndDownloadPdf(invoiceRef).catch((e: unknown) => console.error('[PDF] Download fehlgeschlagen:', e));
+    } else {
+      openPrintWindow();
+    }
+  });
   printBtn.addEventListener('click', openPrintWindow);
   closeBtn.addEventListener('click', closeInvoicePreviewOverlay);
   overlay.addEventListener('click', (ev) => {
@@ -958,7 +966,7 @@ export async function openInvoicePreview(invoice: Invoice, items?: InvoiceItem[]
   const tpl = await resolveTemplate(invoice, template);
   const its = await resolveItems(invoice, items);
   const html = await renderInvoiceHtml({ invoice, items: its, template: tpl, autoPrint: false });
-  if (openInvoiceHtmlOverlay(html, `${invoice.invoiceType} ${invoice.invoiceNo}`, false)) {
+  if (openInvoiceHtmlOverlay(html, `${invoice.invoiceType} ${invoice.invoiceNo}`, false, invoice)) {
     return;
   }
 
@@ -980,7 +988,7 @@ export async function saveInvoicePdfViaPrintDialog(invoice: Invoice, items?: Inv
     console.warn('Generated document could not be persisted:', error);
   }
 
-  if (openInvoiceHtmlOverlay(html, `${invoice.invoiceType} ${invoice.invoiceNo}`, true)) {
+  if (openInvoiceHtmlOverlay(html, `${invoice.invoiceType} ${invoice.invoiceNo}`, true, invoice)) {
     return;
   }
 
