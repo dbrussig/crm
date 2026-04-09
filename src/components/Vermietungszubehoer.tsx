@@ -305,7 +305,7 @@ export default function Vermietungszubehoer() {
   if (loading) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-        Vermietungszubehör wird geladen...
+        Zubehör wird geladen...
       </div>
     );
   }
@@ -358,10 +358,7 @@ export default function Vermietungszubehoer() {
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Vermietungszubehör</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Zubehör-Bestand mit Foto, Bearbeitung und direkter Vorgangs-Verknüpfung.
-          </p>
+          <h2 className="text-2xl font-bold text-slate-900">Zubehör</h2>
         </div>
         <button
           type="button"
