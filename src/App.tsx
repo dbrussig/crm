@@ -1299,6 +1299,7 @@ export default function App() {
                 }
                 setEditingInvoiceItems(items);
                 setInvoiceListReloadTrigger(prev => prev + 1);
+                fetchAllInvoices().then(setDashboardInvoices).catch(() => {});
               }}
               onConvertToOrder={async (invoiceId) => {
                 try {
