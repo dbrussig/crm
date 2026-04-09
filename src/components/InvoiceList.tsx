@@ -294,8 +294,9 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
         const results = await Promise.all(
           batch.map(async (inv) => {
             const payments = await getPaymentsByInvoice(inv.id);
-            const total = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-            return { id: inv.id, count: payments.length, total };
+            const nonKaution = payments.filter((p) => p.kind !== 'Kaution');
+            const total = nonKaution.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+            return { id: inv.id, count: nonKaution.length, total };
           })
         );
         if (cancelled) return;

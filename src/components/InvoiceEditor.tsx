@@ -334,7 +334,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const depositAmountPreview = isDepositSupportedType && depositEnabled && depositPercent > 0
     ? Math.round((totals.total * (depositPercent / 100)) * 100) / 100 : 0;
   const grandTotalPreview = Math.round((totals.total + (depositText && depositAmountPreview > 0 ? depositAmountPreview : 0)) * 100) / 100;
-  const linkedPaymentsTotal = useMemo(() => linkedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0), [linkedPayments]);
+  const linkedPaymentsTotal = useMemo(
+    () => linkedPayments.filter((p) => p.kind !== 'Kaution').reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+    [linkedPayments]
+  );
+  const kautionTotal = useMemo(
+    () => linkedPayments.filter((p) => p.kind === 'Kaution').reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+    [linkedPayments]
+  );
 
   // ─── Effects ───────────────────────────────────────────────────
 
@@ -345,7 +352,16 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     if (!invoiceId) { setLinkedPayments([]); setLinkedPaymentsLoading(false); return; }
     setLinkedPaymentsLoading(true);
     getPaymentsByInvoice(invoiceId)
-      .then((rows) => { if (!cancelled) setLinkedPayments(rows); })
+      .then((rows) => {
+        if (!cancelled) {
+          setLinkedPayments(rows);
+          const kSum = rows.filter((p) => p.kind === 'Kaution').reduce((s, p) => s + (Number(p.amount) || 0), 0);
+          if (kSum > 0) {
+            setValue('depositReceivedEnabled', true, { shouldDirty: false });
+            setValue('depositReceivedAmount', kSum, { shouldDirty: false });
+          }
+        }
+      })
       .catch(() => { if (!cancelled) setLinkedPayments([]); })
       .finally(() => { if (!cancelled) setLinkedPaymentsLoading(false); });
     return () => { cancelled = true; };
@@ -632,9 +648,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-medium text-emerald-900">
                 Zahlungen
-                {linkedPayments.length > 0 && (
+                {linkedPayments.filter(p => p.kind !== 'Kaution').length > 0 && (
                   <span className="ml-2 text-xs text-emerald-700">
-                    {linkedPayments.length}× • {linkedPaymentsTotal.toFixed(2)} €
+                    {linkedPayments.filter(p => p.kind !== 'Kaution').length}× • {linkedPaymentsTotal.toFixed(2)} €
+                  </span>
+                )}
+                {kautionTotal > 0 && (
+                  <span className="ml-2 text-xs text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                    Kaution {kautionTotal.toFixed(2)} €
                   </span>
                 )}
               </h3>
@@ -654,10 +675,11 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 {linkedPayments.length > 0 && (
                   <div className="mb-3 rounded border border-emerald-200 bg-white divide-y divide-emerald-100 overflow-hidden">
                     {linkedPayments.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between px-3 py-2">
+                      <div key={p.id} className={`flex items-center justify-between px-3 py-2 ${p.kind === 'Kaution' ? 'bg-amber-50' : ''}`}>
                         <div>
                           <div className="text-sm font-medium text-gray-900">
                             {(Number(p.amount) || 0).toFixed(2)} € · {p.kind}
+                            {p.kind === 'Kaution' && <span className="ml-2 text-xs text-amber-600">(erscheint auf Rechnung)</span>}
                           </div>
                           <div className="text-xs text-gray-500">
                             {new Date(p.receivedAt || p.createdAt).toLocaleDateString('de-DE')} · {paymentMethods.find(m => m.id === p.method)?.label || p.method}
