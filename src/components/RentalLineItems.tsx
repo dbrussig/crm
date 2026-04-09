@@ -130,7 +130,7 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
                 aria-label={`Position ${index + 1}: Produkt`}
               >
                 {useResources
-                  ? resources!.filter((r) => r.isActive).map((r) => (
+                  ? resources!.filter((r) => r.isActive).sort((a, b) => a.name.localeCompare(b.name, 'de')).map((r) => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))
                   : RENTAL_PRODUCTS.map((p) => (
