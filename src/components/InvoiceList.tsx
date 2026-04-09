@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { ArrowRight, Check, Eye, Mail, Pencil, Send, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, Eye, Mail, Send, Trash2 } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, MailTransportSettings } from '../types';
 import {
   fetchAllInvoices,
@@ -522,7 +522,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Aktionen
                 </th>
               </tr>
@@ -594,19 +594,8 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                     <td className="px-4 py-3 text-sm">
                       {getStatusBadge(invoice.state)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* Edit */}
-                        <button
-                          onClick={() => void runAction(`edit:${invoice.id}`, () => onEdit(invoice))}
-                          className={actionButtonClass}
-                          disabled={Boolean(busyActionKey)}
-                          title="Bearbeiten"
-                          aria-label={`Beleg ${invoice.invoiceNo} bearbeiten`}
-                        >
-                          <Pencil size={14} aria-hidden="true" />
-                        </button>
-
+                    <td className="px-4 py-3 text-left text-sm font-medium">
+                      <div className="flex items-center justify-start gap-1">
                         {/* PDF */}
                         <button
                           onClick={() => void runAction(`preview:${invoice.id}`, async () => { await openInvoicePreview(invoice); })}
