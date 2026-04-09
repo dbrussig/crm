@@ -389,23 +389,25 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {totalPaymentFees > 0 && (
-                  <tr className="bg-amber-50">
+                {Object.entries(feesByMethod).map(([key, val], idx) => (
+                  <tr key={key} className="bg-amber-50">
                     <td className="px-4 py-3 text-sm text-slate-400">-</td>
-                    <td className="px-4 py-3 text-sm text-amber-700 font-medium">SumUp / PayPal</td>
+                    <td className="px-4 py-3 text-sm text-amber-700 font-medium">{val.label}</td>
                     <td className="px-4 py-3 text-sm text-amber-700">
                       <button onClick={() => setIsFeeDrilldownOpen(true)} className="flex items-center gap-1 hover:underline">
                         Zahlungsgebühren {selectedYear} <ChevronRight className="h-4 w-4" />
                       </button>
                     </td>
-                    <td className="px-4 py-3 text-sm text-amber-700 font-bold text-right">{totalPaymentFees.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="px-4 py-3 text-sm text-amber-700 font-bold text-right">{val.totalFee.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={handleExportPaymentFeesPDF} className="p-2 rounded-md text-amber-600 hover:bg-amber-100" title="PDF Export">
-                        <FileDown className="h-4 w-4" />
-                      </button>
+                      {idx === 0 && (
+                        <button onClick={handleExportPaymentFeesPDF} className="p-2 rounded-md text-amber-600 hover:bg-amber-100" title="PDF Export">
+                          <FileDown className="h-4 w-4" />
+                        </button>
+                      )}
                     </td>
                   </tr>
-                )}
+                ))}
                 {yearExpenses.length === 0 && totalPaymentFees === 0 ? (
                   <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500 text-sm">Keine Betriebsausgaben für {selectedYear}</td></tr>
                 ) : (
