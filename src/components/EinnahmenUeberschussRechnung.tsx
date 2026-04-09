@@ -104,9 +104,10 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
       if (p.kind === 'Kaution') return false;
       if (seenPaymentIds.has(p.id)) return false;
       seenPaymentIds.add(p.id);
-      // Inhaltliche Duplikate: gleicher Vorgang + gleicher Betrag + gleiches Datum
-      if (p.rentalRequestId) {
-        const key = `${p.rentalRequestId}|${p.amount}|${p.receivedAt || p.createdAt}|${p.kind}`;
+      // Inhaltliche Duplikate: gleicher Anker (Vorgang oder Rechnung) + gleicher Betrag + gleiches Datum + gleiche Art
+      const anchor = p.rentalRequestId || p.invoiceId;
+      if (anchor) {
+        const key = `${anchor}|${p.amount}|${p.receivedAt || p.createdAt}|${p.kind}`;
         if (seenPaymentKeys.has(key)) return false;
         seenPaymentKeys.add(key);
       }
