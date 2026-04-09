@@ -7,12 +7,10 @@ interface InvoiceCustomerBlockProps {
 }
 
 export default function InvoiceCustomerBlock({ customers }: InvoiceCustomerBlockProps) {
-  const { register, formState: { errors }, watch, setValue } = useFormContext<InvoiceFormValues>();
-  
+  const { register, watch, setValue } = useFormContext<InvoiceFormValues>();
+
   const buyerName = watch('buyerName');
   const buyerAddress = watch('buyerAddress');
-  const hasBuyerName = buyerName?.trim().length > 0;
-  const hasBuyerAddress = buyerAddress?.trim().length > 0;
 
   const handleCustomerChange = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
@@ -25,12 +23,16 @@ export default function InvoiceCustomerBlock({ customers }: InvoiceCustomerBlock
 
   return (
     <div className="space-y-4">
+      {/* Hidden inputs damit Formwerte erhalten bleiben */}
+      <input type="hidden" {...register('buyerName', { required: true })} />
+      <input type="hidden" {...register('buyerAddress', { required: true })} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="companyId">
             Kunde wählen
           </label>
-          <select 
+          <select
             id="companyId"
             {...register('companyId')}
             onChange={(e) => handleCustomerChange(e.target.value)}
@@ -44,7 +46,7 @@ export default function InvoiceCustomerBlock({ customers }: InvoiceCustomerBlock
           <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="salutation">
             Anrede
           </label>
-          <select 
+          <select
             id="salutation"
             {...register('salutation')}
             className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
@@ -56,50 +58,17 @@ export default function InvoiceCustomerBlock({ customers }: InvoiceCustomerBlock
           </select>
         </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="buyerName">
-          Name *
-        </label>
-        <input 
-          id="buyerName"
-          type="text" 
-          {...register('buyerName', { required: 'Name ist ein Pflichtfeld' })}
-          className={[
-            'w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
-            errors.buyerName ? 'border-red-300 bg-red-50' : 'border-slate-300'
-          ].join(' ')}
-          placeholder="Max Mustermann" 
-        />
-        {errors.buyerName && <p className="mt-1 text-xs text-red-600">{errors.buyerName.message}</p>}
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="buyerAddress">
-          Adresse *
-        </label>
-        <textarea 
-          id="buyerAddress"
-          {...register('buyerAddress', { required: 'Adresse ist ein Pflichtfeld' })}
-          rows={3}
-          className={[
-            'w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500',
-            errors.buyerAddress ? 'border-red-300 bg-red-50' : 'border-slate-300'
-          ].join(' ')}
-          placeholder="Musterstraße 1&#10;12345 Musterstadt&#10;Deutschland" 
-        />
-        {errors.buyerAddress && <p className="mt-1 text-xs text-red-600">{errors.buyerAddress.message}</p>}
-      </div>
 
-      {hasBuyerName && hasBuyerAddress && (
-        <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-          <p className="text-xs font-medium text-indigo-700 mb-2">Empfänger-Vorschau</p>
-          <div className="space-y-0.5 text-sm">
-            {buyerName.trim().split('\n').map((line, i) => (
-              <p key={i} className={i === 0 ? 'text-gray-900 font-medium' : 'text-gray-600'}>{line}</p>
-            ))}
-            {buyerAddress.trim().split('\n').map((line, i) => (
-              <p key={`a${i}`} className="text-gray-600">{line}</p>
-            ))}
-          </div>
+      {buyerName?.trim() ? (
+        <div className="px-3 py-2 rounded-md bg-slate-50 border border-slate-200 text-sm text-slate-800 space-y-0.5">
+          <div className="font-medium">{buyerName.trim()}</div>
+          {buyerAddress?.trim().split('\n').map((line, i) => (
+            <div key={i} className="text-slate-600">{line}</div>
+          ))}
+        </div>
+      ) : (
+        <div className="px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-sm text-amber-700">
+          Bitte Kunden wählen
         </div>
       )}
     </div>
