@@ -969,14 +969,6 @@ const CustomerList: React.FC<CustomerListProps> = ({
                   <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="font-medium text-slate-900">{customer.firstName} {customer.lastName}</div>
-                      {(() => {
-                        const line = [
-                          customer.address?.street?.trim(),
-                          [customer.address?.zipCode?.trim(), customer.address?.city?.trim()].filter(Boolean).join(' '),
-                        ].filter(Boolean).join(', ');
-                        if (!line) return null;
-                        return <div className="text-sm text-slate-500">{line}</div>;
-                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm">
