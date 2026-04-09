@@ -97,11 +97,18 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
 
   // Direkt aus Payments (tatsächlich eingegangene Zahlungen, Kaution und Duplikate ausschließen)
   const seenPaymentIds = new Set<string>();
+  const seenPaymentKeys = new Set<string>();
   const incomePayments = payments
     .filter(p => {
       if (p.kind === 'Kaution') return false;
       if (seenPaymentIds.has(p.id)) return false;
       seenPaymentIds.add(p.id);
+      // Inhaltliche Duplikate: gleicher Vorgang + gleicher Betrag + gleiches Datum
+      if (p.rentalRequestId) {
+        const key = `${p.rentalRequestId}|${p.amount}|${p.receivedAt || p.createdAt}|${p.kind}`;
+        if (seenPaymentKeys.has(key)) return false;
+        seenPaymentKeys.add(key);
+      }
       return true;
     })
     .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
