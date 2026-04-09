@@ -472,18 +472,6 @@ export default function Vermietungszubehoer() {
                 aktiv
               </label>
               <input
-                className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm"
-                placeholder="Marke"
-                value={form.brand}
-                onChange={(e) => setForm((p) => ({ ...p, brand: e.target.value }))}
-              />
-              <input
-                className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm"
-                placeholder="Modell"
-                value={form.model}
-                onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))}
-              />
-              <input
                 type="number"
                 className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm"
                 placeholder="Länge (cm)"
