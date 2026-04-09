@@ -1,7 +1,7 @@
 import type { InvoiceType, RentalStatus } from '../types';
 import { createFollowUpInvoiceFromInvoice, fetchInvoiceById, removeInvoice } from './invoiceService';
 import { canTransitionStatus, transitionStatus } from './rentalService';
-import { updateInvoice } from './sqliteService';
+import { assignPaymentToInvoice, getPaymentsByRental, updateInvoice } from './sqliteService';
 
 /**
  * Maps an invoice-type conversion to the appropriate rental status.
@@ -40,6 +40,20 @@ export async function createFollowUpInvoiceWithStatusSync(
 
   if (!source?.invoice?.rentalRequestId) {
     return { nextInvoiceId, rentalStatusUpdated: false };
+  }
+
+  // Bei Konvertierung zu Rechnung: alle offenen Payments des Vorgangs der neuen Rechnung zuweisen
+  if (targetType === 'Rechnung') {
+    try {
+      const rentalPayments = await getPaymentsByRental(source.invoice.rentalRequestId);
+      await Promise.all(
+        rentalPayments
+          .filter((p) => !p.invoiceId)
+          .map((p) => assignPaymentToInvoice(p.id, nextInvoiceId))
+      );
+    } catch (e) {
+      console.warn('Payment-Zuweisung zur Rechnung fehlgeschlagen:', e);
+    }
   }
 
   const targetStatus = rentalStatusForConversion(targetType);
