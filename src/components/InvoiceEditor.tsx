@@ -10,7 +10,7 @@ import { ChevronDown, Download, Eye, FileText, Mail, Save, Send } from 'lucide-r
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import type { InvoiceFormValues } from './invoice/types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
-import { INVOICE_LAYOUTS, getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
+import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
 import { getPaymentsByInvoice } from '../services/sqliteService';
 import InvoiceWorkflowBar from './InvoiceWorkflowBar';
@@ -20,15 +20,10 @@ import Accordion from './ui/Accordion';
 import { useInvoiceExport } from '../hooks/useInvoiceExport';
 import { useInvoiceDirtyTracking } from '../hooks/useInvoiceDirtyTracking';
 import AutoSaveIndicator from './AutoSaveIndicator';
-import InvoiceLineItems from './InvoiceLineItems';
+import RentalLineItems from './RentalLineItems';
+import { DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL, getSuggestedPrice } from '../config/rentalCatalog';
 import InvoiceHeaderFields from './invoice/InvoiceHeaderFields';
 import InvoiceCustomerBlock from './invoice/InvoiceCustomerBlock';
-import InvoiceDatesBlock from './invoice/InvoiceDatesBlock';
-import InvoiceDepositBlock from './invoice/InvoiceDepositBlock';
-import InvoiceTextBlocks from './invoice/InvoiceTextBlocks';
-import InvoicePaymentsBlock from './invoice/InvoicePaymentsBlock';
-import InvoiceTotalsSummary from './invoice/InvoiceTotalsSummary';
-import InvoiceActions from './invoice/InvoiceActions';
 import { Card } from './invoice/Card';
 
 export type { InvoiceFormValues };
@@ -225,12 +220,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // ─── Derived State ─────────────────────────────────────────────
 
   const layout = useMemo(() => getInvoiceLayout(layoutId), [layoutId]);
-  const showQty = true;
-  const showUnit = true;
-  const showUnitPrice = true;
-  const showTax = false;
-  const showLineTotal = true;
-
   const hasBuyerName = buyerName.trim().length > 0;
   const hasBuyerAddress = buyerAddress.trim().length > 0;
   const canSave = hasBuyerName && hasBuyerAddress;
@@ -410,9 +399,13 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // ─── Position CRUD ─────────────────────────────────────────────
 
   const addPosition = () => {
+    const defaultPrice = getSuggestedPrice(DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL);
     append({
-      id: `temp_${Date.now()}`, invoiceId: '', name: '', orderIndex: fields.length,
-      unitPrice: 0, quantity: 1, taxPercent: 0, unit: 'Stück', createdAt: Date.now(),
+      id: `temp_${Date.now()}`, invoiceId: '',
+      name: `Dachbox 524L (XL) inkl. Träger – ${DEFAULT_DURATION_LABEL}`,
+      orderIndex: fields.length,
+      unitPrice: defaultPrice, quantity: 1, taxPercent: 0,
+      unit: DEFAULT_DURATION_LABEL, createdAt: Date.now(),
     } as InvoiceItem);
   };
 
@@ -660,30 +653,18 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           </div>
         )}
 
-        {/* Karte 3: Positionen - ohne Padding für volle Tabellenbreite */}
+        {/* Karte 3: Positionen */}
         <Card title="Positionen" noPadding>
-          <InvoiceLineItems
+          <RentalLineItems
             items={fields as InvoiceItem[]}
-            showQty={showQty} showUnit={showUnit} showUnitPrice={showUnitPrice}
-            showTax={showTax} showLineTotal={showLineTotal}
             onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition}
           />
         </Card>
 
-        {/* Karte 4: Summen & Vorschau - rechtsbündig wie Kassenbeleg */}
+        {/* Karte 4: Summen - kompakt für Kleinunternehmer */}
         <div className="flex justify-end">
           <Card className="w-full max-w-sm">
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Zwischensumme:</span>
-                <span className="font-medium">{totals.subtotal.toFixed(2)} €</span>
-              </div>
-              {totals.hasTax && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">USt. ({totals.singleTaxRate != null ? `${totals.singleTaxRate}%` : `${totals.effectiveTaxRate}%`}):</span>
-                  <span className="font-medium">{totals.tax.toFixed(2)} €</span>
-                </div>
-              )}
               {isDepositSupportedType && depositEnabled && depositText && depositAmountPreview > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Anzahlung ({depositPercent || 0}%):</span>
@@ -694,6 +675,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 <span>Gesamtbetrag:</span>
                 <span>{grandTotalPreview.toFixed(2)} €</span>
               </div>
+              <p className="text-xs text-slate-500 pt-1">
+                Keine Umsatzsteuer gem. §&nbsp;19 UStG
+              </p>
             </div>
           </Card>
         </div>
