@@ -363,9 +363,6 @@ export default function Stammdaten() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Artikel</h2>
-          <p className="text-sm text-slate-600">
-            Übersicht deiner Miet-Items. (Zubehör wie Dachträger folgt als eigener Anhang/Katalog.)
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
