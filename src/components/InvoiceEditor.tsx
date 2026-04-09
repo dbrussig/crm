@@ -409,7 +409,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     const defaultPrice = getSuggestedPrice(DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL);
     append({
       id: `temp_${Date.now()}`, invoiceId: '',
-      name: `Dachbox 524L (XL) inkl. Träger – ${DEFAULT_DURATION_LABEL}`,
+      name: `Dachbox 524L (XL) inkl. Träger`,
       orderIndex: fields.length,
       unitPrice: defaultPrice, quantity: 1, taxPercent: 0,
       unit: DEFAULT_DURATION_LABEL, createdAt: Date.now(),
