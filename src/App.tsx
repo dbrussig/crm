@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AISettings, Customer, GmailAttachmentSummary, GoogleOAuthSettings, InboxImportResult, Invoice, InvoiceItem, MailTransportSettings, Payment, RentalRequest, RentalStatus } from './types';
@@ -61,6 +61,7 @@ export default function App() {
     rentalId?: string;
     nextRentalStatus?: RentalStatus;
   } | null>(null);
+  const invoiceIsDirtyRef = useRef(false);
   const [invoiceListReloadTrigger, setInvoiceListReloadTrigger] = useState(0);
   const [dashboardRentals, setDashboardRentals] = useState<RentalRequest[]>([]);
   const [dashboardInvoices, setDashboardInvoices] = useState<Invoice[]>([]);
@@ -1260,7 +1261,12 @@ export default function App() {
               </h2>
               <button
                 className="px-3 py-2 rounded-md border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
-                onClick={() => {
+                onClick={async () => {
+                  if (invoiceIsDirtyRef.current) {
+                    const ok = window.confirm('Ungespeicherte Änderungen vorhanden. Trotzdem verlassen?');
+                    if (!ok) return;
+                  }
+                  invoiceIsDirtyRef.current = false;
                   setEditingInvoiceContext(null);
                   setEditingInvoice(null);
                   setActiveView('belege');
@@ -1273,6 +1279,7 @@ export default function App() {
               invoice={editingInvoice}
               items={editingInvoiceItems || []}
               customers={customers}
+              onDirtyChange={(dirty) => { invoiceIsDirtyRef.current = dirty; }}
               onSave={async (inv, items) => {
                 const wasCreate = !inv.id;
                 const saveContext: SaveInvoiceContext | undefined =

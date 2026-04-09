@@ -14,6 +14,7 @@ interface UseInvoiceDirtyTrackingOpts {
   externalState: ExternalState;
   formVersion: unknown; // result of watch() — triggers on every form change
   template: unknown; // template object — triggers baseline initialization
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export function useInvoiceDirtyTracking({
@@ -22,6 +23,7 @@ export function useInvoiceDirtyTracking({
   externalState,
   formVersion,
   template,
+  onDirtyChange,
 }: UseInvoiceDirtyTrackingOpts) {
   const dirtyBaselineRef = useRef<string>('');
   const dirtyInitializedRef = useRef(false);
@@ -53,6 +55,8 @@ export function useInvoiceDirtyTracking({
       taxNote: vals.taxNote,
       agbText: vals.agbText,
       agbLink: vals.agbLink,
+      pickupTime: vals.pickupTime,
+      returnTime: vals.returnTime,
       items: fields.map((it) => ({
         id: it.id,
         name: it.name,
@@ -60,6 +64,7 @@ export function useInvoiceDirtyTracking({
         unitPrice: it.unitPrice,
         quantity: it.quantity,
         taxPercent: it.taxPercent,
+        withCarrier: it.withCarrier,
       })),
     });
   };
@@ -78,7 +83,9 @@ export function useInvoiceDirtyTracking({
   useEffect(() => {
     if (!dirtyInitializedRef.current) return;
     const next = buildDirtySnapshot();
-    setIsDirty(next !== dirtyBaselineRef.current);
+    const dirty = next !== dirtyBaselineRef.current;
+    setIsDirty(dirty);
+    onDirtyChange?.(dirty);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formVersion, externalState.invoiceType, externalState.state, externalState.selectedCustomerId, externalState.layoutId, fields]);
 

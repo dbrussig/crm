@@ -92,6 +92,7 @@ interface InvoiceEditorProps {
   onConvertToOrder?: (invoiceId: string) => void;
   onConvertToInvoice?: (invoiceId: string) => void;
   onReissue?: (invoiceId: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
@@ -103,6 +104,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   onConvertToOrder,
   onConvertToInvoice,
   onReissue,
+  onDirtyChange,
 }) => {
   const company = useMemo(() => getCompanyProfile(), []);
 
@@ -277,6 +279,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // ─── Dirty Tracking ────────────────────────────────────────────
 
   const { isDirty, setIsDirty, resetDirtyBaseline } = useInvoiceDirtyTracking({
+    onDirtyChange,
     getValues: getValues as () => Record<string, unknown>,
     fields: fields as InvoiceItem[],
     externalState: { invoiceType, state, selectedCustomerId: companyId, layoutId },
