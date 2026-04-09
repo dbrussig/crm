@@ -309,6 +309,14 @@ export interface Resource {
   createdAt: number;
   dailyRate: number;
   deposit: number;
+  weekendRate?: number;
+  weeklyRate?: number;
+  biweeklyRate?: number;
+  triweeklyRate?: number;
+  enableWeekendRate?: boolean;
+  enableWeeklyRate?: boolean;
+  enableBiweeklyRate?: boolean;
+  enableTriweeklyRate?: boolean;
 }
 
 export type AccessoryCategory = 'Bundle' | 'Dachträger' | 'Fußsatz' | 'Querträger' | 'Kit' | 'Sonstiges';

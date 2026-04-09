@@ -109,6 +109,14 @@ export default function Stammdaten() {
     isActive: boolean;
     googleCalendarId: string;
     itemPhotoDataUrl: string;
+    weekendRate: number;
+    weeklyRate: number;
+    biweeklyRate: number;
+    triweeklyRate: number;
+    enableWeekendRate: boolean;
+    enableWeeklyRate: boolean;
+    enableBiweeklyRate: boolean;
+    enableTriweeklyRate: boolean;
   }>({
     name: '',
     type: 'Dachbox XL',
@@ -117,6 +125,14 @@ export default function Stammdaten() {
     isActive: true,
     googleCalendarId: '',
     itemPhotoDataUrl: '',
+    weekendRate: 0,
+    weeklyRate: 0,
+    biweeklyRate: 0,
+    triweeklyRate: 0,
+    enableWeekendRate: false,
+    enableWeeklyRate: true,
+    enableBiweeklyRate: false,
+    enableTriweeklyRate: false,
   });
 
   async function load() {
@@ -194,6 +210,14 @@ export default function Stammdaten() {
       isActive: true,
       googleCalendarId: '',
       itemPhotoDataUrl: '',
+      weekendRate: 0,
+      weeklyRate: 0,
+      biweeklyRate: 0,
+      triweeklyRate: 0,
+      enableWeekendRate: false,
+      enableWeeklyRate: true,
+      enableBiweeklyRate: false,
+      enableTriweeklyRate: false,
     });
     setPhotoError(null);
     setModalOpen(true);
@@ -209,6 +233,14 @@ export default function Stammdaten() {
       isActive: Boolean(r.isActive),
       googleCalendarId: r.googleCalendarId || '',
       itemPhotoDataUrl: r.itemPhotoDataUrl || '',
+      weekendRate: Number(r.weekendRate || 0),
+      weeklyRate: Number(r.weeklyRate || 0),
+      biweeklyRate: Number(r.biweeklyRate || 0),
+      triweeklyRate: Number(r.triweeklyRate || 0),
+      enableWeekendRate: Boolean(r.enableWeekendRate),
+      enableWeeklyRate: r.enableWeeklyRate !== false,
+      enableBiweeklyRate: Boolean(r.enableBiweeklyRate),
+      enableTriweeklyRate: Boolean(r.enableTriweeklyRate),
     });
     setPhotoError(null);
     setModalOpen(true);
@@ -244,6 +276,16 @@ export default function Stammdaten() {
       return;
     }
     try {
+      const rateFields = {
+        weekendRate: form.enableWeekendRate ? Number(form.weekendRate || 0) : undefined,
+        weeklyRate: form.enableWeeklyRate ? Number(form.weeklyRate || 0) : undefined,
+        biweeklyRate: form.enableBiweeklyRate ? Number(form.biweeklyRate || 0) : undefined,
+        triweeklyRate: form.enableTriweeklyRate ? Number(form.triweeklyRate || 0) : undefined,
+        enableWeekendRate: form.enableWeekendRate,
+        enableWeeklyRate: form.enableWeeklyRate,
+        enableBiweeklyRate: form.enableBiweeklyRate,
+        enableTriweeklyRate: form.enableTriweeklyRate,
+      };
       if (editing) {
         await modifyResource(editing.id, {
           name: form.name.trim(),
@@ -253,6 +295,7 @@ export default function Stammdaten() {
           isActive: Boolean(form.isActive),
           googleCalendarId: form.googleCalendarId.trim(),
           itemPhotoDataUrl: form.itemPhotoDataUrl,
+          ...rateFields,
         });
       } else {
         const now = Date.now();
@@ -266,6 +309,7 @@ export default function Stammdaten() {
           createdAt: now,
           dailyRate: Number(form.dailyRate || 0),
           deposit: Number(form.deposit || 0),
+          ...rateFields,
         };
         await createResource(r);
       }
@@ -516,163 +560,238 @@ export default function Stammdaten() {
         </div>
       )}
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <div className="text-sm text-slate-500">Artikel</div>
-                <div className="text-lg font-semibold text-slate-900">{editing ? 'Bearbeiten' : 'Neu anlegen'}</div>
-              </div>
-            </div>
+      {modalOpen && (() => {
+        const fldCls = 'h-9 w-full px-3 border border-slate-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+        const fldDisCls = 'h-9 w-full px-3 border border-slate-200 rounded-md text-sm bg-slate-50 text-slate-400 cursor-not-allowed';
+        const lblCls = 'block text-xs font-medium text-slate-500 mb-1';
+        const lblPCls = 'block text-xs font-medium text-slate-700 mb-1';
 
-            <div className="p-4 space-y-3">
-              <label className="text-sm block">
-                <div className="text-xs font-medium text-slate-700 mb-1">Name *</div>
-                <input
-                  className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm"
-                  value={form.name}
-                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="z.B. Dachbox XL #2"
-                />
-              </label>
+        type PriceRow = { key: 'weekendRate' | 'weeklyRate' | 'biweeklyRate' | 'triweeklyRate'; enableKey: 'enableWeekendRate' | 'enableWeeklyRate' | 'enableBiweeklyRate' | 'enableTriweeklyRate'; label: string; };
+        const priceRows: PriceRow[] = [
+          { key: 'weekendRate',   enableKey: 'enableWeekendRate',   label: 'Wochenendpreis' },
+          { key: 'weeklyRate',    enableKey: 'enableWeeklyRate',    label: '1 Woche' },
+          { key: 'biweeklyRate',  enableKey: 'enableBiweeklyRate',  label: '2 Wochen' },
+          { key: 'triweeklyRate', enableKey: 'enableTriweeklyRate', label: '3 Wochen' },
+        ];
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="text-sm block">
-                  <div className="text-xs font-medium text-slate-700 mb-1">Typ</div>
-                  <select
-                    className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
-                    value={form.type}
-                    onChange={(e) => {
-                      const next = e.target.value as ProductType;
-                      setForm((p) => ({
-                        ...p,
-                        type: next,
-                        deposit: p.deposit || defaultDepositForType(next),
-                      }));
-                    }}
-                  >
-                    <option value="Dachbox XL">Dachbox XL</option>
-                    <option value="Dachbox L">Dachbox L</option>
-                    <option value="Dachbox M">Dachbox M</option>
-                    <option value="Fahrradträger">Fahrradträger</option>
-                    <option value="Heckbox">Heckbox</option>
-                    <option value="Hüpfburg">Hüpfburg</option>
-                  </select>
-                </label>
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[92vh]">
 
-                <label className="text-sm block">
-                  <div className="text-xs font-medium text-slate-700 mb-1">Aktiv</div>
-                  <select
-                    className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
-                    value={form.isActive ? 'ja' : 'nein'}
-                    onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.value === 'ja' }))}
-                  >
-                    <option value="ja">Ja</option>
-                    <option value="nein">Nein</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="text-sm block">
-                  <div className="text-xs font-medium text-slate-700 mb-1">Tagespreis (EUR)</div>
-                  <input
-                    className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm"
-                    type="number"
-                    step="0.01"
-                    value={form.dailyRate || ''}
-                    onChange={(e) => setForm((p) => ({ ...p, dailyRate: Number(e.target.value || 0) }))}
-                  />
-                </label>
-                <label className="text-sm block">
-                  <div className="text-xs font-medium text-slate-700 mb-1">Kaution (EUR)</div>
-                  <input
-                    className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm"
-                    type="number"
-                    step="0.01"
-                    value={form.deposit || ''}
-                    onChange={(e) => setForm((p) => ({ ...p, deposit: Number(e.target.value || 0) }))}
-                    placeholder={String(defaultDepositForType(form.type))}
-                  />
-                </label>
-              </div>
-
-              <div className="text-sm block">
-                <div className="text-xs font-medium text-slate-700 mb-1">Foto</div>
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <span className="px-3 py-2 rounded-md border border-slate-200 text-sm bg-white hover:bg-slate-50 text-slate-700">
-                    {photoBusy ? 'Wird geladen…' : 'Foto auswählen'}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(e) => {
-                      void handleItemPhotoChange(e.target.files);
-                      e.currentTarget.value = '';
-                    }}
-                    disabled={photoBusy}
-                  />
-                </label>
-                <div className="mt-1 text-xs text-slate-500">
-                  Dieses Foto wird zur klaren Unterscheidung des Vermietungsgegenstands genutzt.
+              {/* Header */}
+              <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Artikel</p>
+                  <h2 className="text-base font-semibold text-slate-900 leading-tight">
+                    {editing ? (editing.name || 'Bearbeiten') : 'Neu anlegen'}
+                  </h2>
                 </div>
-                {photoError && <div className="mt-2 text-xs text-red-600">{photoError}</div>}
-                {form.itemPhotoDataUrl && (
-                  <div className="mt-2">
-                    <img
-                      src={form.itemPhotoDataUrl}
-                      alt="Vorschau Vermietungsgegenstand"
-                      className="w-28 h-28 rounded-lg object-cover border border-slate-200 bg-slate-100"
-                    />
-                    <button
-                      type="button"
-                      className="mt-2 px-3 py-1.5 rounded-md border border-slate-200 text-xs hover:bg-slate-50"
-                      onClick={() => setForm((p) => ({ ...p, itemPhotoDataUrl: '' }))}
-                    >
-                      Foto entfernen
-                    </button>
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  title="Schließen"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
 
-              <details className="rounded-lg border border-slate-200 p-3">
-                <summary className="cursor-pointer text-sm text-slate-700 select-none">Erweitert</summary>
-                <div className="mt-3">
-                  <label className="text-sm block">
-                    <div className="text-xs font-medium text-slate-700 mb-1">Kalender-Referenz (optional)</div>
+              <div className="p-5 space-y-4 overflow-y-auto">
+
+                {/* 1. Stammdaten */}
+                <section>
+                  <p className={lblCls.replace('mb-1', 'mb-2') + ' uppercase tracking-widest text-[10px] font-semibold text-slate-400'}>Stammdaten</p>
+                  <div className="mb-2">
+                    <label className={lblPCls}>Name <span className="text-red-500">*</span></label>
                     <input
-                      className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm font-mono"
+                      className={fldCls}
+                      value={form.name}
+                      onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="z.B. Dachbox XL #2"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className={lblCls}>Typ</label>
+                      <select
+                        className={fldCls}
+                        value={form.type}
+                        onChange={(e) => {
+                          const next = e.target.value as ProductType;
+                          setForm((p) => ({ ...p, type: next, deposit: p.deposit || defaultDepositForType(next) }));
+                        }}
+                      >
+                        <option value="Dachbox XL">Dachbox XL</option>
+                        <option value="Dachbox L">Dachbox L</option>
+                        <option value="Dachbox M">Dachbox M</option>
+                        <option value="Fahrradträger">Fahrradträger</option>
+                        <option value="Heckbox">Heckbox</option>
+                        <option value="Hüpfburg">Hüpfburg</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={lblCls}>Status</label>
+                      <select
+                        className={fldCls}
+                        value={form.isActive ? 'ja' : 'nein'}
+                        onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.value === 'ja' }))}
+                      >
+                        <option value="ja">Aktiv</option>
+                        <option value="nein">Inaktiv</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                {/* 2. Foto */}
+                <section>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Foto</p>
+                  <div className="flex items-center gap-3">
+                    {form.itemPhotoDataUrl ? (
+                      <img
+                        src={form.itemPhotoDataUrl}
+                        alt="Vorschau"
+                        className="w-16 h-16 rounded-lg object-cover border border-slate-200 bg-slate-100 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+                        <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <span className="px-3 py-1.5 rounded-md border border-slate-300 text-xs bg-white hover:bg-slate-50 text-slate-700 font-medium">
+                          {photoBusy ? 'Wird geladen…' : (form.itemPhotoDataUrl ? 'Foto ersetzen' : 'Foto auswählen')}
+                        </span>
+                        <input type="file" accept="image/*" className="sr-only"
+                          onChange={(e) => { void handleItemPhotoChange(e.target.files); e.currentTarget.value = ''; }}
+                          disabled={photoBusy}
+                        />
+                      </label>
+                      {form.itemPhotoDataUrl && (
+                        <button type="button"
+                          className="px-3 py-1.5 rounded-md border border-slate-200 text-xs text-red-600 hover:bg-red-50 text-left"
+                          onClick={() => setForm((p) => ({ ...p, itemPhotoDataUrl: '' }))}
+                        >
+                          Foto entfernen
+                        </button>
+                      )}
+                      {photoError && <p className="text-xs text-red-600">{photoError}</p>}
+                    </div>
+                  </div>
+                </section>
+
+                {/* 3. Kaution */}
+                <section>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Kaution</p>
+                  <div className="w-48">
+                    <label className={lblCls}>Kaution (EUR)</label>
+                    <div className="relative">
+                      <input
+                        className={fldCls + ' pr-8'}
+                        type="number" step="0.01" min="0"
+                        value={form.deposit || ''}
+                        onChange={(e) => setForm((p) => ({ ...p, deposit: Number(e.target.value || 0) }))}
+                        placeholder={String(defaultDepositForType(form.type))}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* 4. Preismodell */}
+                <section className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Preismodell</p>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {/* Tagespreis – immer aktiv */}
+                    <div className="px-3 py-2 flex items-center gap-3">
+                      <span className="w-4 h-4 rounded-full bg-blue-500 shrink-0" title="Immer aktiv" />
+                      <span className="flex-1 text-sm font-medium text-slate-800">Tagespreis</span>
+                      <div className="relative w-28">
+                        <input
+                          className={fldCls + ' pr-7'}
+                          type="number" step="0.01" min="0"
+                          value={form.dailyRate || ''}
+                          onChange={(e) => setForm((p) => ({ ...p, dailyRate: Number(e.target.value || 0) }))}
+                          placeholder="0.00"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
+                      </div>
+                    </div>
+                    {/* Wochenend- + Wochenpreise mit Toggle */}
+                    {priceRows.map((row) => {
+                      const enabled = form[row.enableKey];
+                      return (
+                        <div key={row.key} className={['px-3 py-2 flex items-center gap-3 transition-colors', enabled ? '' : 'opacity-50'].join(' ')}>
+                          <button
+                            type="button"
+                            onClick={() => setForm((p) => ({ ...p, [row.enableKey]: !p[row.enableKey] }))}
+                            className={['w-8 h-5 rounded-full transition-colors shrink-0 relative', enabled ? 'bg-blue-500' : 'bg-slate-200'].join(' ')}
+                            title={enabled ? 'Deaktivieren' : 'Aktivieren'}
+                            aria-label={enabled ? `${row.label} deaktivieren` : `${row.label} aktivieren`}
+                          >
+                            <span className={['absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform', enabled ? 'left-3.5' : 'left-0.5'].join(' ')} />
+                          </button>
+                          <span className={['flex-1 text-sm', enabled ? 'font-medium text-slate-800' : 'text-slate-500'].join(' ')}>{row.label}</span>
+                          <div className="relative w-28">
+                            <input
+                              className={enabled ? fldCls + ' pr-7' : fldDisCls + ' pr-7'}
+                              type="number" step="0.01" min="0"
+                              value={form[row.key] || ''}
+                              onChange={(e) => setForm((p) => ({ ...p, [row.key]: Number(e.target.value || 0) }))}
+                              disabled={!enabled}
+                              placeholder="0.00"
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* 5. Erweitert */}
+                <details className="rounded-lg border border-slate-200">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-slate-500 select-none hover:bg-slate-50">Erweitert</summary>
+                  <div className="px-3 pb-3 pt-2">
+                    <label className={lblCls}>Kalender-Referenz <span className="text-slate-300">(optional)</span></label>
+                    <input
+                      className={fldCls + ' font-mono'}
                       value={form.googleCalendarId}
                       onChange={(e) => setForm((p) => ({ ...p, googleCalendarId: e.target.value }))}
                       placeholder="z.B. primary"
                     />
-                    <div className="mt-1 text-xs text-slate-500">
-                      Wird für Verfügbarkeitsprüfung genutzt. Kalenderliste siehst du im Menüpunkt „Kalender“.
-                    </div>
-                  </label>
-                </div>
-              </details>
-            </div>
+                    <p className="mt-1 text-xs text-slate-400">Für Verfügbarkeitsprüfung. Kalenderliste → Menüpunkt „Kalender".</p>
+                  </div>
+                </details>
 
-            <div className="p-4 border-t border-slate-200 flex items-center justify-end gap-2">
-              <button
-                className="px-4 py-2 rounded-md border border-slate-200 text-sm hover:bg-slate-50"
-                onClick={() => setModalOpen(false)}
-              >
-                Abbrechen
-              </button>
-              <button
-                className="px-4 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800"
-                onClick={() => save()}
-              >
-                Speichern
-              </button>
+              </div>
+
+              {/* Sticky Aktionsleiste */}
+              <div className="px-5 py-3 border-t border-slate-200 bg-white flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-md border border-slate-300 text-sm text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+                  onClick={() => setModalOpen(false)}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  className="px-5 py-2 rounded-md bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors shadow-sm"
+                  onClick={() => save()}
+                >
+                  Speichern
+                </button>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
