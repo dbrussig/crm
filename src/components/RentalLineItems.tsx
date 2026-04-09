@@ -11,6 +11,15 @@ interface RentalLineItemsProps {
   resources?: Resource[];
 }
 
+const RESOURCE_TYPE_TO_CATALOG_KEY: Record<string, string> = {
+  'Dachbox XL': 'dachbox-1-xl',
+  'Dachbox L': 'dachbox-3-m',
+  'Dachbox M': 'dachbox-3-m',
+  'Heckbox': 'heckbox',
+  'Fahrradträger': 'fahrradtraeger',
+  'Hüpfburg': 'huepfburg',
+};
+
 export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, resources }: RentalLineItemsProps) {
   const useResources = resources && resources.length > 0;
   const firstSelectRef = useRef<HTMLSelectElement | null>(null);
@@ -95,7 +104,11 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, reso
 
       {items.map((item, index) => {
         const productKey = parseProductKey(item);
-        const product = RENTAL_PRODUCTS.find((p) => p.key === productKey);
+        const resource = useResources ? resources!.find((r) => r.id === productKey) : undefined;
+        const product = useResources
+          ? RENTAL_PRODUCTS.find((p) => p.key === (resource ? RESOURCE_TYPE_TO_CATALOG_KEY[resource.type] : undefined))
+            ?? RENTAL_PRODUCTS.find((p) => p.key === 'sonstige')
+          : RENTAL_PRODUCTS.find((p) => p.key === productKey);
         const { mode: durationMode, days: durationDays, weeks: durationWeeks } = parseDurationMode(item.unit || DEFAULT_DURATION_LABEL);
         const isTageMode = durationMode === 'Tage';
         const isWochenMode = durationMode === 'Wochen';
