@@ -991,3 +991,26 @@ export async function saveInvoicePdfViaPrintDialog(invoice: Invoice, items?: Inv
   win.document.write(html);
   win.document.close();
 }
+
+export async function exportAndDownloadPdf(invoice: Invoice, items?: InvoiceItem[], template?: InvoiceTemplate | null): Promise<void> {
+  const tpl = await resolveTemplate(invoice, template);
+  const its = await resolveItems(invoice, items);
+  const html = await renderInvoiceHtml({ invoice, items: its, template: tpl, autoPrint: false });
+
+  const pdfBlob = await buildInvoicePdfBlobFromHtml(invoice, html);
+
+  try {
+    await persistGeneratedInvoiceDocument(invoice, html);
+  } catch (e) {
+    console.warn('Silent persist failed', e);
+  }
+
+  const url = URL.createObjectURL(pdfBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${invoice.invoiceNo || 'Beleg'}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

@@ -1,5 +1,5 @@
 import { Invoice, InvoiceItem, InvoiceTemplate, Customer } from '../types';
-import { downloadInvoicePDF, openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
+import { downloadInvoicePDF, openInvoicePreview, saveInvoicePdfViaPrintDialog, exportAndDownloadPdf } from '../services/pdfExportService';
 import { openInvoiceCompose } from '../services/invoiceEmailService';
 
 interface UseInvoiceExportOpts {
@@ -66,7 +66,8 @@ export function useInvoiceExport({
       return;
     }
     try {
-      await saveInvoicePdfViaPrintDialog(buildInvoice(), getFields(), template);
+      showStatus({ tone: 'info', text: 'PDF wird generiert…' });
+      await exportAndDownloadPdf(buildInvoice(), getFields(), template);
       clearStatus();
     } catch (error) {
       console.error('PDF Speichern fehlgeschlagen:', error);
