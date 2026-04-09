@@ -649,8 +649,8 @@ async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Prom
   iframe.style.position = 'fixed';
   iframe.style.left = '-10000px';
   iframe.style.top = '0';
-  iframe.style.width = '1200px';
-  iframe.style.height = '2200px';
+  iframe.style.width = '794px';
+  iframe.style.height = '4000px';
   iframe.style.opacity = '0';
   iframe.setAttribute('aria-hidden', 'true');
   iframe.srcdoc = html;
@@ -662,7 +662,7 @@ async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Prom
       const fail = () => reject(new Error('HTML iframe could not be loaded for PDF rendering'));
       iframe.addEventListener('load', done, { once: true });
       iframe.addEventListener('error', fail, { once: true });
-      setTimeout(() => resolve(), 800);
+      setTimeout(() => resolve(), 1000);
     });
 
     const doc = iframe.contentDocument;
@@ -682,8 +682,7 @@ async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Prom
       scale: 2,
       useCORS: true,
       backgroundColor: '#ffffff',
-      windowWidth: Math.max(target.scrollWidth, 1200),
-      windowHeight: Math.max(target.scrollHeight, 1800),
+      windowWidth: 794,
     });
 
     const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4', compress: true });
@@ -754,7 +753,7 @@ async function buildInvoicePdfBlobFromHtml(invoice: Invoice, html: string): Prom
       if (!ctx) throw new Error('2D context unavailable for PDF page rendering');
       ctx.drawImage(canvas, 0, offset, sourceWidth, sliceHeight, 0, 0, sourceWidth, sliceHeight);
 
-      const image = pageCanvas.toDataURL('image/png');
+      const image = pageCanvas.toDataURL('image/png', 0.8);
       const renderedHeight = (sliceHeight * pageWidth) / sourceWidth;
       if (page > 0) pdf.addPage();
       pdf.addImage(image, 'PNG', 0, 0, pageWidth, renderedHeight, undefined, 'FAST');
