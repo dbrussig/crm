@@ -910,29 +910,25 @@ function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean)
   iframe.srcdoc = html;
 
   const openPrintWindow = () => {
-    // Tauri-kompatibler Druckweg: HTML als print-only Layer in den DOM injizieren
-    const printId = '__crm_print_layer__';
-    let existing = document.getElementById(printId);
-    if (existing) existing.remove();
-
-    const style = document.createElement('style');
-    style.id = printId + '_style';
-    style.textContent = `@media screen { #${printId} { display: none !important; } } @media print { body > *:not(#${printId}) { display: none !important; } #${printId} { display: block !important; } }`;
-
-    const container = document.createElement('div');
-    container.id = printId;
-    container.innerHTML = html;
-
-    document.head.appendChild(style);
-    document.body.appendChild(container);
-
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => {
-        container.remove();
-        style.remove();
-      }, 1000);
-    }, 200);
+    // Tauri: HTML in Temp-Datei schreiben und im System-Browser öffnen (nativer Druckdialog)
+    const isTauri = typeof (window as any).__TAURI_INTERNALS__ !== 'undefined'
+      || typeof (window as any).__TAURI__ !== 'undefined';
+    if (isTauri) {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('open_html_for_print', { html }).catch((err: unknown) => {
+          console.error('[Print] Tauri open_html_for_print fehlgeschlagen:', err);
+        });
+      });
+      return;
+    }
+    // Fallback für Browser-Dev-Umgebung
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      setTimeout(() => win.print(), 500);
+    }
   };
 
   savePdfBtn.addEventListener('click', openPrintWindow);

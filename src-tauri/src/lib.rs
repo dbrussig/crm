@@ -67,6 +67,7 @@ pub fn run() {
             commands::crm::list_expenses,
             commands::crm::upsert_expense,
             commands::crm::delete_expense,
+            commands::print::open_html_for_print,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

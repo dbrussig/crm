@@ -150,6 +150,15 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
     })
     .sort((a, b) => b.date - a.date);
 
+  // DEBUG: Duplikat-Analyse – in Browser-DevTools sichtbar (F12 → Konsole)
+  if (typeof window !== 'undefined') {
+    const allFiltered = payments.filter(p => p.kind !== 'Kaution' && new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear);
+    const invIds = new Set(allFiltered.map(p => p.invoiceId).filter(Boolean));
+    console.debug('[EÜR DEBUG] Payments roh (ohne Kaution, Jahr ' + selectedYear + '):', allFiltered.length, allFiltered.map(p => ({ id: p.id.slice(-8), invoiceId: p.invoiceId, rentalRequestId: p.rentalRequestId, amount: p.amount, kind: p.kind, receivedAt: p.receivedAt })));
+    console.debug('[EÜR DEBUG] Unique invoiceIds:', [...invIds]);
+    console.debug('[EÜR DEBUG] incomePayments nach Dedup:', incomePayments.length, incomePayments.map(p => ({ id: p.paymentId.slice(-8), invoiceNo: p.invoiceNo, amount: p.amount })));
+  }
+
   const totalIncome = incomePayments.reduce((s, p) => s + p.amount, 0);
 
   // Zahlungsgebühren
