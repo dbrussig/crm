@@ -100,6 +100,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
   const seenPaymentIds = new Set<string>();
   const seenPaymentKeys = new Set<string>();
   const incomePayments = payments
+    .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
     .filter(p => {
       if (p.kind === 'Kaution') return false;
       if (seenPaymentIds.has(p.id)) return false;
@@ -122,7 +123,6 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
 
       return true;
     })
-    .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
     .map(p => {
       // Rechnung direkt oder über den verknüpften Vorgang finden
       const inv = invoices.find(i => i.id === p.invoiceId)
