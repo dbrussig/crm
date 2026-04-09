@@ -192,7 +192,20 @@ export default function App() {
           return endDay >= today;
         })
         .sort((a, b) => a.rentalStart - b.rentalStart)
-        .slice(0, 5),
+        .slice(0, 8),
+    [dashboardRentals, today]
+  );
+
+  const returnExpectedRentals = useMemo(
+    () =>
+      dashboardRentals
+        .filter((r) => {
+          if (!openStatuses.includes(r.status)) return false;
+          const startDay = toLocalDayStart(r.rentalStart);
+          const endDay = toLocalDayStart(r.rentalEnd);
+          return startDay <= today && endDay >= today;
+        })
+        .sort((a, b) => a.rentalEnd - b.rentalEnd),
     [dashboardRentals, today]
   );
   const navGroups = useMemo(
@@ -587,26 +600,24 @@ export default function App() {
                 </div>
               </div>
               <div className="bg-white border border-slate-200 rounded-xl p-4">
-                <div className="text-sm font-semibold text-slate-900">Überfällige Rechnungen</div>
-                <div className="text-xs text-slate-500 mt-1">Rechnungen mit Fälligkeit vor heute und offenem Betrag.</div>
+                <div className="text-sm font-semibold text-slate-900">Rückgabe erwartet</div>
+                <div className="text-xs text-slate-500 mt-1">Aktive Mietvorgänge – Rückgabetermin steht bevor.</div>
                 <div className="mt-3 space-y-2">
-                  {dashboardFinancials.ueberfaelligeRechnungen.length === 0 ? (
-                    <div className="text-sm text-emerald-700">Keine überfälligen Rechnungen ✓</div>
+                  {returnExpectedRentals.length === 0 ? (
+                    <div className="text-sm text-slate-600">Keine aktiven Vorgänge.</div>
                   ) : (
-                    dashboardFinancials.ueberfaelligeRechnungen.slice(0, 8).map((row) => (
+                    returnExpectedRentals.map((r) => (
                       <button
-                        key={row.invoice.id}
-                        onClick={async () => {
-                          setActiveView('belege');
-                          await openInvoiceEditorById(row.invoice.id);
-                        }}
-                        className="w-full text-left rounded-lg border border-rose-200 bg-rose-50 p-3 hover:bg-rose-100"
+                        key={r.id}
+                        onClick={() => { setSelectedRentalId(r.id); setActiveView('vorgaenge'); }}
+                        className="w-full text-left rounded-lg border border-amber-200 bg-amber-50 p-3 hover:bg-amber-100"
                       >
-                        <div className="text-sm font-medium text-rose-900">
-                          {row.invoice.invoiceNo} · {row.invoice.buyerName}
+                        <div className="text-sm font-medium text-amber-900">{r.productType}</div>
+                        <div className="text-xs text-amber-800 mt-0.5">
+                          Rückgabe: {new Date(r.rentalEnd).toLocaleDateString('de-DE')} · {r.status}
                         </div>
-                        <div className="text-xs text-rose-800 mt-0.5">
-                          Fällig: {row.invoice.dueDate ? new Date(row.invoice.dueDate).toLocaleDateString('de-DE') : '-'} · {row.daysOverdue} Tag(e) überfällig · Offen: {formatCurrency(row.offenBetrag)}
+                        <div className="text-[11px] text-amber-700 mt-1">
+                          {(() => { const c = customers.find(cu => cu.id === r.customerId); return c ? `${c.firstName} ${c.lastName}`.trim() : formatDisplayRef(r.id); })()}
                         </div>
                       </button>
                     ))
