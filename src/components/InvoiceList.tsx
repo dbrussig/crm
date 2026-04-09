@@ -572,9 +572,6 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                             <span className="font-medium text-emerald-700">
                               {(paymentTotalByInvoiceId[invoice.id] || 0).toFixed(2)} €
                             </span>
-                            <span className="text-xs text-gray-500 ml-1">
-                              ({paymentCountByInvoiceId[invoice.id]} Zahlung{paymentCountByInvoiceId[invoice.id] === 1 ? '' : 'en'})
-                            </span>
                           </div>
                         )}
                         {invoice.depositEnabled && invoice.depositPercent ? (
