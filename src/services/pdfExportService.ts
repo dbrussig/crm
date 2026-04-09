@@ -909,22 +909,34 @@ function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean)
   iframe.style.height = '100%';
   iframe.srcdoc = html;
 
-  savePdfBtn.addEventListener('click', () => {
-    try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    } catch {
-      // ignore
-    }
-  });
-  printBtn.addEventListener('click', () => {
-    try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    } catch {
-      // ignore print failures in restricted environments
-    }
-  });
+  const openPrintWindow = () => {
+    // Tauri-kompatibler Druckweg: HTML als print-only Layer in den DOM injizieren
+    const printId = '__crm_print_layer__';
+    let existing = document.getElementById(printId);
+    if (existing) existing.remove();
+
+    const style = document.createElement('style');
+    style.id = printId + '_style';
+    style.textContent = `@media screen { #${printId} { display: none !important; } } @media print { body > *:not(#${printId}) { display: none !important; } #${printId} { display: block !important; } }`;
+
+    const container = document.createElement('div');
+    container.id = printId;
+    container.innerHTML = html;
+
+    document.head.appendChild(style);
+    document.body.appendChild(container);
+
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        container.remove();
+        style.remove();
+      }, 1000);
+    }, 200);
+  };
+
+  savePdfBtn.addEventListener('click', openPrintWindow);
+  printBtn.addEventListener('click', openPrintWindow);
   closeBtn.addEventListener('click', closeInvoicePreviewOverlay);
   overlay.addEventListener('click', (ev) => {
     if (ev.target === overlay) closeInvoicePreviewOverlay();
@@ -942,14 +954,7 @@ function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean)
   invoicePreviewOverlayEl = overlay;
 
   if (autoPrint) {
-    setTimeout(() => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch {
-        // ignore
-      }
-    }, 500);
+    setTimeout(openPrintWindow, 600);
   }
   return true;
 }
