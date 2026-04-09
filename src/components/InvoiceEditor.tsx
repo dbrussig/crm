@@ -25,6 +25,8 @@ import { useInvoiceDirtyTracking } from '../hooks/useInvoiceDirtyTracking';
 import AutoSaveIndicator from './AutoSaveIndicator';
 import RentalLineItems from './RentalLineItems';
 import { DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL, getSuggestedPrice } from '../config/rentalCatalog';
+import { fetchAllResources } from '../services/resourceService';
+import type { Resource } from '../types';
 import InvoiceHeaderFields from './invoice/InvoiceHeaderFields';
 import InvoiceCustomerBlock from './invoice/InvoiceCustomerBlock';
 import { Card } from './invoice/Card';
@@ -188,6 +190,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [linkedPayments, setLinkedPayments] = useState<Payment[]>([]);
   const [linkedPaymentsLoading, setLinkedPaymentsLoading] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentFormBusy, setPaymentFormBusy] = useState(false);
   const [paymentForm, setPaymentForm] = useState<{ kind: 'Anzahlung' | 'Zahlung' | 'Kaution'; method: string; amount: string; receivedAt: string; note: string }>({
@@ -366,6 +369,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       .finally(() => { if (!cancelled) setLinkedPaymentsLoading(false); });
     return () => { cancelled = true; };
   }, [initialInvoice?.id]);
+
+  useEffect(() => {
+    fetchAllResources().then((res) => setResources(res.filter((r) => r.isActive))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     getPaymentMethodsConfig().then((methods) => {
@@ -839,6 +846,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           <RentalLineItems
             items={fields as InvoiceItem[]}
             onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition}
+            resources={resources.length > 0 ? resources : undefined}
           />
         </Card>
 

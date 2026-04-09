@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Trash2 } from 'lucide-react';
-import type { InvoiceItem } from '../types';
+import type { InvoiceItem, Resource } from '../types';
 import { RENTAL_PRODUCTS, getSuggestedPrice, DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL } from '../config/rentalCatalog';
 
 interface RentalLineItemsProps {
@@ -8,9 +8,11 @@ interface RentalLineItemsProps {
   onAdd: () => void;
   onRemove: (index: number) => void;
   onUpdate: (index: number, field: keyof InvoiceItem, value: string | number | boolean) => void;
+  resources?: Resource[];
 }
 
-export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: RentalLineItemsProps) {
+export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, resources }: RentalLineItemsProps) {
+  const useResources = resources && resources.length > 0;
   const firstSelectRef = useRef<HTMLSelectElement | null>(null);
   const prevLengthRef = useRef(items.length);
 
@@ -22,6 +24,15 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
   }, [items.length]);
 
   const handleProductChange = (index: number, productKey: string) => {
+    if (useResources) {
+      const res = resources!.find((r) => r.id === productKey);
+      if (!res) return;
+      onUpdate(index, 'name', res.name);
+      onUpdate(index, 'unit', DEFAULT_DURATION_LABEL);
+      onUpdate(index, 'unitPrice', res.dailyRate || 0);
+      onUpdate(index, 'quantity', 1);
+      return;
+    }
     const product = RENTAL_PRODUCTS.find((p) => p.key === productKey);
     if (!product) return;
     const durationLabel = product.durations[0].label;
@@ -53,6 +64,11 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
   };
 
   const parseProductKey = (item: InvoiceItem): string => {
+    if (useResources) {
+      const res = resources!.find((r) => r.name === item.name || item.name.startsWith(r.name));
+      if (res) return res.id;
+      return resources![0]?.id || DEFAULT_PRODUCT_KEY;
+    }
     for (const p of RENTAL_PRODUCTS) {
       if (item.name === p.label || item.name.startsWith(p.label)) return p.key;
     }
@@ -102,9 +118,14 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
                 className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 aria-label={`Position ${index + 1}: Produkt`}
               >
-                {RENTAL_PRODUCTS.map((p) => (
-                  <option key={p.key} value={p.key}>{p.label}</option>
-                ))}
+                {useResources
+                  ? resources!.filter((r) => r.isActive).map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))
+                  : RENTAL_PRODUCTS.map((p) => (
+                      <option key={p.key} value={p.key}>{p.label}</option>
+                    ))
+                }
               </select>
               <label className="mt-1.5 flex items-center gap-2 cursor-pointer select-none">
                 <input
