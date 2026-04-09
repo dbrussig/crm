@@ -602,6 +602,15 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                             {paymentCountByInvoiceId[invoice.id]} Eintrag{paymentCountByInvoiceId[invoice.id] === 1 ? '' : 'e'}
                           </span>
                         </div>
+                      ) : invoice.depositEnabled && invoice.depositPercent ? (
+                        <div className="flex flex-col">
+                          <span className="font-medium text-blue-700">
+                            {((amountByInvoiceId[invoice.id] || 0) * (invoice.depositPercent / 100)).toFixed(2)} €
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Anzahlung {invoice.depositPercent}%
+                          </span>
+                        </div>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
