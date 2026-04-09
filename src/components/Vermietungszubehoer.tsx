@@ -6,7 +6,7 @@ import { formatDisplayRef } from '../utils/displayId';
 import ConfirmModal from './ConfirmModal';
 
 const CATEGORY_OPTIONS: AccessoryCategory[] = ['Bundle', 'Dachträger', 'Fußsatz', 'Querträger', 'Kit', 'Sonstiges'];
-const RELING_OPTIONS: RelingType[] = ['offen', 'geschlossen', 'keine', 'unklar'];
+const RELING_OPTIONS: RelingType[] = ['offen', 'geschlossen', 'keine'];
 const CLOSED_STATUSES = new Set<RentalRequest['status']>(['archiviert', 'abgeschlossen', 'abgelehnt', 'storniert', 'noshow']);
 
 function normalizeKey(v: string): string {
@@ -215,10 +215,8 @@ export default function Vermietungszubehoer() {
 
   function toggleReling(reling: RelingType) {
     setForm((prev) => {
-      const next = new Set(prev.compatibleRelingTypes);
-      if (next.has(reling)) next.delete(reling);
-      else next.add(reling);
-      return { ...prev, compatibleRelingTypes: Array.from(next) };
+      const isSelected = prev.compatibleRelingTypes.includes(reling);
+      return { ...prev, compatibleRelingTypes: isSelected ? [] : [reling] };
     });
   }
 
@@ -230,11 +228,6 @@ export default function Vermietungszubehoer() {
       showError('Bitte einen Namen eintragen.');
       return;
     }
-    if (!inventoryKey) {
-      showError('Bitte einen Inventar-/Bundle-Schlüssel eintragen.');
-      return;
-    }
-
     const payload: Partial<RentalAccessory> = {
       name,
       category: form.category,
@@ -630,7 +623,7 @@ export default function Vermietungszubehoer() {
               </div>
 
               <div className="md:col-span-2 rounded-md border border-slate-200 p-3">
-                <div className="text-sm font-medium text-slate-800 mb-2">Kompatible Relingtypen</div>
+                <div className="text-sm font-medium text-slate-800 mb-2">Relingtyp</div>
                 <div className="flex flex-wrap gap-2">
                   {RELING_OPTIONS.map((r) => (
                     <button
