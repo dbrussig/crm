@@ -33,8 +33,8 @@ export default function InvoiceHeaderFields(props: InvoiceHeaderFieldsProps) {
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-type">Typ</label>
         <select id="invoice-type" value={invoiceType}
-          onChange={(e) => onTypeChange(e.target.value as InvoiceType)} disabled={typeDisabled}
-          className="w-full h-10 px-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 text-sm">
+          onChange={(e) => { if (!typeDisabled) onTypeChange(e.target.value as InvoiceType); }}
+          className={`w-full h-10 px-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm ${typeDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
           <option value="Angebot">Angebot</option>
           <option value="Auftrag">Auftrag</option>
           <option value="Rechnung">Rechnung</option>
