@@ -452,6 +452,11 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     update(index, { ...current, [field]: value });
   };
 
+  const updatePositionMulti = (index: number, updates: Partial<InvoiceItem>) => {
+    const current = fields[index] as InvoiceItem;
+    update(index, { ...current, ...updates });
+  };
+
   // ─── Handlers ──────────────────────────────────────────────────
 
   const handleSave = async () => {
@@ -828,7 +833,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         <Card title="Positionen" noPadding>
           <RentalLineItems
             items={fields as InvoiceItem[]}
-            onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition}
+            onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition} onUpdateMulti={updatePositionMulti}
             resources={resources.length > 0 ? resources : undefined}
           />
         </Card>

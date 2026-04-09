@@ -8,6 +8,7 @@ interface RentalLineItemsProps {
   onAdd: () => void;
   onRemove: (index: number) => void;
   onUpdate: (index: number, field: keyof InvoiceItem, value: string | number | boolean) => void;
+  onUpdateMulti?: (index: number, updates: Partial<InvoiceItem>) => void;
   resources?: Resource[];
 }
 
@@ -20,7 +21,7 @@ const RESOURCE_TYPE_TO_CATALOG_KEY: Record<string, string> = {
   'Hüpfburg': 'huepfburg',
 };
 
-export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, resources }: RentalLineItemsProps) {
+export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUpdateMulti, resources }: RentalLineItemsProps) {
   const useResources = resources && resources.length > 0;
   const firstSelectRef = useRef<HTMLSelectElement | null>(null);
   const prevLengthRef = useRef(items.length);
@@ -32,44 +33,41 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, reso
     prevLengthRef.current = items.length;
   }, [items.length]);
 
+  const applyUpdate = (index: number, updates: Partial<InvoiceItem>) => {
+    if (onUpdateMulti) { onUpdateMulti(index, updates); return; }
+    Object.entries(updates).forEach(([k, v]) => onUpdate(index, k as keyof InvoiceItem, v as string | number | boolean));
+  };
+
   const handleProductChange = (index: number, productKey: string) => {
     if (useResources) {
       const res = resources!.find((r) => r.id === productKey);
       if (!res) return;
-      onUpdate(index, 'name', res.name);
-      onUpdate(index, 'unit', DEFAULT_DURATION_LABEL);
-      onUpdate(index, 'unitPrice', res.dailyRate || 0);
-      onUpdate(index, 'quantity', 1);
+      applyUpdate(index, { name: res.name, unit: DEFAULT_DURATION_LABEL, unitPrice: res.dailyRate || 0, quantity: 1 });
       return;
     }
     const product = RENTAL_PRODUCTS.find((p) => p.key === productKey);
     if (!product) return;
-    const durationLabel = product.durations[0].label;
-    const price = product.durations[0].price;
-    onUpdate(index, 'name', product.label);
-    onUpdate(index, 'unit', durationLabel);
-    onUpdate(index, 'unitPrice', price);
-    onUpdate(index, 'quantity', 1);
+    applyUpdate(index, { name: product.label, unit: product.durations[0].label, unitPrice: product.durations[0].price, quantity: 1 });
   };
 
-  const handleDurationChange = (index: number, productKey: string, durationLabel: string) => {
+  const handleDurationChange = (index: number, productKey: string, durationLabel: string, resourceName?: string) => {
+    if (useResources && resourceName) {
+      applyUpdate(index, { name: resourceName, unit: durationLabel });
+      return;
+    }
     const price = getSuggestedPrice(productKey, durationLabel);
     const product = RENTAL_PRODUCTS.find((p) => p.key === productKey);
-    onUpdate(index, 'name', product?.label ?? productKey);
-    onUpdate(index, 'unit', durationLabel);
-    onUpdate(index, 'unitPrice', price);
+    applyUpdate(index, { name: product?.label ?? productKey, unit: durationLabel, unitPrice: price });
   };
 
   const handleDaysChange = (index: number, days: number) => {
     const count = Math.max(1, days);
-    onUpdate(index, 'unit', `${count} Tag${count !== 1 ? 'e' : ''}`);
-    onUpdate(index, 'quantity', count);
+    applyUpdate(index, { unit: `${count} Tag${count !== 1 ? 'e' : ''}`, quantity: count });
   };
 
   const handleWeeksChange = (index: number, weeks: number) => {
     const count = Math.max(1, weeks);
-    onUpdate(index, 'unit', `${count} Woche${count !== 1 ? 'n' : ''}`);
-    onUpdate(index, 'quantity', count);
+    applyUpdate(index, { unit: `${count} Woche${count !== 1 ? 'n' : ''}`, quantity: count });
   };
 
   const parseProductKey = (item: InvoiceItem): string => {
@@ -161,14 +159,12 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, reso
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val === 'Tage') {
-                    onUpdate(index, 'unit', `${durationDays} Tag${durationDays !== 1 ? 'e' : ''}`);
-                    onUpdate(index, 'quantity', durationDays);
+                    applyUpdate(index, { ...(useResources && resource ? { name: resource.name } : {}), unit: `${durationDays} Tag${durationDays !== 1 ? 'e' : ''}`, quantity: durationDays });
                   } else if (val === 'Wochen') {
-                    onUpdate(index, 'unit', `${durationWeeks} Woche${durationWeeks !== 1 ? 'n' : ''}`);
-                    onUpdate(index, 'quantity', durationWeeks);
+                    applyUpdate(index, { ...(useResources && resource ? { name: resource.name } : {}), unit: `${durationWeeks} Woche${durationWeeks !== 1 ? 'n' : ''}`, quantity: durationWeeks });
                   } else {
-                    handleDurationChange(index, productKey, val);
-                    onUpdate(index, 'quantity', 1);
+                    handleDurationChange(index, productKey, val, resource?.name);
+                    applyUpdate(index, { quantity: 1 });
                   }
                 }}
                 className="w-full h-9 px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
