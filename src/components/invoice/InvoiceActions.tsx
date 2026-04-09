@@ -1,5 +1,5 @@
 import { RefObject } from 'react';
-import { ChevronDown, Download, Eye, FileText, Mail, Save, Send } from 'lucide-react';
+import { ArrowRight, ChevronDown, Download, Eye, FileText, Mail, Save, Send } from 'lucide-react';
 import { InvoiceState } from '../../types';
 
 interface InvoiceActionsProps {
@@ -19,6 +19,7 @@ interface InvoiceActionsProps {
   onDownloadHtml: () => void;
   onWorkflowAction: (action: 'convert' | 'reissue' | 'storno') => void;
   canConvert: boolean;
+  convertLabel?: string;
   canReissue: boolean;
   canStorno: boolean;
   moreActionsOpen: boolean;
@@ -45,6 +46,7 @@ export default function InvoiceActions({
   onDownloadHtml,
   onWorkflowAction,
   canConvert,
+  convertLabel,
   canReissue,
   canStorno,
   moreActionsOpen,
@@ -55,12 +57,27 @@ export default function InvoiceActions({
   secondaryBtnClass,
 }: InvoiceActionsProps) {
   return (
-    <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-gray-200 bg-white/95 px-4 pb-4 pt-4 backdrop-blur">
+    <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-slate-200 bg-white/95 px-4 pb-4 pt-3 backdrop-blur">
       <div className="flex items-center justify-between gap-2">
+
+        {/* Linke Seite: primäre Aktionen */}
         <div className="flex flex-wrap gap-2">
           <button onClick={onSave} className={primaryBtnClass} title="Beleg speichern" disabled={!canSave}>
             <Save size={14} aria-hidden="true" /> Speichern
           </button>
+
+          {/* Workflow-Fortschritt: primärer Pfad – prominent neben Speichern */}
+          {canConvert && (
+            <button
+              type="button"
+              onClick={() => onWorkflowAction('convert')}
+              className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              title={convertLabel || 'Nächster Workflow-Schritt'}
+            >
+              <ArrowRight size={14} aria-hidden="true" />
+              {convertLabel || 'Weiter'}
+            </button>
+          )}
 
           {onSend && invoiceId && state === 'entwurf' && (
             <button onClick={onSend} className={secondaryBtnClass} title="Belegstatus auf gesendet setzen">
@@ -68,7 +85,7 @@ export default function InvoiceActions({
             </button>
           )}
 
-          {/* Kautionsbestätigung für Rechnungen */}
+          {/* Kautionsbestätigung für bezahlte Rechnungen */}
           {state === ('bezahlt' as InvoiceState) && (
             <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-white">
               <button
@@ -84,7 +101,7 @@ export default function InvoiceActions({
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                     : 'bg-slate-50 border-slate-200 text-slate-800'
                 }`}
-                aria-pressed={depositReceivedEnabled ? 'true' : 'false'}
+                aria-pressed={depositReceivedEnabled}
                 title="Fügt in der Rechnung einen Hinweis hinzu, dass die Kaution dankend erhalten wurde."
               >
                 Kautionsbestätigung
@@ -103,12 +120,15 @@ export default function InvoiceActions({
               />
             </div>
           )}
+        </div>
 
+        {/* Rechte Seite: sekundäre Aktionen */}
+        <div className="flex items-center gap-2">
           <button onClick={onPreviewPdf} className={secondaryBtnClass} title="PDF Vorschau öffnen">
-            <Eye size={14} aria-hidden="true" /> PDF ansehen
+            <Eye size={14} aria-hidden="true" /> Vorschau
           </button>
 
-          {/* More Actions Dropdown */}
+          {/* Mehr Aktionen Dropdown */}
           <div className="relative" ref={moreActionsWrapRef}>
             <button
               type="button"
@@ -116,14 +136,14 @@ export default function InvoiceActions({
               className={secondaryBtnClass}
               title="Weitere Aktionen"
               aria-haspopup="menu"
-              aria-expanded={moreActionsOpen ? 'true' : 'false'}
+              aria-expanded={moreActionsOpen}
             >
-              Mehr Aktionen <ChevronDown size={14} aria-hidden="true" />
+              Mehr... <ChevronDown size={14} aria-hidden="true" />
             </button>
 
             {moreActionsOpen && (
               <div
-                className="absolute left-0 bottom-full mb-2 w-64 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden"
+                className="absolute right-0 bottom-full mb-2 w-56 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden"
                 role="menu"
               >
                 <button
@@ -142,50 +162,43 @@ export default function InvoiceActions({
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
                   title="Öffnet Gmail-Entwurf"
                 >
-                  <Mail size={14} aria-hidden="true" /> Mail
+                  <Mail size={14} aria-hidden="true" /> Per Mail senden
                 </button>
                 <button
                   type="button"
                   role="menuitem"
                   onClick={() => onDownloadHtml()}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                  title="druckbare HTML-Datei herunterladen"
+                  title="Druckbare HTML-Datei herunterladen"
                 >
                   <Download size={14} aria-hidden="true" /> HTML herunterladen
                 </button>
 
-                {canConvert && (
+                {canReissue && (
                   <>
                     <div className="border-t border-slate-200 my-1" />
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={() => onWorkflowAction('convert')}
+                      onClick={() => onWorkflowAction('reissue')}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
                     >
-                      In Auftrag/Rechnung umwandeln
+                      Neu ausstellen (Reissue)
                     </button>
                   </>
                 )}
-                {canReissue && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => onWorkflowAction('reissue')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-                  >
-                    Neu ausstellen (Reissue)
-                  </button>
-                )}
                 {canStorno && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => onWorkflowAction('storno')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                  >
-                    Stornieren
-                  </button>
+                  <>
+                    <div className="border-t border-slate-200 my-1" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => onWorkflowAction('storno')}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      Stornieren
+                    </button>
+                  </>
                 )}
               </div>
             )}

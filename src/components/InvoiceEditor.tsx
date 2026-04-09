@@ -6,7 +6,7 @@
 
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { useForm, useFieldArray, FormProvider } from 'react-hook-form';
-import { ChevronDown, Download, Eye, FileText, Mail, Save, Send } from 'lucide-react';
+import { ArrowRight, ChevronDown, Download, Eye, FileText, Mail, Save, Send } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import type { InvoiceFormValues } from './invoice/types';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
@@ -817,8 +817,18 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 title="Beleg speichern" 
                 disabled={!canSave}
               >
-                <Save size={14} aria-hidden="true" /> Beleg Speichern
+                <Save size={14} aria-hidden="true" /> Speichern
               </button>
+              {workflowActionLabel && initialInvoice?.id && (
+                <button
+                  type="button"
+                  onClick={handleWorkflowAdvance}
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                  title={workflowActionLabel}
+                >
+                  <ArrowRight size={14} aria-hidden="true" /> {workflowActionLabel}
+                </button>
+              )}
               {onSend && initialInvoice?.id && state === 'entwurf' && (
                 <button 
                   onClick={() => onSend(initialInvoice.id!)} 
@@ -845,7 +855,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60" 
                   title="Weitere Aktionen"
                   aria-haspopup="menu" 
-                  aria-expanded={moreActions.open ? 'true' : 'false'}
+                  aria-expanded={moreActions.open}
                 >
                   Mehr... <ChevronDown size={14} aria-hidden="true" />
                 </button>

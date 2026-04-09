@@ -8,12 +8,12 @@ import KanbanBoard from './components/KanbanBoard';
 import CustomerList from './components/CustomerList';
 import Stammdaten from './components/Stammdaten';
 import { RentalRequestDetail } from './components/RentalRequestDetail';
-import { createRentalRequest, transitionStatus } from './services/rentalService';
+import { createRentalRequest } from './services/rentalService';
 import { generateRentalId } from './services/rentalIdService';
 import { fetchAllRentalRequests } from './services/rentalService';
 import { InvoiceList } from './components/InvoiceList';
 import { InvoiceEditor } from './components/InvoiceEditor';
-import { fetchAllInvoices, fetchInvoiceById, reissueInvoice, removeInvoice, saveInvoice } from './services/invoiceService';
+import { fetchAllInvoices, fetchInvoiceById, reissueInvoice, saveInvoice } from './services/invoiceService';
 import SettingsPanel from './components/SettingsPanel';
 import { testZAiConnection } from './services/zAiService';
 import { findActiveResourcesForType } from './services/resourceService';
@@ -27,7 +27,7 @@ import Vermietungszubehoer from './components/Vermietungszubehoer';
 import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
 import { formatDisplayRef } from './utils/displayId';
 import { getDashboardFinancials, type DashboardFinancials } from './services/dashboardService';
-import { createFollowUpInvoiceWithStatusSync, createOrderFromQuote, createInvoiceFromOrder } from './services/workflowService';
+import { createFollowUpInvoiceWithStatusSync, syncRentalStatusOnInvoiceSave } from './services/workflowService';
 import EinnahmenUeberschussRechnung from './components/EinnahmenUeberschussRechnung';
 
 type View =
@@ -1254,34 +1254,23 @@ export default function App() {
                 const wasCreate = !inv.id;
                 const savedInvoiceId = await saveInvoice(inv, items);
                 if (editingInvoiceContext?.rentalId && editingInvoiceContext.nextRentalStatus) {
-                  try {
-                    await transitionStatus(editingInvoiceContext.rentalId, editingInvoiceContext.nextRentalStatus);
+                  const sync = await syncRentalStatusOnInvoiceSave(
+                    editingInvoiceContext.rentalId,
+                    editingInvoiceContext.nextRentalStatus
+                  );
+                  if (sync.updated) {
                     queryClient.invalidateQueries({ queryKey: ['rentals'] });
-                  } catch (e: any) {
-                    if (wasCreate) {
-                      try {
-                        await removeInvoice(savedInvoiceId);
-                      } catch (rollbackError) {
-                        console.error('Rollback failed after status transition error:', rollbackError);
-                      }
-                    }
-                    const msg = e?.error || e?.message || 'Status konnte nicht automatisch gesetzt werden.';
-                    setAppNotice({
-                      tone: 'error',
-                      text: `${msg}${wasCreate ? '\n\nDer neu erstellte Beleg wurde zur Konsistenz wieder entfernt.' : ''}`,
-                    });
-                    return;
+                  } else if (sync.error) {
+                    setAppNotice({ tone: 'error', text: `Vorgang-Status konnte nicht aktualisiert werden: ${sync.error}` });
                   }
                 }
                 queryClient.invalidateQueries({ queryKey: ['invoices'] });
-                // Update editingInvoice with saved data to keep editor in sync
                 if (wasCreate) {
                   setEditingInvoice({ ...inv, id: savedInvoiceId });
                 } else {
                   setEditingInvoice(inv);
                 }
                 setEditingInvoiceItems(items);
-                // Trigger invoice list reload
                 setInvoiceListReloadTrigger(prev => prev + 1);
               }}
               onConvertToOrder={async (invoiceId) => {

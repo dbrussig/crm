@@ -1,11 +1,22 @@
-import type { RentalStatus } from '../types';
+import type { InvoiceType, RentalStatus } from '../types';
 import { createFollowUpInvoiceFromInvoice, fetchInvoiceById, removeInvoice } from './invoiceService';
-import { transitionStatus } from './rentalService';
+import { canTransitionStatus, transitionStatus } from './rentalService';
 import { updateInvoice } from './sqliteService';
 
 /**
+ * Maps an invoice-type conversion to the appropriate rental status.
+ *
+ * Angebot → Auftrag  : Kunde hat angenommen   → 'angenommen'
+ * Auftrag → Rechnung : Rechnung wird gestellt  → 'uebergabe_rueckgabe'
+ *                      (Vorgang bleibt offen bis tatsächliche Rückgabe)
+ */
+function rentalStatusForConversion(targetType: InvoiceType): RentalStatus {
+  if (targetType === 'Auftrag') return 'angenommen';
+  return 'uebergabe_rueckgabe';
+}
+
+/**
  * Creates an order (Auftrag) from a quote (Angebot) and syncs rental status.
- * Returns the new invoice ID.
  */
 export async function createOrderFromQuote(invoiceId: string): Promise<string> {
   const result = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Auftrag');
@@ -14,7 +25,6 @@ export async function createOrderFromQuote(invoiceId: string): Promise<string> {
 
 /**
  * Creates an invoice (Rechnung) from an order (Auftrag) and syncs rental status.
- * Returns the new invoice ID.
  */
 export async function createInvoiceFromOrder(invoiceId: string): Promise<string> {
   const result = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Rechnung');
@@ -32,7 +42,7 @@ export async function createFollowUpInvoiceWithStatusSync(
     return { nextInvoiceId, rentalStatusUpdated: false };
   }
 
-  const targetStatus: RentalStatus = targetType === 'Auftrag' ? 'angenommen' : 'abgeschlossen';
+  const targetStatus = rentalStatusForConversion(targetType);
 
   try {
     await transitionStatus(source.invoice.rentalRequestId, targetStatus);
@@ -48,5 +58,34 @@ export async function createFollowUpInvoiceWithStatusSync(
       console.error('Rollback failed after status sync error:', rollbackError);
     }
     throw error;
+  }
+}
+
+/**
+ * Called after saving an invoice that was created in the context of a rental draft.
+ * Transitions the rental to the requested status – but only if the transition is valid.
+ * Returns whether the transition was applied.
+ *
+ * This centralises the status-sync that was previously scattered across App.tsx.
+ */
+export async function syncRentalStatusOnInvoiceSave(
+  rentalId: string,
+  nextRentalStatus: RentalStatus
+): Promise<{ updated: boolean; error?: string }> {
+  try {
+    const { getRentalRequest } = await import('./sqliteService');
+    const rental = await getRentalRequest(rentalId);
+    if (!rental) return { updated: false, error: 'Vorgang nicht gefunden' };
+
+    if (!canTransitionStatus(rental.status, nextRentalStatus)) {
+      // Soft-skip: transition not allowed from current state – not a hard error.
+      return { updated: false };
+    }
+
+    await transitionStatus(rentalId, nextRentalStatus);
+    return { updated: true };
+  } catch (e: any) {
+    const msg = e?.error || e?.message || String(e);
+    return { updated: false, error: msg };
   }
 }
