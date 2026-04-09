@@ -633,21 +633,9 @@ const CustomerList: React.FC<CustomerListProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-800">Kundenverwaltung</h2>
-          <div className="flex items-center gap-3 mt-1">
-            <p className="text-slate-600">
-              {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'} insgesamt
-            </p>
-            {docAggTotal.count > 0 && (
-              <p className="text-slate-600">
-                | {docAggTotal.count} Dokumente ({formatFileSize(docAggTotal.bytes)})
-              </p>
-            )}
-            {firecrawlAvailable && (
-              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded border border-blue-200" title="Firecrawl Web-Research verfügbar">
-                🔍 Web-Suche aktiv
-              </span>
-            )}
-          </div>
+          <p className="text-slate-600 mt-1">
+            {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {/* Backups Button */}
@@ -658,7 +646,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
             </svg>
-            Backups ({backups.length})
+            Backups
           </button>
 
           {/* Add Customer Button */}
@@ -679,7 +667,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
         <div className="relative">
           <input
             type="text"
-            placeholder="Kunden suchen (Name, E-Mail, Firma...)"
+            placeholder="Kunde suchen"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -967,7 +955,6 @@ const CustomerList: React.FC<CustomerListProps> = ({
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Anrede</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Kontakt</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reling-Foto</th>
@@ -980,9 +967,6 @@ const CustomerList: React.FC<CustomerListProps> = ({
               <tbody className="divide-y divide-slate-200">
                 {sortedCustomers.map((customer) => (
                   <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <span className="text-slate-700">{customer.salutation || '-'}</span>
-                    </td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-slate-900">{customer.firstName} {customer.lastName}</div>
                       {(() => {
@@ -1105,11 +1089,6 @@ const CustomerList: React.FC<CustomerListProps> = ({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4h9" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v16H4z" />
                           </svg>
-                          {docAggByCustomerId[customer.id]?.count ? (
-                            <span className="absolute -top-1 -right-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-900 text-white shadow">
-                              {docAggByCustomerId[customer.id].count}
-                            </span>
-                          ) : null}
                         </button>
                         <button
                           onClick={() => setEditingCustomer(customer)}
