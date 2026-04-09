@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { AISettings, Customer, GmailAttachmentSummary, GoogleOAuthSettings, InboxImportResult, Invoice, InvoiceItem, MailTransportSettings, RentalRequest, RentalStatus } from './types';
-import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources, updateInvoice } from './services/sqliteService';
+import type { AISettings, Customer, GmailAttachmentSummary, GoogleOAuthSettings, InboxImportResult, Invoice, InvoiceItem, MailTransportSettings, Payment, RentalRequest, RentalStatus } from './types';
+import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources, updateInvoice, getAllPayments } from './services/sqliteService';
 import { MessageBox } from './components/MessageBox';
 import KanbanBoard from './components/KanbanBoard';
 import CustomerList from './components/CustomerList';
@@ -28,6 +28,7 @@ import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
 import { formatDisplayRef } from './utils/displayId';
 import { getDashboardFinancials, type DashboardFinancials } from './services/dashboardService';
 import { createFollowUpInvoiceWithStatusSync, createOrderFromQuote, createInvoiceFromOrder } from './services/workflowService';
+import EinnahmenUeberschussRechnung from './components/EinnahmenUeberschussRechnung';
 
 type View =
   | 'dashboard'
@@ -39,6 +40,7 @@ type View =
   | 'stammdaten'
   | 'zubehoer'
   | 'belege'
+  | 'euer'
   | 'beleg_editor'
   | 'einstellungen';
 
@@ -61,6 +63,7 @@ export default function App() {
   } | null>(null);
   const [dashboardRentals, setDashboardRentals] = useState<RentalRequest[]>([]);
   const [dashboardInvoices, setDashboardInvoices] = useState<Invoice[]>([]);
+  const [dashboardPayments, setDashboardPayments] = useState<Payment[]>([]);
   const [dashboardResourceTotal, setDashboardResourceTotal] = useState(0);
   const [dashboardFinancials, setDashboardFinancials] = useState<DashboardFinancials>({
     offeneForderungen: 0,
@@ -128,6 +131,7 @@ export default function App() {
         { id: 'vorgaenge' as const, label: 'Vorgänge', icon: '📋', group: 'Vorgänge' as const },
         { id: 'kalender' as const, label: 'Kalender', icon: '🗓️', group: 'Vorgänge' as const },
         { id: 'belege' as const, label: 'Belege', icon: '🧾', group: 'Abrechnung' as const },
+        { id: 'euer' as const, label: 'EÜR', icon: '💰', group: 'Abrechnung' as const },
         { id: 'kunden' as const, label: 'Kunden', icon: '👥', group: 'Stammdaten' as const },
         { id: 'stammdaten' as const, label: 'Vermietungsgegenstände', icon: '📦', group: 'Stammdaten' as const },
         { id: 'zubehoer' as const, label: 'Vermietungszubehör', icon: '🧰', group: 'Stammdaten' as const },
@@ -211,14 +215,16 @@ export default function App() {
 
   async function loadDashboardData() {
     try {
-      const [rentals, invoices, resources, financials] = await Promise.all([
+      const [rentals, invoices, payments, resources, financials] = await Promise.all([
         fetchAllRentalRequests(),
         fetchAllInvoices(),
+        getAllPayments(),
         getAllResources(),
         getDashboardFinancials(),
       ]);
       setDashboardRentals(rentals);
       setDashboardInvoices(invoices);
+      setDashboardPayments(payments);
       setDashboardResourceTotal(resources.filter((r) => r.isActive).length);
       setDashboardFinancials(financials);
     } catch (e) {
@@ -1207,6 +1213,15 @@ export default function App() {
                 await updateInvoice(invoiceId, { state: 'angenommen' });
                 queryClient.invalidateQueries({ queryKey: ['invoices'] });
               }}
+            />
+          </div>
+        )}
+
+        {activeView === 'euer' && (
+          <div className="max-w-7xl">
+            <EinnahmenUeberschussRechnung 
+              invoices={dashboardInvoices}
+              payments={dashboardPayments}
             />
           </div>
         )}

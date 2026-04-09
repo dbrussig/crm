@@ -26,7 +26,7 @@ export default function InvoiceHeaderFields(props: InvoiceHeaderFieldsProps) {
   } = props;
 
   return (
-    <div className="mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-type">Typ</label>
         <select id="invoice-type" value={invoiceType}
@@ -43,19 +43,6 @@ export default function InvoiceHeaderFields(props: InvoiceHeaderFieldsProps) {
           onChange={(e) => onInvoiceNoChange(e.target.value)} disabled={invoiceNoDisabled}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
           placeholder="2025001" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-layout">PDF Layout</label>
-        <div className="flex items-center gap-2">
-          <select id="invoice-layout" value={layoutId} onChange={(e) => onLayoutChange(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-            {INVOICE_LAYOUTS.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
-          </select>
-          <button type="button" className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50 whitespace-nowrap"
-            title="Setzt Default-Texte fuer dieses Layout" onClick={onApplyDefaults}>
-            Default-Texte
-          </button>
-        </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-date">Datum</label>

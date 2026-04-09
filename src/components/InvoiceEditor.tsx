@@ -113,11 +113,12 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   // ─── Form ──────────────────────────────────────────────────────
 
-  const { setValue, watch, getValues, control } = useForm<{
+  const methods = useForm<{
     invoiceNo: string;
     invoiceDate: string;
     dueDate: string;
     currency: string;
+    companyId: string;
     buyerName: string;
     buyerAddress: string;
     salutation: string;
@@ -145,6 +146,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         : new Date().toISOString().substring(0, 10),
       dueDate: initialInvoice?.dueDate ? new Date(initialInvoice.dueDate).toISOString().substring(0, 10) : '',
       currency: initialInvoice?.currency || 'EUR',
+      companyId: initialInvoice?.companyId || '',
       buyerName: initialInvoice?.buyerName || '',
       buyerAddress: initialInvoice?.buyerAddress || '',
       salutation: initialInvoice?.salutation || '',
@@ -155,15 +157,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         ? new Date(initialInvoice.servicePeriodEnd).toISOString().substring(0, 10) : '',
       depositPercent: typeof initialInvoice?.depositPercent === 'number' ? initialInvoice.depositPercent : 0,
       depositText: initialInvoice?.depositText || '',
-      depositEnabled: (() => {
-        const explicit = initialInvoice?.depositEnabled;
-        if (typeof explicit === 'boolean') return explicit;
-        const hasLegacyDeposit =
-          typeof initialInvoice?.depositPercent === 'number' &&
-          Number(initialInvoice?.depositPercent) > 0 &&
-          Boolean(String(initialInvoice?.depositText || '').trim());
-        return Boolean(initialInvoice?.id && hasLegacyDeposit);
-      })(),
+      depositEnabled: typeof initialInvoice?.depositEnabled === 'boolean' ? initialInvoice.depositEnabled : false,
       depositReceivedEnabled: Boolean(initialInvoice?.depositReceivedEnabled),
       depositReceivedAmount: typeof initialInvoice?.depositReceivedAmount === 'number'
         ? Number(initialInvoice.depositReceivedAmount) : 0,
@@ -178,6 +172,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     },
   });
 
+  const { setValue, watch, getValues, control } = methods;
   const { fields, append, remove, update } = useFieldArray({ control, name: 'items', keyName: 'rhfId' });
 
   // ─── Local State ───────────────────────────────────────────────
@@ -189,7 +184,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   const [invoiceType, setInvoiceType] = useState<InvoiceType>(initialInvoice?.invoiceType || 'Angebot');
   const [state, setState] = useState<InvoiceState>(initialInvoice?.state || 'entwurf');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(initialInvoice?.companyId || '');
   const [template, setTemplate] = useState<InvoiceTemplate | null>(null);
   const [layoutId, setLayoutId] = useState<string>(initialInvoice?.layoutId || getDefaultInvoiceLayoutId(invoiceType));
   const [linkedPayments, setLinkedPayments] = useState<Payment[]>([]);
@@ -203,7 +197,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [invoiceNo, invoiceDate, dueDate] = watch(['invoiceNo', 'invoiceDate', 'dueDate']);
 
   // Gruppe 2: Kunden-Felder (für Validation-Feedback)
-  const [buyerName, buyerAddress, salutation] = watch(['buyerName', 'buyerAddress', 'salutation']);
+  const [companyId, buyerName, buyerAddress, salutation] = watch(['companyId', 'buyerName', 'buyerAddress', 'salutation']);
 
   // Gruppe 3: Zeitraum & Intro
   const [servicePeriodStart, servicePeriodEnd, introText] = watch(['servicePeriodStart', 'servicePeriodEnd', 'introText']);
@@ -263,7 +257,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     const v = getValues();
     return {
       id: initialInvoice?.id || 'temp', invoiceType, invoiceNo: v.invoiceNo,
-      companyId: selectedCustomerId,
+      companyId: v.companyId,
       invoiceDate: new Date(v.invoiceDate).getTime(),
       dueDate: v.dueDate ? new Date(v.dueDate).getTime() : undefined,
       currency: v.currency, state,
@@ -289,7 +283,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const { isDirty, setIsDirty, resetDirtyBaseline } = useInvoiceDirtyTracking({
     getValues: getValues as () => Record<string, unknown>,
     fields: fields as InvoiceItem[],
-    externalState: { invoiceType, state, selectedCustomerId, layoutId },
+    externalState: { invoiceType, state, selectedCustomerId: companyId, layoutId },
     formVersion: _formVersion,
     template,
   });
@@ -301,7 +295,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     getFields: () => fields as InvoiceItem[],
     template,
     customers,
-    selectedCustomerId,
+    selectedCustomerId: companyId,
     buyerName,
     showStatus,
     clearStatus,
@@ -386,22 +380,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceType]);
 
-  // Kunde-Änderung
-  useEffect(() => {
-    const customer = customers.find((c) => c.id === selectedCustomerId);
-    if (customer && !initialInvoice?.buyerName) {
-      setValue('buyerName', `${customer.firstName} ${customer.lastName}`);
-      setValue('buyerAddress', `${customer.address.street}\n${customer.address.zipCode} ${customer.address.city}\n${customer.address.country}`);
-      setValue('salutation', customer.salutation || '');
-    }
-  }, [selectedCustomerId, customers, initialInvoice, setValue]);
+  // Kunde-Änderung wird jetzt direkt in InvoiceCustomerBlock gehandhabt
 
   // ─── Auto Save ─────────────────────────────────────────────────
 
   const autoSaveData = useMemo(
     () => ({ invoiceData: buildInvoiceData(), items: fields as InvoiceItem[] }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-    [_formVersion, invoiceType, state, selectedCustomerId, layoutId, fields]
+    [_formVersion, invoiceType, state, layoutId, fields]
   );
 
   const { saveState } = useAutoSave({
@@ -530,6 +516,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   // ═══════════════════════════════════════════════════════════════
 
   return (
+    <FormProvider {...methods}>
     <div className="flex flex-col h-full bg-slate-50">
       {confirmDialog}
 
@@ -927,5 +914,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         </div>
       </div>
     </div>
+    </FormProvider>
   );
 };
