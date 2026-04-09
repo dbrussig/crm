@@ -183,10 +183,6 @@ async function renderInvoiceHtml(opts: {
       <style>${style}</style>
     </head>
     <body>
-      <div class="no-print">
-        <button class="btn" onclick="window.print()">Drucken / Als PDF speichern</button>
-        <button class="btn secondary" onclick="window.close()" style="margin-left:8px;">Schliessen</button>
-      </div>
       <div class="page">
         <div class="page-inner">
           <div class="top">
@@ -480,10 +476,6 @@ async function renderMietparkHtml(opts: {
       </style>
     </head>
     <body>
-      <div class="no-print">
-        <button class="btn" onclick="window.print()">Drucken / Als PDF speichern</button>
-        <button class="btn secondary" onclick="window.close()" style="margin-left:8px;">Schliessen</button>
-      </div>
       <div class="page">
         <div class="top">
           <div class="title">${esc(invoice.invoiceType)}</div>
