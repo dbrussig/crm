@@ -104,13 +104,22 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
       if (p.kind === 'Kaution') return false;
       if (seenPaymentIds.has(p.id)) return false;
       seenPaymentIds.add(p.id);
-      // Inhaltliche Duplikate: gleicher Anker (Vorgang oder Rechnung) + gleicher Betrag + gleiches Datum + gleiche Art
-      const anchor = p.rentalRequestId || p.invoiceId;
-      if (anchor) {
-        const key = `${anchor}|${p.amount}|${p.receivedAt || p.createdAt}|${p.kind}`;
-        if (seenPaymentKeys.has(key)) return false;
-        seenPaymentKeys.add(key);
+      // 1. Gemeinsamen "Wurzel-Anker" (Rental/Vorgang) finden, egal ob Zahlung an Rechnung oder Vorgang hängt
+      let rootAnchor = p.rentalRequestId;
+      if (!rootAnchor && p.invoiceId) {
+        const linkedInv = invoices.find(i => i.id === p.invoiceId);
+        rootAnchor = (linkedInv as any)?.rentalRequestId;
       }
+      const finalAnchor = rootAnchor || p.invoiceId || 'unlinked';
+
+      // 2. Datum auf den reinen Tag (YYYY-MM-DD) normieren, um Zeitstempel-Abweichungen zu ignorieren
+      const dateDay = new Date(p.receivedAt || p.createdAt).toISOString().split('T')[0];
+
+      // 3. Inhaltliche Duplikate filtern (Gleicher Vorgang + gleicher Tag + gleicher Betrag)
+      const key = `${finalAnchor}|${p.amount}|${dateDay}|${p.kind}`;
+      if (seenPaymentKeys.has(key)) return false;
+      seenPaymentKeys.add(key);
+
       return true;
     })
     .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
@@ -149,15 +158,6 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
       };
     })
     .sort((a, b) => b.date - a.date);
-
-  // DEBUG: Duplikat-Analyse – in Browser-DevTools sichtbar (F12 → Konsole)
-  if (typeof window !== 'undefined') {
-    const allFiltered = payments.filter(p => p.kind !== 'Kaution' && new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear);
-    const invIds = new Set(allFiltered.map(p => p.invoiceId).filter(Boolean));
-    console.debug('[EÜR DEBUG] Payments roh (ohne Kaution, Jahr ' + selectedYear + '):', allFiltered.length, allFiltered.map(p => ({ id: p.id.slice(-8), invoiceId: p.invoiceId, rentalRequestId: p.rentalRequestId, amount: p.amount, kind: p.kind, receivedAt: p.receivedAt })));
-    console.debug('[EÜR DEBUG] Unique invoiceIds:', [...invIds]);
-    console.debug('[EÜR DEBUG] incomePayments nach Dedup:', incomePayments.length, incomePayments.map(p => ({ id: p.paymentId.slice(-8), invoiceNo: p.invoiceNo, amount: p.amount })));
-  }
 
   const totalIncome = incomePayments.reduce((s, p) => s + p.amount, 0);
 
