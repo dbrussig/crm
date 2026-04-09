@@ -362,7 +362,7 @@ export default function Stammdaten() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Vermietungsgegenstände</h2>
+          <h2 className="text-2xl font-bold text-slate-900">Artikel</h2>
           <p className="text-sm text-slate-600">
             Übersicht deiner Miet-Items. (Zubehör wie Dachträger folgt als eigener Anhang/Katalog.)
           </p>
@@ -528,7 +528,7 @@ export default function Stammdaten() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden">
             <div className="p-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-sm text-slate-500">Vermietungsgegenstand</div>
+                <div className="text-sm text-slate-500">Artikel</div>
                 <div className="text-lg font-semibold text-slate-900">{editing ? 'Bearbeiten' : 'Neu anlegen'}</div>
               </div>
               <button
@@ -566,6 +566,7 @@ export default function Stammdaten() {
                     }}
                   >
                     <option value="Dachbox XL">Dachbox XL</option>
+                    <option value="Dachbox L">Dachbox L</option>
                     <option value="Dachbox M">Dachbox M</option>
                     <option value="Fahrradträger">Fahrradträger</option>
                     <option value="Heckbox">Heckbox</option>

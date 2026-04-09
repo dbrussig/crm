@@ -207,6 +207,7 @@ export const MessageToRentalWorkflow: React.FC<MessageToRentalWorkflowProps> = (
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
         >
           <option value="Dachbox XL">Dachbox XL</option>
+          <option value="Dachbox L">Dachbox L</option>
           <option value="Dachbox M">Dachbox M</option>
           <option value="Fahrradträger">Fahrradträger</option>
           <option value="Heckbox">Heckbox</option>

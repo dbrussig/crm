@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SRC_APP="src-tauri/target/release/bundle/macos/Mietpark CRM Desktop.app"
-DST_APP="/Applications/Mietpark CRM Desktop.app"
+SRC_APP="src-tauri/target/release/bundle/macos/CRM Buddy Desktop.app"
+DST_APP="/Applications/CRM Buddy Desktop.app"
 
 if [ ! -d "$SRC_APP" ]; then
   echo "Build-App nicht gefunden: $SRC_APP"

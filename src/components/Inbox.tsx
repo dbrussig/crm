@@ -1670,6 +1670,7 @@ export default function Inbox(props: {
 	                  onChange={(e) => setImportDraft((prev) => prev ? { ...prev, productType: e.target.value as ProductType } : prev)}
 	                >
 	                  <option value="Dachbox XL">Dachbox XL</option>
+	                  <option value="Dachbox L">Dachbox L</option>
 	                  <option value="Dachbox M">Dachbox M</option>
 	                  <option value="Fahrradträger">Fahrradträger</option>
 	                  <option value="Heckbox">Heckbox</option>
@@ -2691,6 +2692,7 @@ export default function Inbox(props: {
                 >
                   <option value="">Bitte auswählen…</option>
                   <option value="Dachbox XL">Dachbox XL</option>
+                  <option value="Dachbox L">Dachbox L</option>
                   <option value="Dachbox M">Dachbox M</option>
                   <option value="Fahrradträger">Fahrradträger</option>
                   <option value="Heckbox">Heckbox</option>
