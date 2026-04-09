@@ -16,6 +16,7 @@ import { getPaymentsByInvoice } from '../services/sqliteService';
 import InvoiceWorkflowBar from './InvoiceWorkflowBar';
 import { useAutoSave } from '../hooks/useAutoSave';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
+import Accordion from './ui/Accordion';
 import { useInvoiceExport } from '../hooks/useInvoiceExport';
 import { useInvoiceDirtyTracking } from '../hooks/useInvoiceDirtyTracking';
 import AutoSaveIndicator from './AutoSaveIndicator';
@@ -189,6 +190,13 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [linkedPayments, setLinkedPayments] = useState<Payment[]>([]);
   const [linkedPaymentsLoading, setLinkedPaymentsLoading] = useState(false);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+
+  // Update state when initialInvoice changes (e.g., after save)
+  useEffect(() => {
+    if (initialInvoice?.state) {
+      setState(initialInvoice.state);
+    }
+  }, [initialInvoice?.state]);
 
   // ─── Watched Fields (reactive for JSX rendering) ───────────────
   // Gruppiert für bessere Performance (~7 statt 21 Subscriptions)
@@ -484,10 +492,18 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     return undefined;
   }, [initialInvoice?.id, invoiceType, onConvertToOrder, onConvertToInvoice]);
 
-  const handleWorkflowAdvance = () => {
-    if (!initialInvoice?.id) return;
-    if (invoiceType === 'Angebot' && onConvertToOrder) { onConvertToOrder(initialInvoice.id); return; }
-    if (invoiceType === 'Auftrag' && onConvertToInvoice) { onConvertToInvoice(initialInvoice.id); }
+  const handleWorkflowAdvance = async () => {
+    if (!initialInvoice?.id) {
+      showStatus({ tone: 'error', text: 'Bitte speichern Sie den Beleg zuerst.' });
+      return;
+    }
+    if (invoiceType === 'Angebot' && onConvertToOrder) { 
+      onConvertToOrder(initialInvoice.id); 
+      return; 
+    }
+    if (invoiceType === 'Auftrag' && onConvertToInvoice) { 
+      onConvertToInvoice(initialInvoice.id); 
+    }
   };
 
   // ─── Button Classes ────────────────────────────────────────────
@@ -526,9 +542,6 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           <h2 className="text-xl font-semibold text-slate-900">Beleg Editor</h2>
           <div className="flex items-center gap-3">
             <AutoSaveIndicator state={saveState} />
-            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[state]}`}>
-              {state.charAt(0).toUpperCase() + state.slice(1)}
-            </span>
             {onClose && (
               <button
                 onClick={async () => {
@@ -583,6 +596,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             invoiceNo={invoiceNo}
             onInvoiceNoChange={(v: string) => setValue('invoiceNo', v)}
             invoiceNoDisabled={!!initialInvoice?.id}
+            state={state}
+            onStateChange={setState}
             layoutId={layoutId}
             onLayoutChange={setLayoutId}
             onApplyDefaults={async () => {
@@ -754,11 +769,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
         {/* Erweiterte Texte */}
         {hasAdvancedTextBlocks && (
-          <details open={hasNonEmptyAdvancedFields} className="mb-6 rounded-lg border border-slate-200 bg-slate-50/70">
-            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800">
-              Erweiterte Texte &amp; Bedingungen
-            </summary>
-            <div className="space-y-6 border-t border-slate-200 bg-white px-4 py-4">
+          <Accordion title="Erweiterte Texte & Bedingungen anpassen" defaultOpen={false}>
+            <div className="space-y-6">
               {layout.editorBlocks.includes('payment') && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Zahlungsbedingungen</h3>
@@ -825,7 +837,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 </div>
               )}
             </div>
-          </details>
+          </Accordion>
         )}
 
         </div>{/* End max-w-5xl container */}

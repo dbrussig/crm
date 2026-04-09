@@ -30,6 +30,7 @@ interface InvoiceListProps {
   onMarkAccepted?: (invoiceId: string) => void;
   onConvertToOrder?: (invoiceId: string) => void;
   onConvertToInvoice?: (invoiceId: string) => void;
+  reloadTrigger?: number;
 }
 
 export const InvoiceList: React.FC<InvoiceListProps> = ({
@@ -43,6 +44,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   onMarkAccepted,
   onConvertToOrder,
   onConvertToInvoice,
+  reloadTrigger,
 }) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
@@ -101,9 +103,8 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
         setLoading(false);
       }
     };
-
-    loadInvoices();
-  }, []);
+    void loadInvoices();
+  }, [reloadTrigger]);
 
   // Filter & Sort invoices
   useEffect(() => {
@@ -407,12 +408,6 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Belege</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Angebote, Aufträge und Rechnungen verwalten
-            </p>
-          </div>
           <div className="inline-flex rounded-md border border-slate-200 overflow-hidden">
             <button
               type="button"

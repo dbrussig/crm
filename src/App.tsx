@@ -61,6 +61,7 @@ export default function App() {
     rentalId?: string;
     nextRentalStatus?: RentalStatus;
   } | null>(null);
+  const [invoiceListReloadTrigger, setInvoiceListReloadTrigger] = useState(0);
   const [dashboardRentals, setDashboardRentals] = useState<RentalRequest[]>([]);
   const [dashboardInvoices, setDashboardInvoices] = useState<Invoice[]>([]);
   const [dashboardPayments, setDashboardPayments] = useState<Payment[]>([]);
@@ -1174,6 +1175,7 @@ export default function App() {
             <InvoiceList
               customers={customers}
               mailTransportSettings={mailTransportSettings}
+              reloadTrigger={invoiceListReloadTrigger}
               onCreate={() => {
                 setEditingInvoiceContext(null);
                 setEditingInvoice({});
@@ -1271,9 +1273,15 @@ export default function App() {
                   }
                 }
                 queryClient.invalidateQueries({ queryKey: ['invoices'] });
-                setEditingInvoiceContext(null);
-                setEditingInvoice(null);
-                setActiveView('belege');
+                // Update editingInvoice with saved data to keep editor in sync
+                if (wasCreate) {
+                  setEditingInvoice({ ...inv, id: savedInvoiceId });
+                } else {
+                  setEditingInvoice(inv);
+                }
+                setEditingInvoiceItems(items);
+                // Trigger invoice list reload
+                setInvoiceListReloadTrigger(prev => prev + 1);
               }}
               onConvertToOrder={async (invoiceId) => {
                 const next = await createFollowUpInvoiceWithStatusSync(invoiceId, 'Auftrag');
