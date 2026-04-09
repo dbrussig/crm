@@ -290,6 +290,14 @@ export default function App() {
     localStorage.setItem('mietpark_mail_transport_settings', JSON.stringify(mailTransportSettings));
   }, [mailTransportSettings]);
 
+  // EÜR: frische Daten laden wenn die Ansicht geöffnet wird
+  useEffect(() => {
+    if (activeView === 'euer') {
+      fetchAllInvoices().then(setDashboardInvoices).catch(() => {});
+      getAllPayments().then(setDashboardPayments).catch(() => {});
+    }
+  }, [activeView]);
+
   // Escape key to close rental detail offcanvas
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
