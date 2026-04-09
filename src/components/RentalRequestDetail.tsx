@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { RentalRequest, Customer, Invoice, InvoiceItem, InvoiceType, Payment, RentalStatus, MailTransportSettings } from '../types';
 import {
   fetchAllRentalRequests,
@@ -1937,10 +1938,11 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                         {onOpenInvoice && (
                           <button
                             onClick={() => onOpenInvoice(inv.id)}
-                            title="Beleg im Editor öffnen"
-                            className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
+                            title="Beleg bearbeiten"
+                            aria-label={`${inv.invoiceType} ${inv.invoiceNo} bearbeiten`}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50"
                           >
-                            Bearbeiten
+                            <Pencil size={13} aria-hidden="true" />
                           </button>
                         )}
                         <button
