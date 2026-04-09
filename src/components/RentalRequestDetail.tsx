@@ -25,7 +25,7 @@ import { fetchAllInvoices } from '../services/invoiceService';
 import { generateTemplate } from '../services/templateService';
 import { getInvoiceItems, updateRentalRequest } from '../services/sqliteService';
 import { calculateWebsitePrice } from '../services/pricingService';
-import { addPayment, assignPaymentToInvoice, getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer, getPaymentMethodsConfig } from '../services/sqliteService';
+import { addPayment, assignPaymentToInvoice, getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer, getPaymentMethodsConfig, addPayment as updatePayment } from '../services/sqliteService';
 import type { PaymentMethodConfig } from '../types';
 import { DEFAULT_PAYMENT_METHODS } from '../types';
 import { findActiveResourcesForType } from '../services/resourceService';
@@ -122,6 +122,9 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   const [paymentAssignBusyId, setPaymentAssignBusyId] = useState<string | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentFormBusy, setPaymentFormBusy] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editingPaymentForm, setEditingPaymentForm] = useState<{ kind: 'Anzahlung' | 'Zahlung' | 'Kaution'; method: string; amount: string; receivedAt: string; note: string } | null>(null);
+  const [editingPaymentBusy, setEditingPaymentBusy] = useState(false);
   const [configuredPaymentMethods, setConfiguredPaymentMethods] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
   const [paymentForm, setPaymentForm] = useState<{
     kind: 'Anzahlung' | 'Zahlung' | 'Kaution';
@@ -1893,73 +1896,159 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
               {payments.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {payments.map((p) => (
-                    <div key={p.id} className="flex items-start justify-between gap-3 rounded-md border border-gray-200 p-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-900">
-                          {p.kind} · {p.method} · {Number(p.amount || 0).toFixed(2)} {p.currency || 'EUR'}
+                    <div key={p.id} className="rounded-md border border-gray-200 p-3">
+                      {editingPaymentId === p.id && editingPaymentForm ? (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs font-medium text-slate-600 block mb-1">Art</label>
+                              <select title="Art" className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                                value={editingPaymentForm.kind}
+                                onChange={(e) => setEditingPaymentForm((f) => f ? { ...f, kind: e.target.value as typeof f.kind } : f)}>
+                                <option value="Anzahlung">Anzahlung</option>
+                                <option value="Zahlung">Zahlung</option>
+                                <option value="Kaution">Kaution</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-slate-600 block mb-1">Zahlart</label>
+                              <select title="Zahlart" className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                                value={editingPaymentForm.method}
+                                onChange={(e) => setEditingPaymentForm((f) => f ? { ...f, method: e.target.value } : f)}>
+                                {configuredPaymentMethods.filter((m) => m.isActive).map((m) => (
+                                  <option key={m.id} value={m.id}>{m.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs font-medium text-slate-600 block mb-1">Betrag (€)</label>
+                              <input type="number" step="0.01" min="0" title="Betrag"
+                                className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                                value={editingPaymentForm.amount}
+                                onChange={(e) => setEditingPaymentForm((f) => f ? { ...f, amount: e.target.value } : f)} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-slate-600 block mb-1">Datum</label>
+                              <input type="date" title="Eingangsdatum"
+                                className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                                value={editingPaymentForm.receivedAt}
+                                onChange={(e) => setEditingPaymentForm((f) => f ? { ...f, receivedAt: e.target.value } : f)} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-slate-600 block mb-1">Notiz</label>
+                            <input type="text" title="Notiz" placeholder="optional"
+                              className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                              value={editingPaymentForm.note}
+                              onChange={(e) => setEditingPaymentForm((f) => f ? { ...f, note: e.target.value } : f)} />
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" disabled={editingPaymentBusy}
+                              className="px-3 py-1.5 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700 disabled:opacity-50"
+                              onClick={async () => {
+                                if (!editingPaymentForm) return;
+                                setEditingPaymentBusy(true);
+                                try {
+                                  const updated = {
+                                    ...p,
+                                    kind: editingPaymentForm.kind,
+                                    method: editingPaymentForm.method,
+                                    amount: Number(editingPaymentForm.amount),
+                                    receivedAt: editingPaymentForm.receivedAt ? new Date(editingPaymentForm.receivedAt).getTime() : p.receivedAt,
+                                    note: editingPaymentForm.note.trim() || undefined,
+                                  };
+                                  await updatePayment(updated);
+                                  setPayments((prev) => prev.map((x) => x.id === p.id ? updated : x));
+                                  setEditingPaymentId(null);
+                                  setEditingPaymentForm(null);
+                                  showInfo('Zahlung aktualisiert.');
+                                } catch (e) {
+                                  showError('Speichern fehlgeschlagen: ' + (e instanceof Error ? e.message : String(e)));
+                                } finally {
+                                  setEditingPaymentBusy(false);
+                                }
+                              }}>
+                              {editingPaymentBusy ? 'Speichert…' : 'Speichern'}
+                            </button>
+                            <button type="button" className="px-3 py-1.5 rounded border border-slate-200 text-xs hover:bg-slate-50"
+                              onClick={() => { setEditingPaymentId(null); setEditingPaymentForm(null); }}>Abbrechen</button>
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {p.receivedAt ? new Date(p.receivedAt).toLocaleString('de-DE') : ''}
-                          {p.payerName ? ` · ${p.payerName}` : ''}
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-gray-900">
+                              {p.kind} · {configuredPaymentMethods.find(m => m.id === p.method)?.label || p.method} · {Number(p.amount || 0).toFixed(2)} {p.currency || 'EUR'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {p.receivedAt ? new Date(p.receivedAt).toLocaleDateString('de-DE') : ''}
+                              {p.payerName ? ` · ${p.payerName}` : ''}
+                            </div>
+                            <div className="mt-2">
+                              <label className="text-xs text-gray-600">Rechnung zuordnen</label>
+                              <select
+                                className="mt-1 w-full px-2 py-1.5 rounded border border-gray-200 text-xs bg-white"
+                                value={p.invoiceId || ''}
+                                onChange={async (e) => {
+                                  const nextInvoiceId = e.target.value || undefined;
+                                  setPaymentAssignBusyId(p.id);
+                                  try {
+                                    await assignPaymentToInvoice(p.id, nextInvoiceId);
+                                    setPayments((prev) => prev.map((x) => (x.id === p.id ? { ...x, invoiceId: nextInvoiceId } : x)));
+                                  } catch (error) {
+                                    showError('Konnte Rechnungszuordnung nicht speichern: ' + (error instanceof Error ? error.message : String(error)));
+                                  } finally {
+                                    setPaymentAssignBusyId(null);
+                                  }
+                                }}
+                                disabled={paymentAssignBusyId === p.id || actionLoading}
+                                aria-label="Rechnung zuordnen"
+                              >
+                                <option value="">Keine Rechnung zugeordnet</option>
+                                {linkedInvoices.map((inv) => (
+                                  <option key={inv.id} value={inv.id}>{inv.invoiceNo} · {inv.invoiceType} · {inv.state}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {p.note && <div className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">{p.note}</div>}
+                          </div>
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <button
+                              className="px-3 py-1.5 rounded-md border border-indigo-200 text-indigo-700 text-xs hover:bg-indigo-50"
+                              onClick={() => {
+                                setEditingPaymentId(p.id);
+                                setEditingPaymentForm({
+                                  kind: p.kind,
+                                  method: p.method || configuredPaymentMethods.find(m => m.isActive)?.id || 'Bank',
+                                  amount: String(p.amount || ''),
+                                  receivedAt: p.receivedAt ? new Date(p.receivedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+                                  note: p.note || '',
+                                });
+                              }}
+                            >
+                              Bearbeiten
+                            </button>
+                            <button
+                              className="px-3 py-1.5 rounded-md border border-gray-200 text-xs hover:bg-gray-50 disabled:opacity-60"
+                              onClick={async () => {
+                                const ok = await requestConfirm({ title: 'Zahlung löschen?', message: 'Diese Zahlung wirklich löschen?', confirmLabel: 'Löschen', cancelLabel: 'Abbrechen', danger: true });
+                                if (!ok) return;
+                                try {
+                                  await deletePayment(p.id);
+                                  setPayments((prev) => prev.filter((x) => x.id !== p.id));
+                                } catch (e) {
+                                  showError('Konnte Zahlung nicht löschen: ' + (e instanceof Error ? e.message : String(e)));
+                                }
+                              }}
+                              disabled={paymentAssignBusyId === p.id}
+                            >
+                              Löschen
+                            </button>
+                          </div>
                         </div>
-                        <div className="mt-2">
-                          <label className="text-xs text-gray-600">Rechnung zuordnen</label>
-                          <select
-                            className="mt-1 w-full px-2 py-1.5 rounded border border-gray-200 text-xs bg-white"
-                            value={p.invoiceId || ''}
-                            onChange={async (e) => {
-                              const nextInvoiceId = e.target.value || undefined;
-                              setPaymentAssignBusyId(p.id);
-                              try {
-                                await assignPaymentToInvoice(p.id, nextInvoiceId);
-                                setPayments((prev) =>
-                                  prev.map((x) => (x.id === p.id ? { ...x, invoiceId: nextInvoiceId } : x))
-                                );
-                              } catch (error) {
-                                showError('Konnte Rechnungszuordnung nicht speichern: ' + (error instanceof Error ? error.message : String(error)));
-                              } finally {
-                                setPaymentAssignBusyId(null);
-                              }
-                            }}
-                            disabled={paymentAssignBusyId === p.id || actionLoading}
-                            aria-label="Rechnung zuordnen"
-                          >
-                            <option value="">Keine Rechnung zugeordnet</option>
-                            {linkedInvoices.map((inv) => (
-                              <option key={inv.id} value={inv.id}>
-                                {inv.invoiceNo} · {inv.invoiceType} · {inv.state}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        {p.note && <div className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">{p.note}</div>}
-                      </div>
-                      <button
-                        className="shrink-0 px-3 py-1.5 rounded-md border border-gray-200 text-xs hover:bg-gray-50 disabled:opacity-60"
-                        onClick={async () => {
-                          const ok = await requestConfirm({
-                            title: 'Zahlung löschen?'
-                            ,
-                            message: 'Diese Zahlung wirklich löschen?'
-                            ,
-                            confirmLabel: 'Löschen'
-                            ,
-                            cancelLabel: 'Abbrechen'
-                            ,
-                            danger: true,
-                          });
-                          if (!ok) return;
-                          try {
-                            await deletePayment(p.id);
-                            setPayments((prev) => prev.filter((x) => x.id !== p.id));
-                          } catch (e) {
-                            showError('Konnte Zahlung nicht löschen: ' + (e instanceof Error ? e.message : String(e)));
-                          }
-                        }}
-                        disabled={paymentAssignBusyId === p.id}
-                      >
-                        Löschen
-                      </button>
+                      )}
                     </div>
                   ))}
                 </div>
