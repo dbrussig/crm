@@ -134,8 +134,8 @@ export default function App() {
         { id: 'belege' as const, label: 'Belege', icon: '🧾', group: 'Abrechnung' as const },
         { id: 'euer' as const, label: 'EÜR', icon: '💰', group: 'Abrechnung' as const },
         { id: 'kunden' as const, label: 'Kunden', icon: '👥', group: 'Stammdaten' as const },
-        { id: 'stammdaten' as const, label: 'Vermietungsgegenstände', icon: '📦', group: 'Stammdaten' as const },
-        { id: 'zubehoer' as const, label: 'Vermietungszubehör', icon: '🧰', group: 'Stammdaten' as const },
+        { id: 'stammdaten' as const, label: 'Artikel', icon: '📦', group: 'Stammdaten' as const },
+        { id: 'zubehoer' as const, label: 'Zubehör', icon: '🧰', group: 'Stammdaten' as const },
         { id: 'einstellungen' as const, label: 'Einstellungen', icon: '⚙️', group: 'System' as const },
       ] satisfies Array<{ id: View; label: string; icon: string; group: 'Kommunikation' | 'Vorgänge' | 'Stammdaten' | 'Abrechnung' | 'System' }>,
     []
