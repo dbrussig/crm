@@ -4,7 +4,9 @@ import type { InvoiceFormValues } from './types';
 export default function InvoicePickupReturnBlock() {
   const { register, watch, setValue } = useFormContext<InvoiceFormValues>();
   const pickupDate = watch('pickupDate');
+  const pickupTime = watch('pickupTime');
   const returnDate = watch('returnDate');
+  const returnTime = watch('returnTime');
   const pickupEnabled = Boolean(pickupDate);
   const returnEnabled = Boolean(returnDate);
 
@@ -41,7 +43,8 @@ export default function InvoicePickupReturnBlock() {
               <input
                 id="pickup-time"
                 type="time"
-                {...register('pickupTime')}
+                value={pickupTime || ''}
+                onChange={(e) => setValue('pickupTime', e.target.value, { shouldDirty: true })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -80,7 +83,8 @@ export default function InvoicePickupReturnBlock() {
               <input
                 id="return-time"
                 type="time"
-                {...register('returnTime')}
+                value={returnTime || ''}
+                onChange={(e) => setValue('returnTime', e.target.value, { shouldDirty: true })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
