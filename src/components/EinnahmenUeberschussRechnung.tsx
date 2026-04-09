@@ -115,8 +115,8 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
       // 2. Datum auf den reinen Tag (YYYY-MM-DD) normieren, um Zeitstempel-Abweichungen zu ignorieren
       const dateDay = new Date(p.receivedAt || p.createdAt).toISOString().split('T')[0];
 
-      // 3. Inhaltliche Duplikate filtern (Gleicher Vorgang + gleicher Tag + gleicher Betrag)
-      const key = `${finalAnchor}|${p.amount}|${dateDay}|${p.kind}`;
+      // 3. Inhaltliche Duplikate filtern (Gleicher Vorgang + gleicher Tag + gleicher Betrag, kind ignorieren)
+      const key = `${finalAnchor}|${p.amount}|${dateDay}`;
       if (seenPaymentKeys.has(key)) return false;
       seenPaymentKeys.add(key);
 
