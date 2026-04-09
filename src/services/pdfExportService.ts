@@ -869,6 +869,16 @@ function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean)
   actions.style.alignItems = 'center';
   actions.style.gap = '8px';
 
+  const savePdfBtn = document.createElement('button');
+  savePdfBtn.textContent = '💾 Als PDF speichern';
+  savePdfBtn.style.padding = '6px 12px';
+  savePdfBtn.style.borderRadius = '8px';
+  savePdfBtn.style.border = '1px solid #16a34a';
+  savePdfBtn.style.background = '#16a34a';
+  savePdfBtn.style.color = '#fff';
+  savePdfBtn.style.cursor = 'pointer';
+  savePdfBtn.style.fontWeight = '500';
+
   const printBtn = document.createElement('button');
   printBtn.textContent = 'Drucken';
   printBtn.style.padding = '6px 10px';
@@ -893,6 +903,14 @@ function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean)
   iframe.style.height = '100%';
   iframe.srcdoc = html;
 
+  savePdfBtn.addEventListener('click', () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      // ignore
+    }
+  });
   printBtn.addEventListener('click', () => {
     try {
       iframe.contentWindow?.focus();
@@ -906,6 +924,7 @@ function openInvoiceHtmlOverlay(html: string, title: string, autoPrint: boolean)
     if (ev.target === overlay) closeInvoicePreviewOverlay();
   });
 
+  actions.appendChild(savePdfBtn);
   actions.appendChild(printBtn);
   actions.appendChild(closeBtn);
   toolbar.appendChild(titleEl);
