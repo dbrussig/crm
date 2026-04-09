@@ -44,6 +44,14 @@ export async function createFollowUpInvoiceWithStatusSync(
 
   const targetStatus = rentalStatusForConversion(targetType);
 
+  // Prüfe ob Transition erlaubt ist (verhindert Rückwärts-Schritte wenn Rental bereits weiter ist)
+  const { getRentalRequest } = await import('./sqliteService');
+  const rental = await getRentalRequest(source.invoice.rentalRequestId);
+  if (!rental || !canTransitionStatus(rental.status, targetStatus)) {
+    // Rental-Status bereits weiter oder Transition nicht erlaubt → Beleg trotzdem erstellen, aber Status nicht ändern
+    return { nextInvoiceId, rentalStatusUpdated: false };
+  }
+
   try {
     await transitionStatus(source.invoice.rentalRequestId, targetStatus);
     return { nextInvoiceId, rentalStatusUpdated: true };
