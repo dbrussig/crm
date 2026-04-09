@@ -961,14 +961,15 @@ const CustomerList: React.FC<CustomerListProps> = ({
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reling-Foto</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Fahrzeug / Dachträger</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Letzter Kontakt</th>
-                  <th className="px-6 py-4 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Aktionen</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Aktionen</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {sortedCustomers.map((customer) => (
                   <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-medium text-slate-900">{customer.firstName} {customer.lastName}</div>
+                      <div className="font-medium text-slate-900">{customer.firstName}</div>
+                      <div className="text-sm text-slate-600">{customer.lastName}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm">
@@ -1042,7 +1043,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
                       <div className="text-sm text-slate-700">{formatDate(getLastContactTs(customer))}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-start gap-2">
                         {/* Primäre Aktionen */}
                         <button
                           onClick={() => setEditingCustomer(customer)}
