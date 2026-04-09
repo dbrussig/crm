@@ -439,6 +439,7 @@ export interface InvoiceItem {
   quantity: number;
   taxPercent: number;
   createdAt: number;
+  withCarrier?: boolean;
 }
 
 export interface InvoiceTemplate {

@@ -422,7 +422,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     remove(index);
   };
 
-  const updatePosition = (index: number, field: keyof InvoiceItem, value: string | number) => {
+  const updatePosition = (index: number, field: keyof InvoiceItem, value: string | number | boolean) => {
     const current = fields[index] as InvoiceItem;
     update(index, { ...current, [field]: value });
   };

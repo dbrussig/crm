@@ -166,7 +166,7 @@ async function renderInvoiceHtml(opts: {
       const line = qty * up;
       return `<tr>
         <td style="width:28px;color:#6b7280;">${idx + 1}</td>
-        <td>${esc(it.name || '')}${it.unit ? `<div class="muted" style="font-size:11px;margin-top:3px;">Einheit: ${esc(it.unit)}</div>` : ''}</td>
+        <td>${esc((it.name || '') + (it.withCarrier ? ' mit Träger' : ''))}${it.unit ? `<div class="muted" style="font-size:11px;margin-top:3px;">Einheit: ${esc(it.unit)}</div>` : ''}</td>
         <td class="num">${qty.toLocaleString('de-DE')}</td>
         <td class="num">${euro(up)}</td>
         <td class="num">${euro(line)}</td>
@@ -356,7 +356,8 @@ async function renderMietparkHtml(opts: {
       const qty = Number(it.quantity) || 0;
       const up = Number(it.unitPrice) || 0;
       const line = qty * up;
-      const rawLines = String(it.name || '').split('\n').map((l) => l.trim()).filter(Boolean);
+      const displayName = (it.name || '') + (it.withCarrier ? ' mit Träger' : '');
+      const rawLines = String(displayName).split('\n').map((l) => l.trim()).filter(Boolean);
       const firstLine = rawLines[0] || '';
       const extraLines = rawLines.slice(1);
       // If the item already includes a date range line, don't duplicate it when we also show `servicePeriod`.

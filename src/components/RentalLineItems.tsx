@@ -7,7 +7,7 @@ interface RentalLineItemsProps {
   items: InvoiceItem[];
   onAdd: () => void;
   onRemove: (index: number) => void;
-  onUpdate: (index: number, field: keyof InvoiceItem, value: string | number) => void;
+  onUpdate: (index: number, field: keyof InvoiceItem, value: string | number | boolean) => void;
 }
 
 export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: RentalLineItemsProps) {
@@ -83,6 +83,16 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate }: Re
                   <option key={p.key} value={p.key}>{p.label}</option>
                 ))}
               </select>
+              <label className="mt-1.5 flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={Boolean(item.withCarrier)}
+                  onChange={(e) => onUpdate(index, 'withCarrier', e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  aria-label={`Position ${index + 1}: mit Träger`}
+                />
+                <span className="text-xs text-slate-600">mit Träger</span>
+              </label>
             </div>
 
             <div className="col-span-3">
