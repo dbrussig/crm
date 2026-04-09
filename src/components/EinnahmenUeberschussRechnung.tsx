@@ -85,11 +85,13 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
     .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
     .map(p => {
       const inv = invoices.find(i => i.id === p.invoiceId);
+      const customerId = p.customerId || inv?.companyId || '';
+      const customerName = customerMap.get(customerId) || inv?.buyerName || 'Unbekannt';
       return {
         paymentId: p.id,
         date: p.receivedAt || p.createdAt,
-        invoiceNo: inv?.invoiceNo,
-        customerName: customerMap.get(p.customerId || '') || inv?.buyerName || 'Unbekannt',
+        invoiceNo: inv?.invoiceNo || '-',
+        customerName,
         amount: Number(p.amount) || 0,
         fee: Number((p as any).fee) || 0,
         provider: (p as any).provider,
