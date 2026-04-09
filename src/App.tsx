@@ -15,6 +15,7 @@ import { InvoiceList } from './components/InvoiceList';
 import { InvoiceEditor } from './components/InvoiceEditor';
 import { fetchAllInvoices, fetchInvoiceById, reissueInvoice, saveInvoice, type SaveInvoiceContext } from './services/invoiceService';
 import SettingsPanel from './components/SettingsPanel';
+import PriceManagement from './components/PriceManagement';
 import { testZAiConnection } from './services/zAiService';
 import { findActiveResourcesForType } from './services/resourceService';
 import { testGoogleContactsConnection } from './services/googleContactsService';
@@ -42,6 +43,7 @@ type View =
   | 'belege'
   | 'euer'
   | 'beleg_editor'
+  | 'preise'
   | 'einstellungen';
 
 export default function App() {
@@ -136,6 +138,7 @@ export default function App() {
         { id: 'kunden' as const, label: 'Kunden', icon: '👥', group: 'Stammdaten' as const },
         { id: 'stammdaten' as const, label: 'Vermietungsgegenstände', icon: '📦', group: 'Stammdaten' as const },
         { id: 'zubehoer' as const, label: 'Vermietungszubehör', icon: '🧰', group: 'Stammdaten' as const },
+        { id: 'preise' as const, label: 'Preispflege', icon: '💶', group: 'System' as const },
         { id: 'einstellungen' as const, label: 'Einstellungen', icon: '⚙️', group: 'System' as const },
       ] satisfies Array<{ id: View; label: string; icon: string; group: 'Kommunikation' | 'Vorgänge' | 'Stammdaten' | 'Abrechnung' | 'System' }>,
     []
@@ -1299,6 +1302,12 @@ export default function App() {
                 await openInvoiceEditorById(nextId);
               }}
             />
+          </div>
+        )}
+
+        {activeView === 'preise' && (
+          <div className="max-w-5xl">
+            <PriceManagement />
           </div>
         )}
 
