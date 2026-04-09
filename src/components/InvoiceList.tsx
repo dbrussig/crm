@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { ArrowRight, Check, Eye, FileText, Mail, Pencil, Send, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, Eye, Mail, Pencil, Send, Trash2 } from 'lucide-react';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, MailTransportSettings } from '../types';
 import {
   fetchAllInvoices,
@@ -616,15 +616,6 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                           aria-label={`Beleg ${invoice.invoiceNo} PDF ansehen`}
                         >
                           <Eye size={14} aria-hidden="true" />
-                        </button>
-                        <button
-                          onClick={() => void runAction(`pdf:${invoice.id}`, async () => { await saveInvoicePdfViaPrintDialog(invoice); })}
-                          className={actionButtonClass}
-                          disabled={Boolean(busyActionKey)}
-                          title="PDF speichern (Printdialog)"
-                          aria-label={`Beleg ${invoice.invoiceNo} PDF speichern`}
-                        >
-                          <FileText size={14} aria-hidden="true" />
                         </button>
                         <button
                           onClick={() => void runAction(`mail:${invoice.id}`, async () => {
