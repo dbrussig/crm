@@ -702,7 +702,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-xs font-medium text-slate-600 block mb-1">Art</label>
-                        <select title="Art" className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                        <select title="Art" className="w-full px-3 py-2 rounded-md border border-slate-300 bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
                           value={paymentForm.kind}
                           onChange={(e) => setPaymentForm((f) => ({ ...f, kind: e.target.value as typeof f.kind }))}>
                           <option value="Anzahlung">Anzahlung</option>
@@ -712,7 +712,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 block mb-1">Zahlart</label>
-                        <select title="Zahlart" className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                        <select title="Zahlart" className="w-full px-3 py-2 rounded-md border border-slate-300 bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
                           value={paymentForm.method}
                           onChange={(e) => setPaymentForm((f) => ({ ...f, method: e.target.value }))}>
                           {paymentMethods.filter((m) => m.isActive).map((m) => (
@@ -725,14 +725,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                       <div>
                         <label className="text-xs font-medium text-slate-600 block mb-1">Betrag (€)</label>
                         <input type="number" step="0.01" min="0" title="Betrag"
-                          className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                          className="w-full px-3 py-2 rounded-md border border-slate-300 bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
                           value={paymentForm.amount}
                           onChange={(e) => setPaymentForm((f) => ({ ...f, amount: e.target.value }))} />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 block mb-1">Datum</label>
                         <input type="date" title="Eingangsdatum"
-                          className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                          className="w-full px-3 py-2 rounded-md border border-slate-300 bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
                           value={paymentForm.receivedAt}
                           onChange={(e) => setPaymentForm((f) => ({ ...f, receivedAt: e.target.value }))} />
                       </div>
@@ -740,7 +740,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                     <div>
                       <label className="text-xs font-medium text-slate-600 block mb-1">Notiz</label>
                       <input type="text" title="Notiz" placeholder="optional"
-                        className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                        className="w-full px-3 py-2 rounded-md border border-slate-300 bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={paymentForm.note}
                         onChange={(e) => setPaymentForm((f) => ({ ...f, note: e.target.value }))} />
                     </div>

@@ -33,7 +33,7 @@ export default function InvoicePickupReturnBlock() {
                 id="pickup-date"
                 type="date"
                 {...register('pickupDate')}
-                className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             <div className="space-y-1">
@@ -42,7 +42,7 @@ export default function InvoicePickupReturnBlock() {
                 id="pickup-time"
                 type="time"
                 {...register('pickupTime')}
-                className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
@@ -72,7 +72,7 @@ export default function InvoicePickupReturnBlock() {
                 id="return-date"
                 type="date"
                 {...register('returnDate')}
-                className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             <div className="space-y-1">
@@ -81,7 +81,7 @@ export default function InvoicePickupReturnBlock() {
                 id="return-time"
                 type="time"
                 {...register('returnTime')}
-                className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
