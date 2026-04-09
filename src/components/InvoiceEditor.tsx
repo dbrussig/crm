@@ -793,7 +793,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         {/* Intro / Anschreiben */}
         {layout.editorBlocks.includes('intro') && (
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Text (oben)</h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Anschreiben</h3>
             <textarea id="invoice-intro" value={introText}
               onChange={(e) => setValue('introText', e.target.value)} rows={5}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
