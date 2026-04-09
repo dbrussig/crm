@@ -242,6 +242,15 @@ export default function App() {
   useEffect(() => {
     void runDesktopAutoUpdate();
     void migrateInvoiceNosStripLeadingZeros();
+    // Einmaliger Fix: AN-2026-34 → AN-2026-35
+    if (!localStorage.getItem('fix_an_2026_34_done')) {
+      void (async () => {
+        const all = await fetchAllInvoices();
+        const target = all.find((inv: Invoice) => String(inv.invoiceNo).trim().toUpperCase() === 'AN-2026-34');
+        if (target) await updateInvoice(target.id, { invoiceNo: 'AN-2026-35' });
+        localStorage.setItem('fix_an_2026_34_done', '1');
+      })();
+    }
   }, []);
 
   useEffect(() => {
