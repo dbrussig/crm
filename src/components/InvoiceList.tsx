@@ -430,7 +430,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
             id="filter-type"
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as InvoiceType | 'alle')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full h-[38px] px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           >
             <option value="alle">Alle</option>
             <option value="Angebot">Angebot</option>
@@ -446,7 +446,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
             id="filter-state"
             value={filterState}
             onChange={(e) => setFilterState(e.target.value as InvoiceState | 'alle')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full h-[38px] px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           >
             <option value="alle">Alle</option>
             <option value="entwurf">Entwurf</option>
@@ -481,7 +481,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
               setSortBy(sort);
               setSortOrder(order);
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full h-[38px] px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           >
             <option value="date-desc">Datum (neueste zuerst)</option>
             <option value="date-asc">Datum (älteste zuerst)</option>
