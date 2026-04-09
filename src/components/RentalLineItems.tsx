@@ -90,14 +90,19 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
     return { mode: unit, days: 1, weeks: 1 };
   };
 
+  const fieldCls = 'h-9 px-2 border border-slate-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+
   return (
     <div>
-      <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-        <div className="col-span-4">Produkt</div>
-        <div className="col-span-3">Dauer</div>
-        <div className="col-span-2 text-right">Preis/Einheit (€)</div>
-        <div className="col-span-2 text-right">Gesamt (€)</div>
-        <div className="col-span-1"></div>
+      {/* Header */}
+      <div className="hidden sm:grid px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+        style={{ gridTemplateColumns: '1fr 180px 130px 90px 80px 32px' }}>
+        <div>Produkt</div>
+        <div>Dauer</div>
+        <div>Menge</div>
+        <div className="text-right">Preis/Stk.</div>
+        <div className="text-right">Gesamt</div>
+        <div />
       </div>
 
       {items.map((item, index) => {
@@ -116,17 +121,17 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
         return (
           <div
             key={(item as any).rhfId || item.id}
-            className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-slate-100 items-start"
+            className="grid items-center gap-2 px-4 py-2 border-b border-slate-100 hover:bg-slate-50/50 transition-colors"
+            style={{ gridTemplateColumns: '1fr 180px 130px 90px 80px 32px' }}
           >
-            {/* Produkt */}
-            <div className="col-span-4">
-              <label className="sr-only" htmlFor={`product-${index}`}>Produkt</label>
+            {/* Produkt + mit Träger inline */}
+            <div className="flex items-center gap-2 min-w-0">
               <select
                 id={`product-${index}`}
                 ref={isLast ? firstSelectRef : undefined}
                 value={productKey}
                 onChange={(e) => handleProductChange(index, e.target.value)}
-                className="w-full h-9 px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                className={`${fieldCls} flex-1 min-w-0`}
                 aria-label={`Position ${index + 1}: Produkt`}
               >
                 {useResources
@@ -138,21 +143,32 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
                     ))
                 }
               </select>
-              <label className="mt-1.5 flex items-center gap-2 cursor-pointer select-none">
+              <label
+                className={`flex items-center gap-1 px-2 h-9 rounded-md border text-xs font-medium cursor-pointer select-none transition-colors whitespace-nowrap ${
+                  item.withCarrier
+                    ? 'bg-blue-50 border-blue-300 text-blue-700'
+                    : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
+                }`}
+                title="mit Träger"
+              >
                 <input
                   type="checkbox"
                   checked={Boolean(item.withCarrier)}
                   onChange={(e) => onUpdate(index, 'withCarrier', e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  className="sr-only"
                   aria-label={`Position ${index + 1}: mit Träger`}
                 />
-                <span className="text-xs text-slate-600">mit Träger</span>
+                <span className={`w-3 h-3 rounded-sm border flex items-center justify-center flex-shrink-0 ${
+                  item.withCarrier ? 'bg-blue-500 border-blue-500' : 'border-slate-300'
+                }`}>
+                  {item.withCarrier && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 8 8"><path d="M1 4l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </span>
+                Träger
               </label>
             </div>
 
-            {/* Dauer */}
-            <div className="col-span-3 space-y-1">
-              <label className="sr-only" htmlFor={`duration-${index}`}>Dauer</label>
+            {/* Dauer-Dropdown */}
+            <div>
               <select
                 id={`duration-${index}`}
                 value={isTageMode ? 'Tage' : isWochenMode ? 'Wochen' : (item.unit || DEFAULT_DURATION_LABEL)}
@@ -167,87 +183,86 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
                     applyUpdate(index, { quantity: 1 });
                   }
                 }}
-                className="w-full h-9 px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                className={`${fieldCls} w-full`}
                 aria-label={`Position ${index + 1}: Dauer`}
               >
                 {(product?.durations ?? []).map((d) => (
                   <option key={d.label} value={d.label}>{d.label}</option>
                 ))}
               </select>
-              {isTageMode && (
-                <div className="flex items-center gap-1">
+            </div>
+
+            {/* Menge: Zahl + Einheit inline */}
+            <div className="flex items-center gap-1">
+              {(isTageMode || isWochenMode) ? (
+                <>
                   <input
                     type="number"
                     min="1"
-                    value={durationDays}
-                    onChange={(e) => handleDaysChange(index, parseInt(e.target.value) || 1)}
-                    className="w-20 px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
-                    title="Anzahl Tage"
-                    aria-label={`Position ${index + 1}: Anzahl Tage`}
+                    value={isTageMode ? durationDays : durationWeeks}
+                    onChange={(e) => isTageMode
+                      ? handleDaysChange(index, parseInt(e.target.value) || 1)
+                      : handleWeeksChange(index, parseInt(e.target.value) || 1)}
+                    className={`${fieldCls} w-14 text-right`}
+                    title={isTageMode ? 'Anzahl Tage' : 'Anzahl Wochen'}
+                    aria-label={`Position ${index + 1}: Anzahl`}
                   />
-                  <span className="text-xs text-slate-500">Tage</span>
-                </div>
-              )}
-              {isWochenMode && (
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min="1"
-                    value={durationWeeks}
-                    onChange={(e) => handleWeeksChange(index, parseInt(e.target.value) || 1)}
-                    className="w-20 px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right"
-                    title="Anzahl Wochen"
-                    aria-label={`Position ${index + 1}: Anzahl Wochen`}
-                  />
-                  <span className="text-xs text-slate-500">Wochen</span>
-                </div>
+                  <span className="text-xs text-slate-500 whitespace-nowrap">{isTageMode ? 'Tage' : 'Wo.'}</span>
+                </>
+              ) : (
+                <input
+                  type="number"
+                  min="1"
+                  value={item.quantity || 1}
+                  onChange={(e) => onUpdate(index, 'quantity', parseInt(e.target.value) || 1)}
+                  className={`${fieldCls} w-14 text-right`}
+                  title="Menge"
+                  aria-label={`Position ${index + 1}: Menge`}
+                />
               )}
             </div>
 
             {/* Preis */}
-            <div className="col-span-2">
-              <label className="sr-only" htmlFor={`price-${index}`}>Preis</label>
-              <div className="relative">
-                <input
-                  id={`price-${index}`}
-                  type="number"
-                  value={item.unitPrice}
-                  onChange={(e) => onUpdate(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                  step="0.01"
-                  min="0"
-                  className="w-full h-9 pl-2 pr-6 py-1.5 border border-slate-300 rounded-md text-sm text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  aria-label={`Position ${index + 1}: Preis`}
-                />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">€</span>
-              </div>
+            <div className="relative">
+              <input
+                id={`price-${index}`}
+                type="number"
+                value={item.unitPrice}
+                onChange={(e) => onUpdate(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                step="0.01"
+                min="0"
+                className={`${fieldCls} w-full text-right pr-5`}
+                aria-label={`Position ${index + 1}: Preis`}
+              />
+              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">€</span>
             </div>
 
-            {/* Gesamt */}
-            <div className="col-span-2 py-1.5 text-right">
-              <span className="text-sm font-semibold text-slate-800">{lineTotal.toFixed(2)} €</span>
+            {/* Gesamt – prominent */}
+            <div className="text-right">
+              <span className="text-sm font-bold text-slate-900 tabular-nums">{lineTotal.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
             </div>
 
             {/* Löschen */}
-            <div className="col-span-1 flex justify-center pt-1">
+            <div className="flex justify-center">
               <button
                 type="button"
                 onClick={() => onRemove(index)}
-                className="text-slate-400 hover:text-red-600 transition-colors p-1"
+                className="p-1 text-slate-300 hover:text-red-500 transition-colors rounded"
                 title={`Position ${index + 1} löschen`}
                 aria-label={`Position ${index + 1} löschen`}
               >
-                <Trash2 size={16} aria-hidden="true" />
+                <Trash2 size={15} aria-hidden="true" />
               </button>
             </div>
           </div>
         );
       })}
 
-      <div className="px-4 py-3">
+      <div className="px-4 py-2.5">
         <button
           type="button"
           onClick={onAdd}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-md transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-md transition-colors"
           title="Neue Position hinzufügen"
         >
           + Position hinzufügen
