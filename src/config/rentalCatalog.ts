@@ -92,6 +92,17 @@ export const RENTAL_PRODUCTS: RentalProduct[] = [
       { label: '3 Wochen', price: 20 },
     ],
   },
+  {
+    key: 'sonstige',
+    label: 'Sonstige Leistung',
+    durations: [
+      { label: 'Tag', price: 0 },
+      { label: 'Tage', price: 0 },
+      { label: 'Woche', price: 0 },
+      { label: 'Wochenende', price: 0 },
+      { label: 'Pauschal', price: 0 },
+    ],
+  },
 ];
 
 export function getProduct(key: string): RentalProduct | undefined {
