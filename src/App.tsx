@@ -1214,6 +1214,10 @@ export default function App() {
                 await updateInvoice(invoiceId, { state: 'angenommen' });
                 queryClient.invalidateQueries({ queryKey: ['invoices'] });
               }}
+              onStateChange={async (invoiceId, state) => {
+                await updateInvoice(invoiceId, { state });
+                setInvoiceListReloadTrigger(prev => prev + 1);
+              }}
             />
           </div>
         )}

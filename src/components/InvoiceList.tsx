@@ -31,6 +31,7 @@ interface InvoiceListProps {
   onConvertToOrder?: (invoiceId: string) => void;
   onConvertToInvoice?: (invoiceId: string) => void;
   onExportCSV?: () => void;
+  onStateChange?: (invoiceId: string, state: InvoiceState) => void;
   reloadTrigger?: number;
 }
 
@@ -46,6 +47,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   onConvertToOrder,
   onConvertToInvoice,
   onExportCSV,
+  onStateChange,
   reloadTrigger,
 }) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -586,7 +588,23 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {getStatusBadge(invoice.state)}
+                      {onStateChange ? (
+                        <select
+                          value={invoice.state}
+                          onChange={(e) => onStateChange(invoice.id, e.target.value as InvoiceState)}
+                          className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white cursor-pointer hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          title="Status ändern"
+                        >
+                          <option value="entwurf">Entwurf</option>
+                          <option value="gesendet">Gesendet</option>
+                          <option value="storniert">Storniert</option>
+                          <option value="angenommen">Angenommen</option>
+                          <option value="bezahlt">Bezahlt</option>
+                          <option value="archiviert">Archiviert</option>
+                        </select>
+                      ) : (
+                        getStatusBadge(invoice.state)
+                      )}
                     </td>
                     <td className="px-4 py-3 text-left text-sm font-medium">
                       <div className="flex items-center justify-start gap-1">
