@@ -243,10 +243,6 @@ export default function Stammdaten() {
       showError('Bitte einen Namen eingeben.');
       return;
     }
-    if (!form.itemPhotoDataUrl?.trim()) {
-      showError('Bitte ein Foto für den Vermietungsgegenstand hochladen.');
-      return;
-    }
     try {
       if (editing) {
         await modifyResource(editing.id, {
@@ -528,12 +524,6 @@ export default function Stammdaten() {
                 <div className="text-sm text-slate-500">Artikel</div>
                 <div className="text-lg font-semibold text-slate-900">{editing ? 'Bearbeiten' : 'Neu anlegen'}</div>
               </div>
-              <button
-                className="px-3 py-2 rounded-md border border-slate-200 text-sm hover:bg-slate-50"
-                onClick={() => setModalOpen(false)}
-              >
-                Schließen
-              </button>
             </div>
 
             <div className="p-4 space-y-3">
@@ -609,7 +599,7 @@ export default function Stammdaten() {
               </div>
 
               <label className="text-sm block">
-                <div className="text-xs font-medium text-slate-700 mb-1">Foto *</div>
+                <div className="text-xs font-medium text-slate-700 mb-1">Foto</div>
                 <input
                   type="file"
                   accept="image/*"
