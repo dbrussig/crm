@@ -13,7 +13,9 @@ import InvoicePickupReturnBlock from './invoice/InvoicePickupReturnBlock';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
-import { getPaymentsByInvoice } from '../services/sqliteService';
+import { getPaymentsByInvoice, addPayment, deletePayment, getPaymentMethodsConfig } from '../services/sqliteService';
+import { DEFAULT_PAYMENT_METHODS } from '../types';
+import type { PaymentMethodConfig } from '../types';
 import InvoiceWorkflowBar from './InvoiceWorkflowBar';
 import { useAutoSave } from '../hooks/useAutoSave';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
@@ -185,6 +187,12 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [layoutId, setLayoutId] = useState<string>(initialInvoice?.layoutId || getDefaultInvoiceLayoutId(invoiceType));
   const [linkedPayments, setLinkedPayments] = useState<Payment[]>([]);
   const [linkedPaymentsLoading, setLinkedPaymentsLoading] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentFormBusy, setPaymentFormBusy] = useState(false);
+  const [paymentForm, setPaymentForm] = useState<{ kind: 'Anzahlung' | 'Zahlung' | 'Kaution'; method: string; amount: string; receivedAt: string; note: string }>({
+    kind: 'Anzahlung', method: '', amount: '', receivedAt: new Date().toISOString().slice(0, 10), note: '',
+  });
   const [showValidationErrors, setShowValidationErrors] = useState(false);
 
   // Update state when initialInvoice changes (e.g., after save)
@@ -342,6 +350,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       .finally(() => { if (!cancelled) setLinkedPaymentsLoading(false); });
     return () => { cancelled = true; };
   }, [initialInvoice?.id]);
+
+  useEffect(() => {
+    getPaymentMethodsConfig().then((methods) => {
+      setPaymentMethods(methods);
+      const first = methods.find((m) => m.isActive);
+      if (first) setPaymentForm((f) => ({ ...f, method: first.id }));
+    }).catch(() => {});
+  }, []);
 
   // Template laden bei Typ-Änderung
   useEffect(() => {
@@ -610,30 +626,149 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           <InvoiceCustomerBlock customers={customers} />
         </Card>
 
-        {/* Verknüpfte Zahlungen */}
+        {/* Zahlungen */}
         {initialInvoice?.id && (
           <div className="mb-6 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
-            <h3 className="text-sm font-medium text-emerald-900 mb-2">Verknüpfte Zahlungen</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-emerald-900">
+                Zahlungen
+                {linkedPayments.length > 0 && (
+                  <span className="ml-2 text-xs text-emerald-700">
+                    {linkedPayments.length}× • {linkedPaymentsTotal.toFixed(2)} €
+                  </span>
+                )}
+              </h3>
+              {!showPaymentForm && (
+                <button type="button" title="Zahlung erfassen"
+                  className="text-xs px-2.5 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+                  onClick={() => setShowPaymentForm(true)}>
+                  + Zahlung
+                </button>
+              )}
+            </div>
+
             {linkedPaymentsLoading ? (
-              <div className="text-sm text-emerald-800">Zahlungen werden geladen…</div>
-            ) : linkedPayments.length === 0 ? (
-              <div className="text-sm text-emerald-800">Noch keine Zahlungen zugeordnet.</div>
+              <div className="text-sm text-emerald-800">Wird geladen…</div>
             ) : (
-              <div className="space-y-2">
-                <div className="text-sm text-emerald-900">
-                  {linkedPayments.length} Zahlung{linkedPayments.length === 1 ? '' : 'en'} • Summe {linkedPaymentsTotal.toFixed(2)} €
-                </div>
-                <div className="max-h-40 overflow-auto rounded border border-emerald-200 bg-white">
-                  {linkedPayments.map((p) => (
-                    <div key={p.id} className="px-3 py-2 text-sm border-b last:border-b-0 border-emerald-100">
-                      <div className="font-medium text-gray-900">{(Number(p.amount) || 0).toFixed(2)} € • {p.kind}</div>
-                      <div className="text-xs text-gray-600">
-                        {new Date(p.receivedAt || p.createdAt).toLocaleDateString('de-DE')} • {p.method}{p.payerName ? ` • ${p.payerName}` : ''}
+              <>
+                {linkedPayments.length > 0 && (
+                  <div className="mb-3 rounded border border-emerald-200 bg-white divide-y divide-emerald-100 overflow-hidden">
+                    {linkedPayments.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between px-3 py-2">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {(Number(p.amount) || 0).toFixed(2)} € · {p.kind}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(p.receivedAt || p.createdAt).toLocaleDateString('de-DE')} · {paymentMethods.find(m => m.id === p.method)?.label || p.method}
+                            {p.note ? ` · ${p.note}` : ''}
+                          </div>
+                        </div>
+                        <button type="button" title="Zahlung löschen"
+                          className="text-xs px-2 py-1 rounded border border-red-100 text-red-600 hover:bg-red-50"
+                          onClick={async () => {
+                            const ok = await requestConfirm({ title: 'Zahlung löschen?', message: 'Diese Zahlung wirklich löschen?', confirmLabel: 'Löschen', cancelLabel: 'Abbrechen', danger: true });
+                            if (!ok) return;
+                            try {
+                              await deletePayment(p.id);
+                              setLinkedPayments((prev) => prev.filter((x) => x.id !== p.id));
+                            } catch {}
+                          }}>
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {linkedPayments.length === 0 && !showPaymentForm && (
+                  <div className="text-sm text-emerald-800">Noch keine Zahlungen erfasst.</div>
+                )}
+
+                {showPaymentForm && (
+                  <div className="rounded-lg border border-emerald-200 bg-white p-3 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 block mb-1">Art</label>
+                        <select title="Art" className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                          value={paymentForm.kind}
+                          onChange={(e) => setPaymentForm((f) => ({ ...f, kind: e.target.value as typeof f.kind }))}>
+                          <option value="Anzahlung">Anzahlung</option>
+                          <option value="Zahlung">Zahlung</option>
+                          <option value="Kaution">Kaution</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 block mb-1">Zahlart</label>
+                        <select title="Zahlart" className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                          value={paymentForm.method}
+                          onChange={(e) => setPaymentForm((f) => ({ ...f, method: e.target.value }))}>
+                          {paymentMethods.filter((m) => m.isActive).map((m) => (
+                            <option key={m.id} value={m.id}>{m.label}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 block mb-1">Betrag (€)</label>
+                        <input type="number" step="0.01" min="0" title="Betrag"
+                          className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                          value={paymentForm.amount}
+                          onChange={(e) => setPaymentForm((f) => ({ ...f, amount: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 block mb-1">Datum</label>
+                        <input type="date" title="Eingangsdatum"
+                          className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                          value={paymentForm.receivedAt}
+                          onChange={(e) => setPaymentForm((f) => ({ ...f, receivedAt: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 block mb-1">Notiz</label>
+                      <input type="text" title="Notiz" placeholder="optional"
+                        className="w-full px-2 py-1.5 rounded border border-slate-200 bg-white text-sm"
+                        value={paymentForm.note}
+                        onChange={(e) => setPaymentForm((f) => ({ ...f, note: e.target.value }))} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" disabled={paymentFormBusy}
+                        className="px-3 py-1.5 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700 disabled:opacity-50"
+                        onClick={async () => {
+                          if (!paymentForm.amount || Number(paymentForm.amount) <= 0) return;
+                          setPaymentFormBusy(true);
+                          try {
+                            const now = Date.now();
+                            const newPayment: Payment = {
+                              id: `pay_${now}`,
+                              rentalRequestId: initialInvoice?.rentalRequestId || '',
+                              invoiceId: initialInvoice!.id,
+                              kind: paymentForm.kind,
+                              method: paymentForm.method,
+                              amount: Number(paymentForm.amount),
+                              currency: 'EUR',
+                              receivedAt: paymentForm.receivedAt ? new Date(paymentForm.receivedAt).getTime() : now,
+                              note: paymentForm.note.trim() || undefined,
+                              source: 'manual',
+                              createdAt: now,
+                            };
+                            await addPayment(newPayment);
+                            setLinkedPayments((prev) => [newPayment, ...prev]);
+                            setShowPaymentForm(false);
+                            setPaymentForm((f) => ({ ...f, amount: '', note: '', receivedAt: new Date().toISOString().slice(0, 10) }));
+                          } catch {} finally {
+                            setPaymentFormBusy(false);
+                          }
+                        }}>
+                        {paymentFormBusy ? 'Speichert…' : 'Speichern'}
+                      </button>
+                      <button type="button" className="px-3 py-1.5 rounded border border-slate-200 text-xs hover:bg-slate-50"
+                        onClick={() => setShowPaymentForm(false)}>Abbrechen</button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
