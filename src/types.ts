@@ -193,8 +193,26 @@ export interface Message {
   };
 }
 
-export type PaymentMethod = 'PayPal' | 'Bar' | 'Karte' | 'Ueberweisung' | 'Sonstiges';
+export type PaymentMethod = string;
 export type PaymentKind = 'Anzahlung' | 'Zahlung' | 'Kaution';
+
+export interface PaymentMethodConfig {
+  id: string;
+  label: string;
+  feePercent: number;  // z.B. 1.39 für 1,39%
+  feeFixed: number;    // z.B. 0.10 für 0,10 €
+  isActive: boolean;
+}
+
+export const DEFAULT_PAYMENT_METHODS: PaymentMethodConfig[] = [
+  { id: 'Bank',             label: 'Bank / Überweisung', feePercent: 0,    feeFixed: 0,    isActive: true },
+  { id: 'SumUp',            label: 'SumUp',              feePercent: 1.39, feeFixed: 0,    isActive: true },
+  { id: 'PayPal_QR',        label: 'PayPal QR-Code',     feePercent: 0.50, feeFixed: 0.10, isActive: true },
+  { id: 'PayPal_Service',   label: 'PayPal Dienstleistung', feePercent: 2.49, feeFixed: 0.35, isActive: true },
+  { id: 'PayPal_Friends',   label: 'PayPal Freunde',     feePercent: 0,    feeFixed: 0,    isActive: true },
+  { id: 'Bar',              label: 'Bar',                feePercent: 0,    feeFixed: 0,    isActive: true },
+  { id: 'Sonstiges',        label: 'Sonstiges',          feePercent: 0,    feeFixed: 0,    isActive: true },
+];
 
 export interface Payment {
   id: string;

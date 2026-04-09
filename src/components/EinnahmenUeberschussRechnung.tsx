@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Euro, Calendar, Paperclip, RefreshCw, Download, Eye, X, Upload, ChevronRight, FileDown } from 'lucide-react';
-import type { Invoice, Payment, Expense, ExpenseAttachment, RecurringInterval, RentalRequest } from '../types';
-import { getAllExpenses, createExpense, updateExpense, deleteExpense } from '../services/sqliteService';
+import type { Invoice, Payment, Expense, ExpenseAttachment, RecurringInterval, RentalRequest, PaymentMethodConfig } from '../types';
+import { DEFAULT_PAYMENT_METHODS } from '../types';
+import { getAllExpenses, createExpense, updateExpense, deleteExpense, getPaymentMethodsConfig } from '../services/sqliteService';
 
 interface EUeRProps {
   invoices: Invoice[];
@@ -46,8 +47,10 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
   const [previewAttachment, setPreviewAttachment] = useState<ExpenseAttachment | null>(null);
   const [isFeeDrilldownOpen, setIsFeeDrilldownOpen] = useState(false);
   const [isRecurringChecked, setIsRecurringChecked] = useState(false);
+  const [paymentMethodsConfig, setPaymentMethodsConfig] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
 
   useEffect(() => { loadExpenses(); }, []);
+  useEffect(() => { getPaymentMethodsConfig().then(setPaymentMethodsConfig).catch(() => {}); }, []);
 
   const loadExpenses = async () => {
     try {
@@ -81,6 +84,17 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
     }))
     .sort((a, b) => b.date - a.date);
 
+  // Hilfsfunktion: Gebühr berechnen aus Config
+  const calcFee = (amount: number, methodId: string): number => {
+    const cfg = paymentMethodsConfig.find(m => m.id === methodId);
+    if (!cfg || (cfg.feePercent === 0 && cfg.feeFixed === 0)) return 0;
+    return Math.round(((amount * cfg.feePercent / 100) + cfg.feeFixed) * 100) / 100;
+  };
+
+  const getMethodLabel = (methodId: string): string => {
+    return paymentMethodsConfig.find(m => m.id === methodId)?.label || methodId;
+  };
+
   // Direkt aus Payments (tatsächlich eingegangene Zahlungen)
   const incomePayments = payments
     .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
@@ -95,17 +109,22 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
         || (rental ? customerMap.get(rental.customerId || '') : undefined)
         || p.payerName
         || 'Unbekannt';
-      // invoiceNo: direkte Verknüpfung oder über Vorgang
       const invoiceNo = inv?.invoiceNo
         || (rental ? invoices.find(i => (i as any).rentalRequestId === rental.id)?.invoiceNo : undefined)
         || '-';
+      const amount = Number(p.amount) || 0;
+      const methodId = p.method || '';
+      // Gebühr: zuerst gespeichertes fee-Feld (Gmail-Import), sonst aus Config berechnen
+      const fee = Number((p as any).fee) > 0 ? Number((p as any).fee) : calcFee(amount, methodId);
       return {
         paymentId: p.id,
         date: p.receivedAt || p.createdAt,
         invoiceNo,
         customerName,
-        amount: Number(p.amount) || 0,
-        fee: Number((p as any).fee) || 0,
+        methodId,
+        methodLabel: getMethodLabel(methodId),
+        amount,
+        fee,
         provider: (p as any).provider,
       };
     })
@@ -116,6 +135,16 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
   // Zahlungsgebühren
   const paymentFeesData = incomePayments.filter(p => p.fee > 0);
   const totalPaymentFees = paymentFeesData.reduce((s, p) => s + p.fee, 0);
+
+  // Gebühren nach Zahlart gruppiert (für EÜR-Übersicht)
+  const feesByMethod = paymentFeesData.reduce<Record<string, { label: string; count: number; totalAmount: number; totalFee: number }>>((acc, p) => {
+    const key = p.methodId || 'unbekannt';
+    if (!acc[key]) acc[key] = { label: p.methodLabel || key, count: 0, totalAmount: 0, totalFee: 0 };
+    acc[key].count++;
+    acc[key].totalAmount += p.amount;
+    acc[key].totalFee += p.fee;
+    return acc;
+  }, {});
 
   const yearExpenses = expenses
     .filter(e => new Date(e.date).getFullYear() === selectedYear)
@@ -542,11 +571,32 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
               <h2 className="text-lg font-semibold text-slate-900">Zahlungsgebühren {selectedYear}</h2>
               <button onClick={() => setIsFeeDrilldownOpen(false)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
             </div>
+
+            {/* Zusammenfassung nach Zahlart */}
+            {Object.keys(feesByMethod).length > 0 && (
+              <div className="px-6 py-4 border-b bg-amber-50">
+                <p className="text-xs font-semibold text-slate-600 mb-2 uppercase">Gebühren nach Zahlart (EÜR-Positionen)</p>
+                <div className="space-y-1">
+                  {Object.entries(feesByMethod).map(([key, val]) => (
+                    <div key={key} className="flex items-center justify-between text-sm">
+                      <span className="text-slate-700">{val.label} <span className="text-slate-400 text-xs">({val.count} Zahlung{val.count !== 1 ? 'en' : ''})</span></span>
+                      <span className="font-medium text-amber-700">{val.totalFee.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 pt-2 border-t border-amber-200 flex justify-between text-sm font-semibold">
+                  <span>Gesamt Gebühren</span>
+                  <span className="text-amber-700">{totalPaymentFees.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</span>
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200">
                 <thead className="bg-slate-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Datum</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Zahlart</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Rechnung</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Kunde</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Betrag</th>
@@ -555,10 +605,11 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {paymentFeesData.length === 0
-                    ? <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Keine Gebühren</td></tr>
+                    ? <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Keine Gebühren</td></tr>
                     : paymentFeesData.map((entry, idx) => (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-4 py-3 text-sm">{format(new Date(entry.date), 'dd.MM.yyyy', { locale: de })}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{entry.methodLabel || '-'}</td>
                         <td className="px-4 py-3 text-sm">{entry.invoiceNo || '-'}</td>
                         <td className="px-4 py-3 text-sm">{entry.customerName}</td>
                         <td className="px-4 py-3 text-sm text-right">{entry.amount.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</td>

@@ -25,7 +25,9 @@ import { fetchAllInvoices } from '../services/invoiceService';
 import { generateTemplate } from '../services/templateService';
 import { getInvoiceItems, updateRentalRequest } from '../services/sqliteService';
 import { calculateWebsitePrice } from '../services/pricingService';
-import { addPayment, assignPaymentToInvoice, getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer } from '../services/sqliteService';
+import { addPayment, assignPaymentToInvoice, getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer, getPaymentMethodsConfig } from '../services/sqliteService';
+import type { PaymentMethodConfig } from '../types';
+import { DEFAULT_PAYMENT_METHODS } from '../types';
 import { findActiveResourcesForType } from '../services/resourceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose, type EmailSendResult } from '../services/invoiceEmailService';
@@ -120,19 +122,28 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   const [paymentAssignBusyId, setPaymentAssignBusyId] = useState<string | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentFormBusy, setPaymentFormBusy] = useState(false);
+  const [configuredPaymentMethods, setConfiguredPaymentMethods] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
   const [paymentForm, setPaymentForm] = useState<{
     kind: 'Anzahlung' | 'Zahlung' | 'Kaution';
-    method: 'Bar' | 'PayPal' | 'Karte' | 'Ueberweisung' | 'Sonstiges';
+    method: string;
     amount: string;
     receivedAt: string;
     note: string;
   }>({
     kind: 'Anzahlung',
-    method: 'Ueberweisung',
+    method: 'Bank',
     amount: '',
     receivedAt: new Date().toISOString().slice(0, 10),
     note: '',
   });
+  useEffect(() => {
+    getPaymentMethodsConfig().then((methods) => {
+      setConfiguredPaymentMethods(methods);
+      const firstActive = methods.find((m) => m.isActive);
+      if (firstActive) setPaymentForm((f) => ({ ...f, method: firstActive.id }));
+    }).catch(() => {});
+  }, []);
+
   const [linkedInvoices, setLinkedInvoices] = useState<Invoice[]>([]);
   const [invoiceAmountById, setInvoiceAmountById] = useState<Record<string, number>>({});
 
@@ -1792,13 +1803,11 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                         className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
                         title="Zahlungsmethode"
                         value={paymentForm.method}
-                        onChange={(e) => setPaymentForm((p) => ({ ...p, method: e.target.value as typeof p.method }))}
+                        onChange={(e) => setPaymentForm((p) => ({ ...p, method: e.target.value }))}
                       >
-                        <option value="Ueberweisung">Überweisung</option>
-                        <option value="PayPal">PayPal</option>
-                        <option value="Bar">Bar</option>
-                        <option value="Karte">Karte</option>
-                        <option value="Sonstiges">Sonstiges</option>
+                        {configuredPaymentMethods.filter((m) => m.isActive).map((m) => (
+                          <option key={m.id} value={m.id}>{m.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>

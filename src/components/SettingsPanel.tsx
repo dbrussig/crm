@@ -1,8 +1,9 @@
-import React, { useRef, useState } from 'react';
-import { AISettings, GoogleOAuthSettings, MailTransportSettings } from '../types';
+import React, { useEffect, useRef, useState } from 'react';
+import { AISettings, GoogleOAuthSettings, MailTransportSettings, PaymentMethodConfig, DEFAULT_PAYMENT_METHODS } from '../types';
 import { getGLMModels } from '../services/zAiService';
 import { runMailBridgeAttachmentSelfTest } from '../services/invoiceEmailService';
 import { getCompanyProfile, saveCompanyProfile, type CompanyProfile } from '../config/companyProfile';
+import { getPaymentMethodsConfig, savePaymentMethodsConfig } from '../services/sqliteService';
 import ConfirmModal from './ConfirmModal';
 
 type GoogleTestStatus = 'idle' | 'testing' | 'success' | 'error';
@@ -44,6 +45,52 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 }) => {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(() => getCompanyProfile());
   const [companyDirty, setCompanyDirty] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
+  const [pmDirty, setPmDirty] = useState(false);
+  const [pmSaving, setPmSaving] = useState(false);
+  const [pmEditId, setPmEditId] = useState<string | null>(null);
+  const [pmNewForm, setPmNewForm] = useState<{ label: string; feePercent: string; feeFixed: string } | null>(null);
+
+  useEffect(() => {
+    getPaymentMethodsConfig().then(setPaymentMethods).catch(() => {});
+  }, []);
+
+  const handlePmChange = (id: string, field: keyof PaymentMethodConfig, value: string | number | boolean) => {
+    setPaymentMethods((prev) => prev.map((m) => m.id === id ? { ...m, [field]: value } : m));
+    setPmDirty(true);
+  };
+
+  const handlePmSave = async () => {
+    setPmSaving(true);
+    try {
+      await savePaymentMethodsConfig(paymentMethods);
+      setPmDirty(false);
+    } finally {
+      setPmSaving(false);
+    }
+  };
+
+  const handlePmDelete = async (id: string) => {
+    const ok = await requestConfirm({ title: 'Zahlart löschen?', message: 'Diese Zahlart wirklich löschen?', confirmLabel: 'Löschen', cancelLabel: 'Abbrechen', danger: true });
+    if (!ok) return;
+    setPaymentMethods((prev) => prev.filter((m) => m.id !== id));
+    setPmDirty(true);
+  };
+
+  const handlePmAdd = () => {
+    if (!pmNewForm) { setPmNewForm({ label: '', feePercent: '0', feeFixed: '0' }); return; }
+    if (!pmNewForm.label.trim()) return;
+    const newId = `custom_${Date.now()}`;
+    setPaymentMethods((prev) => [...prev, {
+      id: newId,
+      label: pmNewForm.label.trim(),
+      feePercent: Number(pmNewForm.feePercent) || 0,
+      feeFixed: Number(pmNewForm.feeFixed) || 0,
+      isActive: true,
+    }]);
+    setPmNewForm(null);
+    setPmDirty(true);
+  };
   const [mailBridgeTestStatus, setMailBridgeTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [mailBridgeAttachmentTestStatus, setMailBridgeAttachmentTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [mailBridgeAttachmentTestMsg, setMailBridgeAttachmentTestMsg] = useState<string>('');
@@ -1015,6 +1062,108 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             Firmendaten speichern
           </button>
         </div>
+      </div>
+
+      {/* Zahlarten */}
+      <div className="border-t border-slate-200 pt-3">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">💳 Zahlarten &amp; Gebühren</p>
+            <p className="text-xs text-slate-500">Gebühren werden automatisch in der EÜR berechnet</p>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {paymentMethods.map((m) => (
+            <div key={m.id} className="rounded-lg border border-slate-200 bg-white p-3">
+              {pmEditId === m.id ? (
+                <div className="space-y-2">
+                  <input
+                    className="w-full px-2 py-1 rounded border border-slate-200 text-sm"
+                    title="Bezeichnung"
+                    placeholder="Bezeichnung"
+                    value={m.label}
+                    onChange={(e) => handlePmChange(m.id, 'label', e.target.value)}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-slate-500 block mb-0.5">Gebühr % (z.B. 1.39)</label>
+                      <input type="number" step="0.01" min="0" max="100"
+                        className="w-full px-2 py-1 rounded border border-slate-200 text-sm"
+                        title="Gebühr Prozent"
+                        value={m.feePercent}
+                        onChange={(e) => handlePmChange(m.id, 'feePercent', Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 block mb-0.5">Fixgebühr € (z.B. 0.35)</label>
+                      <input type="number" step="0.01" min="0"
+                        className="w-full px-2 py-1 rounded border border-slate-200 text-sm"
+                        title="Fixgebühr Euro"
+                        value={m.feeFixed}
+                        onChange={(e) => handlePmChange(m.id, 'feeFixed', Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" className="px-3 py-1 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700" onClick={() => setPmEditId(null)}>Fertig</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <input type="checkbox" title="Aktiv" checked={m.isActive}
+                      onChange={(e) => handlePmChange(m.id, 'isActive', e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    <span className="text-sm font-medium text-slate-800 truncate">{m.label}</span>
+                    {(m.feePercent > 0 || m.feeFixed > 0) && (
+                      <span className="text-xs text-amber-600 whitespace-nowrap">
+                        {m.feePercent > 0 ? `${m.feePercent}%` : ''}{m.feePercent > 0 && m.feeFixed > 0 ? ' + ' : ''}{m.feeFixed > 0 ? `${m.feeFixed.toFixed(2)} €` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button type="button" title="Bearbeiten" className="px-2 py-1 rounded border border-slate-200 text-xs hover:bg-slate-50" onClick={() => setPmEditId(m.id)}>✏️</button>
+                    <button type="button" title="Löschen" className="px-2 py-1 rounded border border-red-100 text-xs hover:bg-red-50 text-red-600" onClick={() => handlePmDelete(m.id)}>✕</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {pmNewForm ? (
+          <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50 p-3 space-y-2">
+            <input className="w-full px-2 py-1 rounded border border-slate-200 text-sm bg-white" title="Bezeichnung neue Zahlart" placeholder="Bezeichnung (z.B. Klarna)" value={pmNewForm.label}
+              onChange={(e) => setPmNewForm((f) => f ? { ...f, label: e.target.value } : f)} />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-slate-500 block mb-0.5">Gebühr %</label>
+                <input type="number" step="0.01" min="0" title="Gebühr Prozent" className="w-full px-2 py-1 rounded border border-slate-200 text-sm bg-white" value={pmNewForm.feePercent}
+                  onChange={(e) => setPmNewForm((f) => f ? { ...f, feePercent: e.target.value } : f)} />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-0.5">Fixgebühr €</label>
+                <input type="number" step="0.01" min="0" title="Fixgebühr Euro" className="w-full px-2 py-1 rounded border border-slate-200 text-sm bg-white" value={pmNewForm.feeFixed}
+                  onChange={(e) => setPmNewForm((f) => f ? { ...f, feeFixed: e.target.value } : f)} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="px-3 py-1 rounded bg-indigo-600 text-white text-xs hover:bg-indigo-700" onClick={handlePmAdd}>Hinzufügen</button>
+              <button type="button" className="px-3 py-1 rounded border border-slate-200 text-xs hover:bg-slate-50" onClick={() => setPmNewForm(null)}>Abbrechen</button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" className="mt-3 w-full px-3 py-2 rounded-lg border border-dashed border-slate-300 text-sm text-slate-600 hover:bg-slate-50" onClick={() => setPmNewForm({ label: '', feePercent: '0', feeFixed: '0' })}>+ Zahlart hinzufügen</button>
+        )}
+
+        <button type="button"
+          className={`mt-3 w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${ pmDirty ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-200 text-slate-600'}`}
+          disabled={!pmDirty || pmSaving}
+          onClick={handlePmSave}
+        >
+          {pmSaving ? 'Wird gespeichert…' : 'Zahlarten speichern'}
+        </button>
       </div>
 
       {/* Gmail API Settings */}

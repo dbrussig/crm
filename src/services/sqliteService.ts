@@ -5,7 +5,8 @@
  * public API but back it with localStorage so the UI can run again.
  */
 
-import type { Customer, CustomerDocument, RentalRequest, Message, Resource, Invoice, InvoiceItem, Payment, DocumentCategory, RentalAccessory, Expense } from '../types';
+import type { Customer, CustomerDocument, RentalRequest, Message, Resource, Invoice, InvoiceItem, Payment, DocumentCategory, RentalAccessory, Expense, PaymentMethodConfig } from '../types';
+import { DEFAULT_PAYMENT_METHODS } from '../types';
 import { deleteKey, loadJson, saveJson } from './_storage';
 import { idbGet, idbSet } from './idbKv';
 import { invokeDesktopCommand, isDesktopApp } from '../platform/runtime';
@@ -20,6 +21,7 @@ const KEY_INVOICES = 'mietpark_crm_invoices_v1';
 const KEY_INVOICE_ITEMS = 'mietpark_crm_invoice_items_v1';
 const KEY_CUSTOMER_DOCS = 'mietpark_crm_customer_docs_v1';
 const KEY_CUSTOMER_DOC_PAYLOAD_PREFIX = 'mietpark_crm_customer_doc_payload_v1:';
+const KEY_PAYMENT_METHODS_CONFIG = 'mietpark_crm_payment_methods_config_v1';
 
 function normalizeRoofRackInventoryKey(raw?: string): string | undefined {
   const v = String(raw || '').trim();
@@ -523,6 +525,20 @@ export async function deletePayment(id: string): Promise<void> {
     return;
   }
   await savePayments((await loadPayments()).filter((p) => p.id !== id));
+}
+
+// Payment Method Config
+export async function getPaymentMethodsConfig(): Promise<PaymentMethodConfig[]> {
+  const stored = await loadJson<PaymentMethodConfig[] | null>(KEY_PAYMENT_METHODS_CONFIG, null);
+  if (!stored) return DEFAULT_PAYMENT_METHODS;
+  // Merge: neue Default-Einträge anfügen wenn noch nicht vorhanden
+  const existingIds = new Set(stored.map((m) => m.id));
+  const missing = DEFAULT_PAYMENT_METHODS.filter((d) => !existingIds.has(d.id));
+  return [...stored, ...missing];
+}
+
+export async function savePaymentMethodsConfig(methods: PaymentMethodConfig[]): Promise<void> {
+  await saveJson(KEY_PAYMENT_METHODS_CONFIG, methods);
 }
 
 // Resources
