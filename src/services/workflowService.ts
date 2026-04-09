@@ -7,12 +7,12 @@ import { updateInvoice } from './sqliteService';
  * Maps an invoice-type conversion to the appropriate rental status.
  *
  * Angebot → Auftrag  : Kunde hat angenommen   → 'angenommen'
- * Auftrag → Rechnung : Rechnung wird gestellt  → 'uebergabe_rueckgabe'
- *                      (Vorgang bleibt offen bis tatsächliche Rückgabe)
+ * Auftrag → Rechnung : Rechnung wird gestellt  → 'rechnung_gestellt'
+ *                      (Vorgang bleibt offen; abgeschlossen erst nach Rückgabe/Zahlung)
  */
 function rentalStatusForConversion(targetType: InvoiceType): RentalStatus {
   if (targetType === 'Auftrag') return 'angenommen';
-  return 'uebergabe_rueckgabe';
+  return 'rechnung_gestellt';
 }
 
 /**

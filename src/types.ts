@@ -159,6 +159,7 @@ export type RentalStatus =
   | 'check_verfuegbarkeit'
   | 'angebot_gesendet'
   | 'angenommen'
+  | 'rechnung_gestellt'
   | 'uebergabe_rueckgabe'
   | 'abgeschlossen'
   | 'archiviert'

@@ -13,7 +13,7 @@ import { generateRentalId } from './services/rentalIdService';
 import { fetchAllRentalRequests } from './services/rentalService';
 import { InvoiceList } from './components/InvoiceList';
 import { InvoiceEditor } from './components/InvoiceEditor';
-import { fetchAllInvoices, fetchInvoiceById, reissueInvoice, saveInvoice } from './services/invoiceService';
+import { fetchAllInvoices, fetchInvoiceById, reissueInvoice, saveInvoice, type SaveInvoiceContext } from './services/invoiceService';
 import SettingsPanel from './components/SettingsPanel';
 import { testZAiConnection } from './services/zAiService';
 import { findActiveResourcesForType } from './services/resourceService';
@@ -27,7 +27,7 @@ import Vermietungszubehoer from './components/Vermietungszubehoer';
 import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
 import { formatDisplayRef } from './utils/displayId';
 import { getDashboardFinancials, type DashboardFinancials } from './services/dashboardService';
-import { createFollowUpInvoiceWithStatusSync, syncRentalStatusOnInvoiceSave } from './services/workflowService';
+import { createFollowUpInvoiceWithStatusSync } from './services/workflowService';
 import EinnahmenUeberschussRechnung from './components/EinnahmenUeberschussRechnung';
 
 type View =
@@ -1252,17 +1252,13 @@ export default function App() {
               customers={customers}
               onSave={async (inv, items) => {
                 const wasCreate = !inv.id;
-                const savedInvoiceId = await saveInvoice(inv, items);
-                if (editingInvoiceContext?.rentalId && editingInvoiceContext.nextRentalStatus) {
-                  const sync = await syncRentalStatusOnInvoiceSave(
-                    editingInvoiceContext.rentalId,
-                    editingInvoiceContext.nextRentalStatus
-                  );
-                  if (sync.updated) {
-                    queryClient.invalidateQueries({ queryKey: ['rentals'] });
-                  } else if (sync.error) {
-                    setAppNotice({ tone: 'error', text: `Vorgang-Status konnte nicht aktualisiert werden: ${sync.error}` });
-                  }
+                const saveContext: SaveInvoiceContext | undefined =
+                  editingInvoiceContext?.rentalId && editingInvoiceContext.nextRentalStatus
+                    ? { rentalId: editingInvoiceContext.rentalId, targetStatus: editingInvoiceContext.nextRentalStatus }
+                    : undefined;
+                const savedInvoiceId = await saveInvoice(inv, items, saveContext);
+                if (saveContext) {
+                  queryClient.invalidateQueries({ queryKey: ['rentals'] });
                 }
                 queryClient.invalidateQueries({ queryKey: ['invoices'] });
                 if (wasCreate) {

@@ -1,6 +1,11 @@
-import type { Invoice, InvoiceItem, InvoiceState, InvoiceTemplate, InvoiceType } from '../types';
+import type { Invoice, InvoiceItem, InvoiceState, InvoiceTemplate, InvoiceType, RentalStatus } from '../types';
 import { addInvoice, deleteInvoice, getAllInvoices, getInvoiceItems, updateInvoice } from './sqliteService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
+
+export interface SaveInvoiceContext {
+  rentalId: string;
+  targetStatus: RentalStatus;
+}
 
 const DEFAULT_TEMPLATES: Record<InvoiceType, InvoiceTemplate> = {
   Angebot: {
@@ -168,13 +173,20 @@ export async function createFollowUpInvoiceFromInvoice(
   const src = await fetchInvoiceById(sourceInvoiceId);
   if (!src) throw new Error('Quelle-Beleg nicht gefunden');
 
-  // Idempotent conversion: if source already references a follow-up of the requested target type,
-  // return that invoice instead of creating another one.
+  // Idempotenz: Wenn Quellbeleg bereits ein Folgedokument hat, prüfen ob es dem Zieltyp entspricht.
+  // Existiert ein passendes Folgedokument → zurückgeben statt neu erstellen.
+  // Existiert ein Folgedokument eines ANDEREN Typs → hard error: verhindert Verzweigungen.
   const existingFollowUpId = String(src.invoice.replacesInvoiceId || '').trim();
   if (existingFollowUpId) {
     const existingFollowUp = await fetchInvoiceById(existingFollowUpId);
     if (existingFollowUp?.invoice?.invoiceType === targetType) {
       return existingFollowUp.invoice.id;
+    }
+    if (existingFollowUp) {
+      throw new Error(
+        `Dieser Beleg wurde bereits als ${existingFollowUp.invoice.invoiceType} fortgeführt (${existingFollowUp.invoice.invoiceNo}). ` +
+        `Eine weitere Konvertierung ist nicht möglich.`
+      );
     }
   }
 
@@ -276,7 +288,7 @@ export async function reissueInvoice(invoiceId: string): Promise<string> {
   let maxSuffix = 1;
   for (const inv of all) {
     const no = String(inv.invoiceNo || '');
-    const mm = new RegExp(`^${base.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}-([0-9]+)$`).exec(no);
+    const mm = new RegExp(`^${base.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')}-([0-9]+)$`).exec(no);
     if (mm?.[1]) maxSuffix = Math.max(maxSuffix, Number(mm[1]));
   }
   const nextSuffix = maxSuffix + 1;
@@ -310,6 +322,7 @@ export async function reissueInvoice(invoiceId: string): Promise<string> {
     taxNote: src.invoice.taxNote || tpl?.defaultTaxNote || d.taxNote,
     agbText: src.invoice.agbText || tpl?.defaultAgbText || d.agbText,
     agbLink: src.invoice.agbLink || tpl?.defaultAgbLink,
+    rentalRequestId: src.invoice.rentalRequestId,
     reissuedFromInvoiceId: invoiceId,
     replacesInvoiceId: undefined,
     createdAt: invDate,
@@ -384,7 +397,11 @@ export async function createInvoiceFromRental(
   return id;
 }
 
-export async function saveInvoice(invoice: Partial<Invoice>, items: InvoiceItem[]): Promise<string> {
+export async function saveInvoice(
+  invoice: Partial<Invoice>,
+  items: InvoiceItem[],
+  context?: SaveInvoiceContext
+): Promise<string> {
   const now = Date.now();
   if (!invoice.id) {
     const id = `invoice_${now}`;
@@ -430,6 +447,7 @@ export async function saveInvoice(invoice: Partial<Invoice>, items: InvoiceItem[
       updatedAt: now,
     };
     await addInvoice(inv, items);
+    await applySaveContext(context);
     return id;
   }
 
@@ -441,7 +459,14 @@ export async function saveInvoice(invoice: Partial<Invoice>, items: InvoiceItem[
   }
 
   await updateInvoice(invoice.id, invoice as Partial<Invoice>, items);
+  await applySaveContext(context);
   return invoice.id;
+}
+
+async function applySaveContext(context?: SaveInvoiceContext): Promise<void> {
+  if (!context) return;
+  const { syncRentalStatusOnInvoiceSave } = await import('./workflowService');
+  await syncRentalStatusOnInvoiceSave(context.rentalId, context.targetStatus);
 }
 
 export async function convertOfferToOrder(invoiceId: string): Promise<string> {

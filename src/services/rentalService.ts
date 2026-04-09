@@ -232,6 +232,7 @@ function isForwardTransition(current: RentalStatus, next: RentalStatus): boolean
     'check_verfuegbarkeit',
     'angebot_gesendet',
     'angenommen',
+    'rechnung_gestellt',
     'uebergabe_rueckgabe',
     'abgeschlossen',
   ];
@@ -247,6 +248,7 @@ const STATUS_LABELS: Record<RentalStatus, string> = {
   check_verfuegbarkeit: 'Verfügbarkeit prüfen',
   angebot_gesendet: 'Angebot gesendet',
   angenommen: 'Angenommen',
+  rechnung_gestellt: 'Rechnung gestellt',
   uebergabe_rueckgabe: 'Übergabe/Rückgabe',
   abgeschlossen: 'Abgeschlossen',
   archiviert: 'Archiviert',

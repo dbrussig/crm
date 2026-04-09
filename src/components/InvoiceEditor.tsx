@@ -483,17 +483,27 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     return undefined;
   }, [initialInvoice?.id, invoiceType, onConvertToOrder, onConvertToInvoice]);
 
+  const [workflowAdvancing, setWorkflowAdvancing] = useState(false);
+
   const handleWorkflowAdvance = async () => {
     if (!initialInvoice?.id) {
       showStatus({ tone: 'error', text: 'Bitte speichern Sie den Beleg zuerst.' });
       return;
     }
-    if (invoiceType === 'Angebot' && onConvertToOrder) { 
-      onConvertToOrder(initialInvoice.id); 
-      return; 
-    }
-    if (invoiceType === 'Auftrag' && onConvertToInvoice) { 
-      onConvertToInvoice(initialInvoice.id); 
+    if (workflowAdvancing) return;
+    setWorkflowAdvancing(true);
+    try {
+      if (invoiceType === 'Angebot' && onConvertToOrder) {
+        await onConvertToOrder(initialInvoice.id);
+        return;
+      }
+      if (invoiceType === 'Auftrag' && onConvertToInvoice) {
+        await onConvertToInvoice(initialInvoice.id);
+      }
+    } catch (e: any) {
+      showStatus({ tone: 'error', text: e?.message || 'Konvertierung fehlgeschlagen.' });
+    } finally {
+      setWorkflowAdvancing(false);
     }
   };
 
@@ -823,10 +833,14 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 <button
                   type="button"
                   onClick={handleWorkflowAdvance}
-                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                  disabled={workflowAdvancing}
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   title={workflowActionLabel}
                 >
-                  <ArrowRight size={14} aria-hidden="true" /> {workflowActionLabel}
+                  {workflowAdvancing
+                    ? <span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                    : <ArrowRight size={14} aria-hidden="true" />}
+                  {workflowAdvancing ? 'Wird erstellt…' : workflowActionLabel}
                 </button>
               )}
               {onSend && initialInvoice?.id && state === 'entwurf' && (
