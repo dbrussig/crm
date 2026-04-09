@@ -198,13 +198,6 @@ export default function App() {
         .slice(0, 5),
     [dashboardRentals, today]
   );
-  const navBadges = useMemo(
-    () => ({
-      vorgaenge: openRentalsCount,
-      belege: pendingInvoicesCount + draftInvoicesCount,
-    }),
-    [openRentalsCount, pendingInvoicesCount, draftInvoicesCount]
-  );
   const navGroups = useMemo(
     () => ['Kommunikation', 'Vorgänge', 'Stammdaten', 'Abrechnung', 'System'] as const,
     []
@@ -451,11 +444,6 @@ export default function App() {
                           </span>
                           <span className="truncate">{item.label}</span>
                         </span>
-                        {item.id in navBadges && (navBadges as any)[item.id] > 0 ? (
-                          <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-white/20 text-white border border-white/25">
-                            {(navBadges as any)[item.id]}
-                          </span>
-                        ) : null}
                       </button>
                     ))}
                 </div>
