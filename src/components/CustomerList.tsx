@@ -68,6 +68,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const [photoCustomer, setPhotoCustomer] = useState<Customer | null>(null);
   const [photoIndex, setPhotoIndex] = useState<number>(0);
   const [docsCustomer, setDocsCustomer] = useState<Customer | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const [lastMessageByCustomerId, setLastMessageByCustomerId] = useState<Record<string, number>>({});
   const [lastGmailByCustomerId, setLastGmailByCustomerId] = useState<Record<string, number>>({});
   const [docAggByCustomerId, setDocAggByCustomerId] = useState<Record<string, { count: number; bytes: number }>>({});
@@ -960,7 +961,6 @@ const CustomerList: React.FC<CustomerListProps> = ({
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reling-Foto</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Fahrzeug / Dachträger</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Letzter Kontakt</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Neuanlage</th>
                   <th className="px-6 py-4 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Aktionen</th>
                 </tr>
               </thead>
@@ -1042,46 +1042,8 @@ const CustomerList: React.FC<CustomerListProps> = ({
                       <div className="text-sm text-slate-700">{formatDate(getLastContactTs(customer))}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-slate-700">{formatDate(customer.createdAt)}</div>
-                    </td>
-                    <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleComposeCustomerEmail(customer)}
-                          className="p-2 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="E-Mail schreiben"
-                          aria-label={`E-Mail an ${customer.firstName} ${customer.lastName} schreiben`}
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => setEmailHistoryCustomer(customer)}
-                          className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="E-Mail Historie"
-                          aria-label={`E-Mail Historie von ${customer.firstName} ${customer.lastName} öffnen`}
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => setDocsCustomer(customer)}
-                          className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-                          title={
-                            docAggByCustomerId[customer.id]?.count
-                              ? `Dokumente (${docAggByCustomerId[customer.id].count}) | ${formatFileSize(docAggByCustomerId[customer.id].bytes)}`
-                              : 'Dokumente'
-                          }
-                          aria-label={`Dokumente von ${customer.firstName} ${customer.lastName} öffnen`}
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4h9" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v16H4z" />
-                          </svg>
-                        </button>
+                        {/* Primäre Aktionen */}
                         <button
                           onClick={() => setEditingCustomer(customer)}
                           className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -1093,23 +1055,13 @@ const CustomerList: React.FC<CustomerListProps> = ({
                           </svg>
                         </button>
                         <button
-                          onClick={() => handleSyncToGoogle(customer)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            customer.googleContactResourceId
-                              ? 'text-green-600 bg-green-50 cursor-default'
-                              : 'text-slate-600 hover:text-green-600 hover:bg-green-50'
-                          }`}
-                          title={customer.googleContactResourceId ? 'Bereits zu Google Kontakten hinzugefügt' : 'Zu Google Kontakten hinzufügen'}
-                          disabled={!!customer.googleContactResourceId}
-                          aria-label={
-                            customer.googleContactResourceId
-                              ? `Kunde ${customer.firstName} ${customer.lastName} ist bereits in Google Kontakten`
-                              : `Kunde ${customer.firstName} ${customer.lastName} zu Google Kontakten hinzufügen`
-                          }
+                          onClick={() => handleComposeCustomerEmail(customer)}
+                          className="p-2 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="E-Mail schreiben"
+                          aria-label={`E-Mail an ${customer.firstName} ${customer.lastName} schreiben`}
                         >
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                           </svg>
                         </button>
                         <button
@@ -1122,6 +1074,70 @@ const CustomerList: React.FC<CustomerListProps> = ({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
+                        
+                        {/* Dropdown für sekundäre Aktionen */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setDropdownOpen(dropdownOpen === customer.id ? null : customer.id)}
+                            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                            title="Weitere Aktionen"
+                            aria-label={`Weitere Aktionen für ${customer.firstName} ${customer.lastName}`}
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                            </svg>
+                          </button>
+                          
+                          {dropdownOpen === customer.id && (
+                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                              <div className="py-1">
+                                <button
+                                  onClick={() => {
+                                    setEmailHistoryCustomer(customer);
+                                    setDropdownOpen(null);
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                  E-Mail Historie
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setDocsCustomer(customer);
+                                    setDropdownOpen(null);
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4h9" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v16H4z" />
+                                  </svg>
+                                  Dokumente
+                                  {docAggByCustomerId[customer.id]?.count ? (
+                                    <span className="ml-auto text-xs text-slate-500">({docAggByCustomerId[customer.id].count})</span>
+                                  ) : null}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    void handleSyncToGoogle(customer);
+                                    setDropdownOpen(null);
+                                  }}
+                                  disabled={!!customer.googleContactResourceId}
+                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  {customer.googleContactResourceId ? 'In Google Kontakten' : 'Zu Google hinzufügen'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
