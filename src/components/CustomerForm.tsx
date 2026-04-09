@@ -286,349 +286,298 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
     }
   };
 
+  const fieldCls = 'h-9 w-full px-3 border border-slate-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+  const fieldErrCls = 'h-9 w-full px-3 border border-red-300 bg-red-50 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-red-400';
+  const labelCls = 'block text-xs font-medium text-slate-500 mb-1';
+  const labelPrimaryCls = 'block text-xs font-medium text-slate-700 mb-1';
+
+  const photos = Array.isArray(formData.roofRailPhotoDataUrls)
+    ? formData.roofRailPhotoDataUrls.filter(Boolean)
+    : (formData.roofRailPhotoDataUrl ? [formData.roofRailPhotoDataUrl] : []);
+
   return (
-    <form onSubmit={handleSubmit} className="p-6 space-y-6">
-      {/* Personal Info */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Anrede
-          </label>
-          <select
-            value={formData.salutation || ''}
-            onChange={(e) => handleChange('salutation', e.target.value || undefined)}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Bitte wählen...</option>
-            <option value="Herr">Herr</option>
-            <option value="Frau">Frau</option>
-            <option value="Divers">Divers</option>
-          </select>
-        </div>
+    <form onSubmit={handleSubmit} className="flex flex-col">
+      <div className="p-5 space-y-4 overflow-y-auto">
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Vorname * <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.firstName}
-            onChange={(e) => handleChange('firstName', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.firstName ? 'border-red-300 bg-red-50' : 'border-slate-300'
-            }`}
-            placeholder="Max"
-          />
-          {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Nachname * <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.lastName}
-            onChange={(e) => handleChange('lastName', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.lastName ? 'border-red-300 bg-red-50' : 'border-slate-300'
-            }`}
-            placeholder="Mustermann"
-          />
-          {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>}
-        </div>
-
-      </div>
-
-      {/* Contact Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            E-Mail * <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="email"
-            value={formData.email}
-            onChange={(e) => handleChange('email', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.email ? 'border-red-300 bg-red-50' : 'border-slate-300'
-            }`}
-            placeholder="beispiel@email.de"
-          />
-          {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Telefonnummer * <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => handleChange('phone', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.phone ? 'border-red-300 bg-red-50' : 'border-slate-300'
-            }`}
-            placeholder="+49 123 4567890"
-          />
-          {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
-        </div>
-      </div>
-
-      {/* Roof Rail Photo */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-800">Reling-Foto (optional)</h3>
-            <p className="text-sm text-slate-600 mt-1">
-              Manche Kunden schicken ein Foto der Dachreling. Dieses Foto wird im Kundenstamm gespeichert.
-            </p>
-          </div>
-          <div className="shrink-0 flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handlePhotoSelected(e.target.files)}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-2 text-sm font-medium rounded-lg bg-white border border-slate-300 hover:bg-slate-100 transition-colors disabled:opacity-60"
-              disabled={photoBusy}
-            >
-              {(Array.isArray(formData.roofRailPhotoDataUrls) && formData.roofRailPhotoDataUrls.length) || formData.roofRailPhotoDataUrl
-                ? 'Fotos hinzufuegen'
-                : 'Fotos hochladen'}
-            </button>
-            {((Array.isArray(formData.roofRailPhotoDataUrls) && formData.roofRailPhotoDataUrls.length) || formData.roofRailPhotoDataUrl) && (
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    roofRailPhotoDataUrls: undefined,
-                    roofRailPhotoDataUrl: undefined,
-                  }))
-                }
-                className="px-3 py-2 text-sm font-medium rounded-lg bg-white border border-slate-300 hover:bg-slate-100 transition-colors disabled:opacity-60"
-                disabled={photoBusy}
+        {/* 1. Kontaktdaten */}
+        <section>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Kontakt</p>
+          {/* Zeile 1: Anrede / Vorname / Nachname */}
+          <div className="grid grid-cols-12 gap-2 mb-2">
+            <div className="col-span-2">
+              <label className={labelCls}>Anrede</label>
+              <select
+                value={formData.salutation || ''}
+                onChange={(e) => handleChange('salutation', e.target.value || undefined)}
+                className={fieldCls}
               >
-                Alle entfernen
-              </button>
-            )}
+                <option value="">–</option>
+                <option value="Herr">Herr</option>
+                <option value="Frau">Frau</option>
+                <option value="Divers">Divers</option>
+              </select>
+            </div>
+            <div className="col-span-5">
+              <label className={labelPrimaryCls}>Vorname <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => handleChange('firstName', e.target.value)}
+                className={errors.firstName ? fieldErrCls : fieldCls}
+                placeholder="Max"
+                autoFocus
+              />
+              {errors.firstName && <p className="mt-0.5 text-xs text-red-600">{errors.firstName}</p>}
+            </div>
+            <div className="col-span-5">
+              <label className={labelPrimaryCls}>Nachname <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={formData.lastName}
+                onChange={(e) => handleChange('lastName', e.target.value)}
+                className={errors.lastName ? fieldErrCls : fieldCls}
+                placeholder="Mustermann"
+              />
+              {errors.lastName && <p className="mt-0.5 text-xs text-red-600">{errors.lastName}</p>}
+            </div>
           </div>
-        </div>
+          {/* Zeile 2: Telefon / E-Mail */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={labelPrimaryCls}>Telefon <span className="text-red-500">*</span></label>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => handleChange('phone', e.target.value)}
+                className={errors.phone ? fieldErrCls : fieldCls}
+                placeholder="+49 123 4567890"
+              />
+              {errors.phone && <p className="mt-0.5 text-xs text-red-600">{errors.phone}</p>}
+            </div>
+            <div>
+              <label className={labelCls}>E-Mail <span className="text-red-500">*</span></label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleChange('email', e.target.value)}
+                className={errors.email ? fieldErrCls : fieldCls}
+                placeholder="beispiel@email.de"
+              />
+              {errors.email && <p className="mt-0.5 text-xs text-red-600">{errors.email}</p>}
+            </div>
+          </div>
+        </section>
 
-        {photoError && <p className="mt-2 text-sm text-red-600">{photoError}</p>}
-
-        {(() => {
-          const photos = Array.isArray(formData.roofRailPhotoDataUrls)
-            ? formData.roofRailPhotoDataUrls.filter(Boolean)
-            : (formData.roofRailPhotoDataUrl ? [formData.roofRailPhotoDataUrl] : []);
-          if (!photos.length) return null;
-          return (
-            <div className="mt-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {photos.map((url, idx) => (
-                  <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
-                    <img
-                      src={url}
-                      alt={idx === 0 ? 'Reling-Foto (Hauptfoto)' : 'Reling-Foto'}
-                      className="w-full h-40 object-cover"
-                      loading="lazy"
-                    />
-                    <div className="p-2 flex items-center justify-between gap-2">
-                      <div className="text-[11px] text-slate-500">{idx === 0 ? 'Hauptfoto' : `Foto ${idx + 1}`}</div>
-                      <div className="flex items-center gap-2">
-                        {idx !== 0 && (
-                          <button
-                            type="button"
-                            className="text-[11px] px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
-                            onClick={() =>
-                              setFormData((prev) => {
+        {/* 2. Fahrzeug & Dachträger + Reling-Foto */}
+        <section className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Fahrzeug & Dachträger</p>
+            <span className="text-[10px] text-slate-400">HSN/TSN oder Reling-Foto</span>
+          </div>
+          <div className="p-3 space-y-2">
+            {/* Marke + Modell */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelCls}>Marke</label>
+                <input
+                  type="text"
+                  value={formData.assignedVehicleMake || ''}
+                  onChange={(e) => handleChange('assignedVehicleMake', e.target.value)}
+                  className={fieldCls}
+                  placeholder="z.B. VW"
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Modell</label>
+                <input
+                  type="text"
+                  value={formData.assignedVehicleModel || ''}
+                  onChange={(e) => handleChange('assignedVehicleModel', e.target.value)}
+                  className={fieldCls}
+                  placeholder="z.B. Passat Variant"
+                />
+              </div>
+            </div>
+            {/* HSN / TSN / Reling / Dachträger */}
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-2">
+                <label className={labelCls}>HSN</label>
+                <input
+                  type="text"
+                  value={formData.assignedHsn || ''}
+                  onChange={(e) => handleChange('assignedHsn', e.target.value)}
+                  className={fieldCls}
+                  placeholder="0000"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className={labelCls}>TSN</label>
+                <input
+                  type="text"
+                  value={formData.assignedTsn || ''}
+                  onChange={(e) => handleChange('assignedTsn', e.target.value)}
+                  className={fieldCls}
+                  placeholder="000"
+                />
+              </div>
+              <div className="col-span-3">
+                <label className={labelCls}>Reling</label>
+                <select
+                  value={formData.assignedRelingType || 'unklar'}
+                  onChange={(e) => handleChange('assignedRelingType', e.target.value)}
+                  className={fieldCls}
+                >
+                  <option value="unklar">Unklar</option>
+                  <option value="offen">Offen</option>
+                  <option value="geschlossen">Geschlossen</option>
+                  <option value="keine">Keine</option>
+                </select>
+              </div>
+              <div className="col-span-5">
+                <label className={labelCls}>Dachträger-Schlüssel</label>
+                <input
+                  type="text"
+                  value={formData.assignedRoofRackInventoryKey || ''}
+                  onChange={(e) => handleChange('assignedRoofRackInventoryKey', e.target.value)}
+                  className={fieldCls}
+                  placeholder="z.B. THULE-OPEN-710410"
+                />
+              </div>
+            </div>
+            {/* Entscheidungsnotiz */}
+            <div>
+              <label className={labelCls}>Entscheidungsnotiz</label>
+              <textarea
+                value={formData.roofRackDecisionNote || ''}
+                onChange={(e) => handleChange('roofRackDecisionNote', e.target.value)}
+                rows={2}
+                className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                placeholder="z.B. HSN/TSN geprüft, offene Reling per Foto bestätigt."
+              />
+            </div>
+            {/* Reling-Foto – integriert */}
+            <div className="pt-1 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className={labelCls}>Reling-Foto <span className="text-slate-300">(optional)</span></label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handlePhotoSelected(e.target.files)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={photoBusy}
+                    className="px-2.5 py-1 text-xs font-medium rounded-md border border-slate-300 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  >
+                    {photos.length ? 'Hinzufügen' : 'Hochladen'}
+                  </button>
+                  {photos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, roofRailPhotoDataUrls: undefined, roofRailPhotoDataUrl: undefined }))}
+                      disabled={photoBusy}
+                      className="px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 bg-white text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      Alle entfernen
+                    </button>
+                  )}
+                </div>
+              </div>
+              {photoError && <p className="text-xs text-red-600 mb-1">{photoError}</p>}
+              {photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {photos.map((url, idx) => (
+                    <div key={idx} className="rounded-md overflow-hidden border border-slate-200 bg-white">
+                      <img
+                        src={url}
+                        alt={idx === 0 ? 'Reling-Hauptfoto' : `Reling-Foto ${idx + 1}`}
+                        className="w-full h-24 object-cover"
+                        loading="lazy"
+                      />
+                      <div className="px-1.5 py-1 flex items-center justify-between gap-1">
+                        <span className="text-[10px] text-slate-400">{idx === 0 ? 'Hauptfoto' : `Foto ${idx + 1}`}</span>
+                        <div className="flex gap-1">
+                          {idx !== 0 && (
+                            <button
+                              type="button"
+                              className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200 hover:bg-slate-50"
+                              onClick={() => setFormData((prev) => {
                                 const cur = ensurePhotoArray(prev);
                                 const next = cur.slice();
                                 const [picked] = next.splice(idx, 1);
                                 next.unshift(picked);
                                 return { ...prev, roofRailPhotoDataUrls: next, roofRailPhotoDataUrl: next[0] };
-                              })
-                            }
-                          >
-                            Als Hauptfoto
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="text-[11px] px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
-                          onClick={() =>
-                            setFormData((prev) => {
+                              })}
+                            >
+                              Haupt
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200 hover:bg-red-50 text-red-500"
+                            onClick={() => setFormData((prev) => {
                               const cur = ensurePhotoArray(prev);
                               const next = cur.filter((_, i) => i !== idx);
-                              return {
-                                ...prev,
-                                roofRailPhotoDataUrls: next.length ? next : undefined,
-                                roofRailPhotoDataUrl: next[0] || undefined,
-                              };
-                            })
-                          }
-                        >
-                          Entfernen
-                        </button>
+                              return { ...prev, roofRailPhotoDataUrls: next.length ? next : undefined, roofRailPhotoDataUrl: next[0] || undefined };
+                            })}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                Hinweis: Das Bild wird lokal gespeichert (als komprimiertes JPEG im Kundenobjekt).
-              </p>
+                  ))}
+                </div>
+              )}
             </div>
-          );
-        })()}
-      </div>
+          </div>
+        </section>
 
-      {/* Vehicle + Roof Rack Assignment */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-        <div>
-          <h3 className="text-sm font-bold text-slate-800">Fahrzeug & Dachträger-Zuordnung</h3>
-          <p className="text-sm text-slate-600 mt-1">
-            Manuelle Entscheidung auf Basis von HSN/TSN oder Reling-Foto. Wird im Kundenstamm gespeichert.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Fahrzeug Marke</label>
-            <input
-              type="text"
-              value={formData.assignedVehicleMake || ''}
-              onChange={(e) => handleChange('assignedVehicleMake', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="z.B. VW"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Fahrzeug Modell</label>
-            <input
-              type="text"
-              value={formData.assignedVehicleModel || ''}
-              onChange={(e) => handleChange('assignedVehicleModel', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="z.B. Passat Variant"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">HSN</label>
-            <input
-              type="text"
-              value={formData.assignedHsn || ''}
-              onChange={(e) => handleChange('assignedHsn', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="4-stellig"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">TSN</label>
-            <input
-              type="text"
-              value={formData.assignedTsn || ''}
-              onChange={(e) => handleChange('assignedTsn', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="3-stellig"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Reling</label>
-            <select
-              value={formData.assignedRelingType || 'unklar'}
-              onChange={(e) => handleChange('assignedRelingType', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="unklar">Unklar</option>
-              <option value="offen">Offene Reling</option>
-              <option value="geschlossen">Geschlossene Reling</option>
-              <option value="keine">Keine Reling/Fixpunkte</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Dachträger Schlüssel</label>
-            <input
-              type="text"
-              value={formData.assignedRoofRackInventoryKey || ''}
-              onChange={(e) => handleChange('assignedRoofRackInventoryKey', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="z.B. THULE-OPEN-710410+712300"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Entscheidungsnotiz</label>
-          <textarea
-            value={formData.roofRackDecisionNote || ''}
-            onChange={(e) => handleChange('roofRackDecisionNote', e.target.value)}
-            rows={2}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="z.B. HSN/TSN geprüft, offene Reling per Foto bestätigt."
-          />
-        </div>
-      </div>
-
-      {/* Address */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Adresse * <span className="text-red-500">*</span>
-        </label>
-        <div className="space-y-3">
-          <div>
-            <input
-              type="text"
-              value={formData.address?.street}
-              onChange={(e) => handleAddressChange('street', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors['address.street'] ? 'border-red-300 bg-red-50' : 'border-slate-300'
-              }`}
-              placeholder="Straße und Hausnummer"
-            />
-            {errors['address.street'] && <p className="mt-1 text-sm text-red-600">{errors['address.street']}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* 3. Adresse */}
+        <section>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Adresse</p>
+          <div className="space-y-2">
             <div>
               <input
                 type="text"
-                value={formData.address?.zipCode}
-                onChange={(e) => handleAddressChange('zipCode', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors['address.zipCode'] ? 'border-red-300 bg-red-50' : 'border-slate-300'
-                }`}
-                placeholder="PLZ"
+                value={formData.address?.street}
+                onChange={(e) => handleAddressChange('street', e.target.value)}
+                className={errors['address.street'] ? fieldErrCls : fieldCls}
+                placeholder="Straße und Hausnummer *"
               />
-              {errors['address.zipCode'] && <p className="mt-1 text-sm text-red-600">{errors['address.zipCode']}</p>}
+              {errors['address.street'] && <p className="mt-0.5 text-xs text-red-600">{errors['address.street']}</p>}
             </div>
-
-            <div className="md:col-span-2">
-              <input
-                type="text"
-                value={formData.address?.city}
-                onChange={(e) => handleAddressChange('city', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors['address.city'] ? 'border-red-300 bg-red-50' : 'border-slate-300'
-                }`}
-                placeholder="Ort"
-              />
-              {errors['address.city'] && <p className="mt-1 text-sm text-red-600">{errors['address.city']}</p>}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <input
+                  type="text"
+                  value={formData.address?.zipCode}
+                  onChange={(e) => handleAddressChange('zipCode', e.target.value)}
+                  className={errors['address.zipCode'] ? fieldErrCls : fieldCls}
+                  placeholder="PLZ *"
+                />
+                {errors['address.zipCode'] && <p className="mt-0.5 text-xs text-red-600">{errors['address.zipCode']}</p>}
+              </div>
+              <div className="col-span-2">
+                <input
+                  type="text"
+                  value={formData.address?.city}
+                  onChange={(e) => handleAddressChange('city', e.target.value)}
+                  className={errors['address.city'] ? fieldErrCls : fieldCls}
+                  placeholder="Ort *"
+                />
+                {errors['address.city'] && <p className="mt-0.5 text-xs text-red-600">{errors['address.city']}</p>}
+              </div>
             </div>
-          </div>
-
-          <div>
             <select
               value={formData.address?.country}
               onChange={(e) => handleAddressChange('country', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className={fieldCls}
             >
               <option value="Deutschland">Deutschland</option>
               <option value="Österreich">Österreich</option>
@@ -637,56 +586,53 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
               <option value="Luxemburg">Luxemburg</option>
             </select>
           </div>
-        </div>
+        </section>
+
+        {/* 4. Kontaktdatum + Notizen */}
+        <section>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Weitere Angaben</p>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className={labelCls}>Erstkontakt <span className="text-red-500">*</span></label>
+              <input
+                type="date"
+                value={formData.contactDate ? new Date(formData.contactDate).toISOString().split('T')[0] : ''}
+                onChange={(e) => handleChange('contactDate', new Date(e.target.value).getTime())}
+                className={errors.contactDate ? fieldErrCls : fieldCls}
+              />
+              {errors.contactDate && <p className="mt-0.5 text-xs text-red-600">{errors.contactDate}</p>}
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Interne Notizen</label>
+            <textarea
+              value={formData.notes || ''}
+              onChange={(e) => handleChange('notes', e.target.value)}
+              rows={2}
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              placeholder="Optionale interne Notizen..."
+            />
+          </div>
+        </section>
       </div>
 
-      {/* Contact Date */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Tag der Kontaktaufnahme * <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="date"
-          value={formData.contactDate ? new Date(formData.contactDate).toISOString().split('T')[0] : ''}
-          onChange={(e) => handleChange('contactDate', new Date(e.target.value).getTime())}
-          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-            errors.contactDate ? 'border-red-300 bg-red-50' : 'border-slate-300'
-          }`}
-        />
-        {errors.contactDate && <p className="mt-1 text-sm text-red-600">{errors.contactDate}</p>}
-      </div>
-
-      {/* Notes */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Interne Notizen
-        </label>
-        <textarea
-          value={formData.notes || ''}
-          onChange={(e) => handleChange('notes', e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Optionale Notizen für interne Zwecke..."
-        />
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-200">
+      {/* Sticky Aktionsleiste */}
+      <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-white sticky bottom-0">
         <AutoSaveIndicator state={draftSaveState} />
-        <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-6 py-2 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors"
-        >
-          Abbrechen
-        </button>
-        <button
-          type="submit"
-          className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg transition-colors shadow-sm"
-        >
-          {customer ? 'Speichern' : 'Kunde anlegen'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm border border-slate-300 text-slate-600 font-medium rounded-md hover:bg-slate-50 transition-colors"
+          >
+            Abbrechen
+          </button>
+          <button
+            type="submit"
+            className="px-5 py-2 text-sm bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-md transition-colors shadow-sm"
+          >
+            {customer ? 'Speichern' : 'Kunde anlegen'}
+          </button>
         </div>
       </div>
     </form>
