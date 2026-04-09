@@ -489,12 +489,6 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="mb-4 text-sm text-gray-600">
-        {filteredInvoices.length} Belege
-        {totalSum > 0 && ` • Summe: ${totalSum.toFixed(2)} €`}
-      </div>
-
       {/* Table */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
