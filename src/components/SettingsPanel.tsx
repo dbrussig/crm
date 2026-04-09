@@ -954,20 +954,27 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <div className="col-span-2 space-y-1">
             <label className="text-xs font-medium text-slate-700">Logo (optional)</label>
             <div className="flex items-center gap-3">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    setCompanyDirty(true);
-                    setCompanyProfile({ ...companyProfile, logoDataUrl: String(reader.result || '') });
-                  };
-                  reader.readAsDataURL(f);
-                }}
-              />
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <span className="px-3 py-2 rounded-md border border-slate-200 text-sm bg-white hover:bg-slate-50 text-slate-700">
+                  Datei auswählen
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setCompanyDirty(true);
+                      setCompanyProfile({ ...companyProfile, logoDataUrl: String(reader.result || '') });
+                    };
+                    reader.readAsDataURL(f);
+                    e.currentTarget.value = '';
+                  }}
+                />
+              </label>
               {companyProfile.logoDataUrl && (
                 <button
                   type="button"

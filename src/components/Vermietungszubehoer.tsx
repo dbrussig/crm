@@ -649,13 +649,18 @@ export default function Vermietungszubehoer() {
                   {photoBusy && <span className="text-xs text-slate-500">wird verarbeitet...</span>}
                 </div>
                 <div className="mt-2 flex items-center gap-3">
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={(e) => void handleItemPhotoChange(e.target.files)}
-                    aria-label="Foto hochladen"
-                    title="Foto hochladen"
-                  />
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <span className="px-3 py-1.5 rounded-md border border-slate-200 text-sm bg-white hover:bg-slate-50 text-slate-700">
+                      {photoBusy ? 'Wird geladen…' : 'Foto auswählen'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) => { void handleItemPhotoChange(e.target.files); e.currentTarget.value = ''; }}
+                      disabled={photoBusy}
+                    />
+                  </label>
                   {form.photoDataUrl && (
                     <button
                       type="button"

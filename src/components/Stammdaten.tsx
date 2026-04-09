@@ -598,18 +598,23 @@ export default function Stammdaten() {
                 </label>
               </div>
 
-              <label className="text-sm block">
+              <div className="text-sm block">
                 <div className="text-xs font-medium text-slate-700 mb-1">Foto</div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="w-full px-3 py-2 rounded-md border border-slate-200 text-sm bg-white"
-                  onChange={(e) => {
-                    void handleItemPhotoChange(e.target.files);
-                    e.currentTarget.value = '';
-                  }}
-                  disabled={photoBusy}
-                />
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <span className="px-3 py-2 rounded-md border border-slate-200 text-sm bg-white hover:bg-slate-50 text-slate-700">
+                    {photoBusy ? 'Wird geladen…' : 'Foto auswählen'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => {
+                      void handleItemPhotoChange(e.target.files);
+                      e.currentTarget.value = '';
+                    }}
+                    disabled={photoBusy}
+                  />
+                </label>
                 <div className="mt-1 text-xs text-slate-500">
                   Dieses Foto wird zur klaren Unterscheidung des Vermietungsgegenstands genutzt.
                 </div>
@@ -630,7 +635,7 @@ export default function Stammdaten() {
                     </button>
                   </div>
                 )}
-              </label>
+              </div>
 
               <details className="rounded-lg border border-slate-200 p-3">
                 <summary className="cursor-pointer text-sm text-slate-700 select-none">Erweitert</summary>
