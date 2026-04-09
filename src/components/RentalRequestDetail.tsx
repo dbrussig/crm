@@ -25,7 +25,7 @@ import { fetchAllInvoices } from '../services/invoiceService';
 import { generateTemplate } from '../services/templateService';
 import { getInvoiceItems, updateRentalRequest } from '../services/sqliteService';
 import { calculateWebsitePrice } from '../services/pricingService';
-import { assignPaymentToInvoice, getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer } from '../services/sqliteService';
+import { addPayment, assignPaymentToInvoice, getAllCustomers, getPaymentsByRental, deletePayment, updateCustomer } from '../services/sqliteService';
 import { findActiveResourcesForType } from '../services/resourceService';
 import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose, type EmailSendResult } from '../services/invoiceEmailService';
@@ -118,6 +118,21 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
   };
   const [payments, setPayments] = useState<Payment[]>([]);
   const [paymentAssignBusyId, setPaymentAssignBusyId] = useState<string | null>(null);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentFormBusy, setPaymentFormBusy] = useState(false);
+  const [paymentForm, setPaymentForm] = useState<{
+    kind: 'Anzahlung' | 'Zahlung' | 'Kaution';
+    method: 'Bar' | 'PayPal' | 'Karte' | 'Ueberweisung' | 'Sonstiges';
+    amount: string;
+    receivedAt: string;
+    note: string;
+  }>({
+    kind: 'Anzahlung',
+    method: 'Ueberweisung',
+    amount: '',
+    receivedAt: new Date().toISOString().slice(0, 10),
+    note: '',
+  });
   const [linkedInvoices, setLinkedInvoices] = useState<Invoice[]>([]);
   const [invoiceAmountById, setInvoiceAmountById] = useState<Record<string, number>>({});
 
@@ -1746,10 +1761,121 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                   <span className="text-gray-600">Summe erfasst:</span>{' '}
                   <span className="font-semibold text-emerald-700">{paymentsTotal > 0 ? `${paymentsTotal.toFixed(2)} €` : '-'}</span>
                 </div>
-                <div className="text-xs text-gray-500">
-                  Hinweis: Zuordnung erfolgt im Posteingang (z.B. PayPal-Eingang).
-                </div>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+                  onClick={() => setShowPaymentForm((v) => !v)}
+                >
+                  {showPaymentForm ? 'Abbrechen' : '+ Zahlung erfassen'}
+                </button>
               </div>
+
+              {showPaymentForm && (
+                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Art</label>
+                      <select
+                        className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
+                        title="Art der Zahlung"
+                        value={paymentForm.kind}
+                        onChange={(e) => setPaymentForm((p) => ({ ...p, kind: e.target.value as typeof p.kind }))}
+                      >
+                        <option value="Anzahlung">Anzahlung</option>
+                        <option value="Zahlung">Zahlung</option>
+                        <option value="Kaution">Kaution</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Zahlart</label>
+                      <select
+                        className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
+                        title="Zahlungsmethode"
+                        value={paymentForm.method}
+                        onChange={(e) => setPaymentForm((p) => ({ ...p, method: e.target.value as typeof p.method }))}
+                      >
+                        <option value="Ueberweisung">Überweisung</option>
+                        <option value="PayPal">PayPal</option>
+                        <option value="Bar">Bar</option>
+                        <option value="Karte">Karte</option>
+                        <option value="Sonstiges">Sonstiges</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Betrag (€)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
+                        placeholder="0,00"
+                        value={paymentForm.amount}
+                        onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Eingangsdatum</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
+                        title="Eingangsdatum"
+                        value={paymentForm.receivedAt}
+                        onChange={(e) => setPaymentForm((p) => ({ ...p, receivedAt: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Notiz (optional)</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm"
+                      placeholder="z.B. Rechnungsnr. des Zahlers"
+                      value={paymentForm.note}
+                      onChange={(e) => setPaymentForm((p) => ({ ...p, note: e.target.value }))}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700 disabled:opacity-50"
+                    disabled={paymentFormBusy || !paymentForm.amount || Number(paymentForm.amount) <= 0}
+                    onClick={async () => {
+                      if (!rental) return;
+                      setPaymentFormBusy(true);
+                      try {
+                        const now = Date.now();
+                        const invoiceForPayment = linkedInvoices.length === 1 ? linkedInvoices[0] : undefined;
+                        const newPayment: Payment = {
+                          id: `pay_${now}_${Math.random().toString(36).slice(2, 7)}`,
+                          rentalRequestId: rental.id,
+                          customerId: rental.customerId,
+                          invoiceId: invoiceForPayment?.id,
+                          kind: paymentForm.kind,
+                          method: paymentForm.method,
+                          amount: Number(paymentForm.amount),
+                          currency: 'EUR',
+                          receivedAt: paymentForm.receivedAt ? new Date(paymentForm.receivedAt).getTime() : now,
+                          note: paymentForm.note.trim() || undefined,
+                          source: 'manual',
+                          createdAt: now,
+                        };
+                        await addPayment(newPayment);
+                        setPayments((prev) => [newPayment, ...prev]);
+                        setPaymentForm({ kind: 'Anzahlung', method: 'Ueberweisung', amount: '', receivedAt: new Date().toISOString().slice(0, 10), note: '' });
+                        setShowPaymentForm(false);
+                        showInfo('Zahlung erfasst.');
+                      } catch (e) {
+                        showError('Zahlung konnte nicht gespeichert werden: ' + (e instanceof Error ? e.message : String(e)));
+                      } finally {
+                        setPaymentFormBusy(false);
+                      }
+                    }}
+                  >
+                    {paymentFormBusy ? 'Wird gespeichert…' : 'Zahlung speichern'}
+                  </button>
+                </div>
+              )}
 
               {payments.length === 0 && (
                 <div className="mt-3 text-sm text-gray-600">Keine Zahlungen erfasst.</div>
