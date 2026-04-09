@@ -393,7 +393,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       resetDirtyBaseline();
     },
     isDirty,
-    condition: state === 'entwurf' && canSave,
+    condition: canSave,
     delay: 1500,
   });
 
