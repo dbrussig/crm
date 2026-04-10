@@ -45,6 +45,15 @@ struct UserInfoResponse {
     email: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct OAuthErrorResponse {
+    error: String,
+    #[serde(default)]
+    error_description: Option<String>,
+    #[serde(default)]
+    error_uri: Option<String>,
+}
+
 fn random_string(len: usize) -> String {
     let byte_len = ((len.saturating_mul(3)).saturating_add(3)) / 4; // ceil(len * 3 / 4)
     let mut bytes = vec![0u8; byte_len.max(1)];
@@ -69,7 +78,8 @@ pub async fn google_oauth_prepare(
     let listener = TcpListener::bind("127.0.0.1:0")
         .map_err(|e| format!("Port-Bind fehlgeschlagen: {}", e))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-    let redirect_uri = format!("http://127.0.0.1:{}/callback", port);
+    // Loopback redirect (Installed/Desktop App): keep it simple (no path) for maximum compatibility.
+    let redirect_uri = format!("http://127.0.0.1:{}", port);
 
     let verifier = random_string(43);
     let challenge = pkce_challenge(&verifier);
@@ -220,6 +230,20 @@ pub async fn google_oauth_exchange(
     let body = token_resp.text().await.map_err(|e| e.to_string())?;
 
     if !status.is_success() {
+        if let Ok(err) = serde_json::from_str::<OAuthErrorResponse>(&body) {
+            let desc = err
+                .error_description
+                .as_deref()
+                .unwrap_or("Keine Fehlerbeschreibung.");
+            let uri = err.error_uri.as_deref().unwrap_or("");
+            return Err(format!(
+                "OAuth token error: {}. {}{}{}",
+                err.error,
+                desc,
+                if uri.is_empty() { "" } else { " " },
+                uri
+            ));
+        }
         return Err(format!("Token-Tausch fehlgeschlagen ({}): {}", status, body));
     }
 

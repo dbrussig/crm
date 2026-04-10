@@ -47,7 +47,20 @@ function friendlyError(raw: string): string {
   if (raw.includes('redirect_uri_mismatch'))
     return 'Redirect-URI passt nicht. Für die Desktop-App bitte einen OAuth-Client vom Typ „Desktop App“ erstellen (kein „Web Application“).';
   if (raw.includes('Token-Tausch fehlgeschlagen'))
-    return 'Token-Tausch fehlgeschlagen. Bitte erneut verbinden.';
+    return `Token-Tausch fehlgeschlagen. Details: ${raw}`;
+  if (raw.includes('OAuth token error:')) {
+    const lower = raw.toLowerCase();
+    if (lower.includes('invalid_grant')) {
+      return 'Google OAuth: invalid_grant (Code abgelaufen/ungültig). Bitte erneut verbinden.';
+    }
+    if (lower.includes('unauthorized_client')) {
+      return 'Google OAuth: unauthorized_client. Bitte OAuth Client Typ „Desktop App“ verwenden.';
+    }
+    if (lower.includes('invalid_request') && lower.includes('redirect_uri')) {
+      return 'Google OAuth: invalid_request (redirect_uri). Bitte OAuth Client Typ „Desktop App“ verwenden.';
+    }
+    return raw;
+  }
   if (raw.includes('Timeout'))
     return 'Anmeldung nicht abgeschlossen (Timeout). Bitte erneut versuchen.';
   if (raw.includes('insufficientPermissions') || raw.includes('PERMISSION_DENIED'))
