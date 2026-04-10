@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Mail, Calendar, CheckCircle, AlertCircle, Link2, ChevronDown } from 'lucide-react';
 import { AISettings, GoogleOAuthSettings, MailTransportSettings, PaymentMethodConfig, DEFAULT_PAYMENT_METHODS } from '../types';
 import { getGLMModels } from '../services/zAiService';
 import { runMailBridgeAttachmentSelfTest } from '../services/invoiceEmailService';
@@ -416,65 +417,145 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </>
       )}
 
-      {/* Google OAuth Settings */}
+      {/* Google Workspace Integration */}
       {onGoogleOAuthChange && (
-        <>
-          <div className="border-t border-slate-200 pt-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Google OAuth Einstellungen</p>
-                <p className="text-xs text-slate-500">Für Synchronisation mit Google Kontakten</p>
+        <div className="border-t border-slate-200 pt-3 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Google Workspace Integration</p>
+            <p className="text-xs text-slate-500">Gmail, Kalender & Kontakte synchronisieren</p>
+          </div>
+
+          {/* Status-Karte */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+
+            {/* Verbindungsstatus */}
+            <div className="flex items-center gap-3">
+              {googleOAuthSettings?.enabled ? (
+                <CheckCircle className="w-6 h-6 text-emerald-500 shrink-0" />
+              ) : (
+                <AlertCircle className="w-6 h-6 text-amber-400 shrink-0" />
+              )}
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-800">
+                  {googleOAuthSettings?.enabled ? '✅ Aktiviert' : 'Nicht verbunden'}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {googleOAuthSettings?.enabled
+                    ? 'Google OAuth ist aktiv. Features werden unten angezeigt.'
+                    : 'Verbinde dein Google-Konto, um Gmail & Kalender zu nutzen.'}
+                </p>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="google-enabled"
-              checked={googleOAuthSettings?.enabled || false}
-              onChange={(e) => handleGoogleOAuthChange('enabled', e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="google-enabled" className="text-sm font-medium text-slate-700">
-              Google OAuth aktivieren
-            </label>
-          </div>
+            {/* Connect / Disconnect Button */}
+            {!googleOAuthSettings?.enabled ? (
+              <button
+                type="button"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                onClick={() => {
+                  handleGoogleOAuthChange('enabled', true);
+                  if (!googleOAuthSettings?.clientId && envGoogleClientId) {
+                    handleGoogleOAuthChange('clientId', envGoogleClientId);
+                  }
+                }}
+              >
+                <Link2 className="w-4 h-4" />
+                Mit Google verbinden
+              </button>
+            ) : (
+              <div className="space-y-3">
+                {/* Features */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                      <Mail className="w-4 h-4 text-slate-400" />
+                      Gmail
+                    </div>
+                    {onTestGmailConnection && (
+                      <button
+                        type="button"
+                        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                        disabled={gmailTestStatus === 'testing'}
+                        onClick={() => onTestGmailConnection?.()}
+                      >
+                        {gmailTestStatus === 'testing' ? 'Teste…' : gmailTestStatus === 'success' ? '✅ OK' : gmailTestStatus === 'error' ? '❌ Fehler' : 'testen'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      Kalender
+                    </div>
+                    {onTestGoogleConnection && (
+                      <button
+                        type="button"
+                        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                        disabled={googleTestStatus === 'testing'}
+                        onClick={() => onTestGoogleConnection?.()}
+                      >
+                        {googleTestStatus === 'testing' ? 'Teste…' : googleTestStatus === 'success' ? '✅ OK' : googleTestStatus === 'error' ? '❌ Fehler' : 'testen'}
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700" htmlFor="google-clientid">
-              OAuth Client ID *
-            </label>
-            <input
-              id="google-clientid"
-              type="password"
-              placeholder="<client-id>.apps.googleusercontent.com"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={googleOAuthSettings?.clientId || ''}
-              onChange={(e) => handleGoogleOAuthChange('clientId', e.target.value)}
-            />
-            {typeof window !== 'undefined' && (
-              <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                <div className="font-semibold">Hinweis bei Fehler 400: redirect_uri_mismatch</div>
-                <div className="mt-1">
-                  In Google Cloud Console bei deinem OAuth Client die aktuelle Origin eintragen:
-                </div>
-                <div className="mt-1 font-mono bg-white border border-slate-200 rounded px-2 py-1 inline-block">
-                  {window.location.origin}
-                </div>
-                <div className="mt-2">
-                  Credentials → OAuth 2.0 Client ID → Authorized JavaScript origins (und falls nötig Authorized redirect URIs).
-                </div>
+                {/* Trennen */}
+                <button
+                  type="button"
+                  className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                  onClick={() => handleGoogleOAuthChange('enabled', false)}
+                >
+                  Verbindung trennen
+                </button>
               </div>
             )}
-            {envGoogleClientId && (
-              <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                <div className="font-semibold">.env Client ID</div>
-                <div className="mt-1 font-mono break-all">{envGoogleClientId}</div>
-                <div className="mt-2 flex items-center justify-end gap-2">
+          </div>
+
+          {/* Erweiterte Einrichtung (Accordion) */}
+          <details className="group">
+            <summary className="flex items-center justify-between cursor-pointer list-none py-2 px-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors">
+              <span className="text-xs font-medium text-slate-600">Erweiterte Einrichtung (Eigene Client-ID)</span>
+              <ChevronDown className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="mt-2 space-y-3 px-1">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600" htmlFor="google-clientid">OAuth Client ID</label>
+                <input
+                  id="google-clientid"
+                  type="password"
+                  placeholder="<client-id>.apps.googleusercontent.com"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={googleOAuthSettings?.clientId || ''}
+                  onChange={(e) => handleGoogleOAuthChange('clientId', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600" htmlFor="google-apikey">API Key (optional)</label>
+                <input
+                  id="google-apikey"
+                  type="password"
+                  placeholder="AIza..."
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={googleOAuthSettings?.apiKey || ''}
+                  onChange={(e) => handleGoogleOAuthChange('apiKey', e.target.value)}
+                />
+              </div>
+              {typeof window !== 'undefined' && googleOAuthSettings?.clientId && (
+                <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <div className="font-semibold mb-1">Bei Fehler 400: redirect_uri_mismatch</div>
+                  <div>Authorized JavaScript Origin in Google Cloud Console:</div>
+                  <div className="mt-1 font-mono bg-white border border-slate-200 rounded px-2 py-1 inline-block break-all">
+                    {window.location.origin}
+                  </div>
+                </div>
+              )}
+              {envGoogleClientId && (
+                <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <span className="font-mono truncate mr-2">.env: {envGoogleClientId.slice(0, 24)}…</span>
                   <button
                     type="button"
-                    className="px-3 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50"
+                    className="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 whitespace-nowrap"
                     onClick={async () => {
                       const ok = await requestConfirm({
                         title: 'Google OAuth umstellen?',
@@ -487,111 +568,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       handleGoogleOAuthChange('enabled', true);
                       handleGoogleOAuthChange('clientId', envGoogleClientId);
                     }}
-                    title="Ueberschreibt die im CRM gespeicherte Client ID mit dem Wert aus .env"
                   >
-                    Auf .env setzen
+                    Übernehmen
                   </button>
                 </div>
+              )}
+              <div className="text-xs text-slate-500 bg-blue-50 border border-blue-100 rounded-lg p-3">
+                <span className="font-semibold text-blue-800 block mb-1">Einrichtung</span>
+                <ol className="list-decimal pl-4 space-y-0.5">
+                  <li>Google Cloud Projekt: <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">console.cloud.google.com</a></li>
+                  <li>People API + Gmail API aktivieren</li>
+                  <li>OAuth Client ID erstellen (Web Application)</li>
+                  <li>Client ID oben eintragen</li>
+                </ol>
               </div>
-            )}
-          </div>
-
-          {/* Test Connection Button */}
-          {googleOAuthSettings?.clientId && onTestGoogleConnection && (
-            <div className="space-y-2">
-              <button
-                onClick={async () => {
-                  await onTestGoogleConnection();
-                }}
-                disabled={googleTestStatus === 'testing'}
-                className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  googleTestStatus === 'testing'
-                    ? 'bg-slate-200 text-slate-500 cursor-wait'
-                    : googleTestStatus === 'success'
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : googleTestStatus === 'error'
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                }`}
-              >
-                {googleTestStatus === 'testing' && (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Teste Verbindung...
-                  </>
-                )}
-                {googleTestStatus === 'success' && (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Verbindung erfolgreich!
-                  </>
-                )}
-                {googleTestStatus === 'error' && (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Verbindung fehlgeschlagen
-                  </>
-                )}
-                {googleTestStatus === 'idle' && (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Google Verbindung testen
-                  </>
-                )}
-              </button>
-
-              {/* Status Messages */}
-              {googleTestStatus === 'success' && (
-                <div className="text-xs bg-green-50 text-green-700 px-3 py-2 rounded-lg border border-green-200">
-                  ✅ Google OAuth ist korrekt konfiguriert und bereit!
-                </div>
-              )}
-              {googleTestStatus === 'error' && (
-                <div className="text-xs bg-red-50 text-red-700 px-3 py-2 rounded-lg border border-red-200">
-                  ❌ Google OAuth konnte nicht initialisiert werden. Bitte prüfen Sie:
-                  <ul className="list-disc ml-4 mt-1">
-                    <li>Client ID ist korrekt?</li>
-                    <li>Internetverbindung besteht?</li>
-                    <li>Google Services sind erreichbar?</li>
-                  </ul>
-                </div>
-              )}
             </div>
-          )}
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700" htmlFor="google-apikey">
-              API Key (optional)
-            </label>
-            <input
-              id="google-apikey"
-              type="password"
-              placeholder="AIza..."
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={googleOAuthSettings?.apiKey || ''}
-              onChange={(e) => handleGoogleOAuthChange('apiKey', e.target.value)}
-            />
-          </div>
-
-          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-slate-600">
-            <p className="font-semibold text-blue-900 mb-1">📋 Einrichtung:</p>
-            <ol className="list-decimal pl-4 space-y-1">
-              <li>Google Cloud Projekt erstellen: <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">console.cloud.google.com</a></li>
-              <li>People API aktivieren (APIs & Services → Library)</li>
-              <li>OAuth Client ID erstellen (Web Application)</li>
-              <li>Authorized JavaScript Origin: http://localhost:3000</li>
-              <li>Client ID hier eintragen und speichern</li>
-            </ol>
-          </div>
-        </>
+          </details>
+        </div>
       )}
 
       {/* Mail Transport Settings */}
