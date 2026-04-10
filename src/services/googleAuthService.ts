@@ -1,74 +1,11 @@
-import { getTokenValue, setTokenValue } from '../platform/auth';
-import { isDesktopApp, invokeDesktopCommand } from '../platform/runtime';
-
-type TokenInfo = {
-  accessToken: string;
-  expiresAt: number;
-  scope: string; // space-separated
-};
-
-const GIS_SRC = 'https://accounts.google.com/gsi/client';
-const STORAGE_KEY_PREFIX = 'mietpark_google_oauth_token_cache_';
-
-let gisLoading: Promise<void> | null = null;
-
-function ensureGisLoaded(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.reject(new Error('GIS can only be used in the browser'));
-  if ((window as any).google?.accounts?.oauth2?.initTokenClient) return Promise.resolve();
-  if (gisLoading) return gisLoading;
-
-  gisLoading = new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = GIS_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
-    document.head.appendChild(script);
-  });
-
-  return gisLoading;
-}
-
-const tokenCache: Record<string, TokenInfo | undefined> = {};
-const storageLoaded: Record<string, boolean | undefined> = {};
-
-function storageKeyFor(clientId: string, scopes: string): string {
-  // Keep key readable, but safe for localStorage.
-  return `${STORAGE_KEY_PREFIX}${clientId}__${encodeURIComponent(scopes)}`;
-}
-
-async function loadTokenFromStorage(storageKey: string): Promise<TokenInfo | undefined> {
-  try {
-    const raw = await getTokenValue(storageKey);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as TokenInfo;
-    if (!parsed || typeof parsed !== 'object') return undefined;
-    if (typeof parsed.accessToken !== 'string') return undefined;
-    if (typeof parsed.expiresAt !== 'number') return undefined;
-    if (typeof parsed.scope !== 'string') return undefined;
-    return parsed;
-  } catch {
-    return undefined;
-  }
-}
-
-async function saveTokenToStorage(storageKey: string, token: TokenInfo): Promise<void> {
-  await setTokenValue(storageKey, JSON.stringify(token));
-}
-
-function scopesKey(scopes: string[]) {
-  return scopes
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .sort()
-    .join(' ');
-}
-
-function hasAllScopes(tokenScope: string, requiredScopes: string[]) {
-  const set = new Set(tokenScope.split(/\s+/g).filter(Boolean));
-  return requiredScopes.every((s) => set.has(s));
-}
+/**
+ * googleAuthService.ts
+ * Abwärtskompatibilität: getAccessToken delegiert an googleOAuthService.
+ * Direkt: getValidAccessToken aus googleOAuthService verwenden.
+ */
+import { getValidAccessToken, connectGoogle } from './googleOAuthService';
+import { loadTokenSet } from './googleTokenStore';
+import { isDesktopApp } from '../platform/runtime';
 
 export async function getAccessToken(opts: {
   clientId: string;
@@ -77,92 +14,17 @@ export async function getAccessToken(opts: {
   force?: boolean;
 }): Promise<string> {
   const clientId = opts.clientId.trim();
-  if (!clientId) throw new Error('Google OAuth Client ID is missing');
+  if (!clientId) throw new Error('Google OAuth Client ID fehlt. Bitte in den Einstellungen eintragen.');
 
-  const requiredScopes = opts.scopes.map((s) => s.trim()).filter(Boolean);
-  if (requiredScopes.length === 0) throw new Error('No Google OAuth scopes configured');
-
-  const scopes = scopesKey(requiredScopes);
-  const key = `${clientId}::${scopes}`;
-  const persistKey = storageKeyFor(clientId, scopes);
-
-  // Persistierten Token laden (einmalig pro Key)
-  if (!opts.force && !storageLoaded[key]) {
-    storageLoaded[key] = true;
-    const persisted = await loadTokenFromStorage(persistKey);
-    if (persisted) tokenCache[key] = persisted;
-  }
-
-  const cached = tokenCache[key];
-  if (!opts.force && cached && Date.now() < cached.expiresAt && hasAllScopes(cached.scope, requiredScopes)) {
-    return cached.accessToken;
-  }
-
-  // --- Desktop: nativer Loopback-OAuth-Flow via Tauri ---
   if (isDesktopApp()) {
-    const result = await invokeDesktopCommand<{
-      access_token: string;
-      expires_in: number;
-      scope: string;
-      refresh_token?: string;
-    }>('google_oauth_start', { clientId, scopes: requiredScopes });
-
-    const info: TokenInfo = {
-      accessToken: result.access_token,
-      expiresAt: Date.now() + result.expires_in * 1000 - 30_000,
-      scope: result.scope || requiredScopes.join(' '),
-    };
-    tokenCache[key] = info;
-    void saveTokenToStorage(persistKey, info);
-    return info.accessToken;
+    const ts = await loadTokenSet();
+    if (!ts || opts.force) {
+      await connectGoogle(clientId);
+    }
+    return getValidAccessToken(clientId);
   }
 
-  // --- Browser: GIS Token Client ---
-  await ensureGisLoaded();
-
-  return new Promise<string>((resolve, reject) => {
-    const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: requiredScopes.join(' '),
-      callback: (resp: any) => {
-        if (resp?.error) {
-          reject(new Error(resp.error_description || resp.error));
-          return;
-        }
-        if (!resp?.access_token) {
-          reject(new Error('No access_token returned by GIS'));
-          return;
-        }
-
-        const grantedScope = String(resp.scope || '').trim() || requiredScopes.join(' ');
-        if (!hasAllScopes(grantedScope, requiredScopes)) {
-          reject(
-            new Error(
-              `Google OAuth: Missing required scopes. Required: ${requiredScopes.join(' ')}; Granted: ${grantedScope}. ` +
-                `Try again with prompt="consent".`
-            )
-          );
-          return;
-        }
-
-        const expiresInSec = Number(resp.expires_in || 3600);
-        const info: TokenInfo = {
-          accessToken: resp.access_token,
-          expiresAt: Date.now() + expiresInSec * 1000 - 30_000,
-          scope: grantedScope,
-        };
-        tokenCache[key] = info;
-        void saveTokenToStorage(persistKey, info);
-        resolve(resp.access_token);
-      },
-    });
-
-    try {
-      tokenClient.requestAccessToken({ prompt: opts.prompt ?? '' });
-    } catch (e: any) {
-      reject(e);
-    }
-  });
+  throw new Error('Google OAuth ist nur in der Desktop-App verfügbar.');
 }
 
 export async function googleFetchJson<T>(opts: {

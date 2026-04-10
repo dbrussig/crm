@@ -1,12 +1,6 @@
 import type { GmailAttachmentSummary, GmailThread, GmailThreadFormatted } from '../types';
-import { getAccessToken, googleFetchJson } from './googleAuthService';
-
-const SCOPES = [
-  'openid',
-  'email',
-  'profile',
-  'https://www.googleapis.com/auth/gmail.modify',
-];
+import { googleFetchJson } from './googleAuthService';
+import { requireScope, getValidAccessToken } from './googleOAuthService';
 
 const DEFAULT_PROCESSED_LABEL_NAME = 'Mietpark CRM/Verarbeitet';
 
@@ -20,17 +14,14 @@ function isScopeInsufficientError(err: unknown): boolean {
   );
 }
 
-async function getGmailToken(clientId: string, opts?: { prompt?: '' | 'consent' | 'select_account'; force?: boolean }) {
-  return getAccessToken({
-    clientId,
-    scopes: SCOPES,
-    prompt: opts?.prompt ?? '',
-    force: opts?.force ?? false,
-  });
+async function getGmailToken(clientId: string, opts?: { force?: boolean }) {
+  if (opts?.force) {
+    return requireScope(clientId, 'gmail');
+  }
+  return getValidAccessToken(clientId);
 }
 
 function getDefaultClientId(): string {
-  // Prefer runtime settings stored by the app, fall back to Vite env.
   return (
     localStorage.getItem('mietpark_google_oauth_client_id') ||
     (import.meta as any).env?.VITE_GOOGLE_OAUTH_CLIENT_ID ||
@@ -187,7 +178,7 @@ export async function isGmailAuthenticated(_clientId?: string): Promise<boolean>
   try {
     const clientId = (_clientId || getDefaultClientId()).trim();
     if (!clientId) return false;
-    const token = await getAccessToken({ clientId, scopes: SCOPES, prompt: '', force: false });
+    const token = await getValidAccessToken(clientId);
     return Boolean(token);
   } catch {
     return false;
@@ -217,7 +208,7 @@ export async function listInboxThreads(opts: {
   } catch (e) {
     // If the user previously consented to basic scopes only, GIS can return a token without gmail scopes.
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(opts.clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(opts.clientId, { force: true });
     const resp = await googleFetchJson<ListThreadsResponse>({ url, token });
     return {
       threads: (resp.threads || []).map((t) => ({ id: t.id, snippet: t.snippet || '' })),
@@ -242,7 +233,7 @@ export async function getThreadMetadata(opts: { clientId: string; threadId: stri
     resp = await googleFetchJson<ThreadResponse>({ url, token });
   } catch (e) {
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(opts.clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(opts.clientId, { force: true });
     resp = await googleFetchJson<ThreadResponse>({ url, token });
   }
 
@@ -301,7 +292,7 @@ export async function listThreadsByQueryWithClientId(opts: {
     resp = await googleFetchJson<ListThreadsResponse>({ url, token });
   } catch (e) {
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(opts.clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(opts.clientId, { force: true });
     resp = await googleFetchJson<ListThreadsResponse>({ url, token });
   }
   return {
@@ -337,7 +328,7 @@ export async function getThread(opts: { clientId: string; threadId: string }): P
     resp = await googleFetchJson<ThreadResponse>({ url, token });
   } catch (e) {
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(opts.clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(opts.clientId, { force: true });
     resp = await googleFetchJson<ThreadResponse>({ url, token });
   }
 
@@ -381,7 +372,7 @@ export async function getMessageAttachmentDataWithClientId(opts: {
     resp = await googleFetchJson<Resp>({ url, token });
   } catch (e) {
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(opts.clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(opts.clientId, { force: true });
     resp = await googleFetchJson<Resp>({ url, token });
   }
   const base64url = resp?.data || '';
@@ -406,7 +397,7 @@ export async function searchByEmailWithClientId(clientId: string, email: string,
     resp = await googleFetchJson<ListThreadsResponse>({ url, token });
   } catch (e) {
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(clientId, { force: true });
     resp = await googleFetchJson<ListThreadsResponse>({ url, token });
   }
   return (resp.threads || []).map((t) => ({ id: t.id, snippet: t.snippet || '' }));
@@ -427,7 +418,7 @@ export async function listLabelsWithClientId(opts: { clientId: string }): Promis
     resp = await googleFetchJson<ListLabelsResponse>({ url, token });
   } catch (e) {
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(opts.clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(opts.clientId, { force: true });
     resp = await googleFetchJson<ListLabelsResponse>({ url, token });
   }
   return resp.labels || [];
@@ -461,7 +452,7 @@ export async function getOrCreateLabelIdWithClientId(opts: {
     });
   } catch (e) {
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(opts.clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(opts.clientId, { force: true });
     created = await googleFetchJson<Label>({
       url,
       method: 'POST',
@@ -494,7 +485,7 @@ export async function modifyThreadLabelsWithClientId(opts: {
     await googleFetchJson<any>({ url, method: 'POST', token, body });
   } catch (e) {
     if (!isScopeInsufficientError(e)) throw e;
-    const token = await getGmailToken(opts.clientId, { prompt: 'consent', force: true });
+    const token = await getGmailToken(opts.clientId, { force: true });
     await googleFetchJson<any>({ url, method: 'POST', token, body });
   }
 }

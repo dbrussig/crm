@@ -24,6 +24,14 @@ pub struct GoogleOAuthResult {
     pub expires_in: u64,
     pub scope: String,
     pub refresh_token: Option<String>,
+    pub email: Option<String>,
+    pub user_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct UserInfoResponse {
+    sub: Option<String>,
+    email: Option<String>,
 }
 
 fn random_string(len: usize) -> String {
@@ -211,10 +219,80 @@ pub async fn google_oauth_start(
     let token: OAuthTokenResponse =
         serde_json::from_str(&body).map_err(|e| format!("Token-Parse-Fehler: {}", e))?;
 
+    eprintln!("[OAuth] Token-Tausch erfolgreich. Lade UserInfo...");
+
+    // UserInfo abrufen (email + sub/user_id) – Fehler ist non-fatal
+    let (email, user_id) = fetch_userinfo(&client, &token.access_token).await;
+
+    eprintln!("[OAuth] Verbunden. E-Mail: {}", email.as_deref().unwrap_or("unbekannt"));
+
     Ok(GoogleOAuthResult {
         access_token: token.access_token,
         expires_in: token.expires_in,
         scope: token.scope,
         refresh_token: token.refresh_token,
+        email,
+        user_id,
+    })
+}
+
+async fn fetch_userinfo(client: &Client, access_token: &str) -> (Option<String>, Option<String>) {
+    let resp = client
+        .get("https://www.googleapis.com/oauth2/v3/userinfo")
+        .bearer_auth(access_token)
+        .send()
+        .await;
+    match resp {
+        Ok(r) if r.status().is_success() => {
+            let info: Result<UserInfoResponse, _> = r.json().await;
+            match info {
+                Ok(u) => (u.email, u.sub),
+                Err(_) => (None, None),
+            }
+        }
+        _ => (None, None),
+    }
+}
+
+#[tauri::command]
+pub async fn google_token_refresh(
+    client_id: String,
+    refresh_token: String,
+) -> Result<GoogleOAuthResult, String> {
+    eprintln!("[OAuth] Starte Token-Refresh...");
+    let client = Client::new();
+    let resp = client
+        .post("https://oauth2.googleapis.com/token")
+        .form(&[
+            ("client_id", client_id.as_str()),
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh_token.as_str()),
+        ])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let status = resp.status();
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+
+    if !status.is_success() {
+        eprintln!("[OAuth] Refresh fehlgeschlagen ({})", status);
+        return Err(format!("Token-Refresh fehlgeschlagen ({}): {}", status, body));
+    }
+
+    let token: OAuthTokenResponse =
+        serde_json::from_str(&body).map_err(|e| format!("Refresh-Parse-Fehler: {}", e))?;
+
+    let (email, user_id) = fetch_userinfo(&client, &token.access_token).await;
+    eprintln!("[OAuth] Refresh erfolgreich.");
+
+    Ok(GoogleOAuthResult {
+        access_token: token.access_token,
+        expires_in: token.expires_in,
+        scope: token.scope,
+        // Refresh-Token kommt beim Refresh nicht immer zurück – dann alten behalten
+        refresh_token: if token.refresh_token.is_some() { token.refresh_token } else { Some(refresh_token) },
+        email,
+        user_id,
     })
 }
