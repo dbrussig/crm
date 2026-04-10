@@ -10,6 +10,11 @@ Native Desktop-App fuer Mietpark CRM auf Basis von Tauri 2, React und Rust.
 - sichere Token-Ablage im Keychain
 - spaeter Cloud-Backups ueber Google Drive, OneDrive, Dropbox und optional iCloud
 
+Hinweis zu Google OAuth (Desktop):
+
+- Es wird ein OAuth-Client vom Typ **Desktop App** in der Google Cloud Console benoetigt (kein **Web Application**).
+- Die Autorisierung laeuft ueber System-Browser + Loopback-Callback (`http://127.0.0.1:<port>`). Unter macOS App Sandbox wird der Browser direkt via `NSWorkspace` geoeffnet.
+
 ## Architektur
 
 - `src/`: React-Frontend fuer die UI

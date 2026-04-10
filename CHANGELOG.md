@@ -28,6 +28,7 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 
 ### Fixed
 - Repository-Hygiene verbessert: lokale DB- und nicht-projektbezogene Artefakte bleiben ausserhalb von GitLab.
+- Google OAuth Desktop: Browser-Öffnung unter macOS App Sandbox stabilisiert und Token-Tausch liefert jetzt aussagekräftige Fehlerdetails (z.B. `invalid_grant`).
 - GitLab macOS Release-Job gehaertet: Package-Uploads loggen HTTP-Status sauber und brechen bei bereits vorhandenen Dateien nicht mehr mit Exit 1 ab.
 - Belegablage verbessert: `PDF speichern` legt jetzt echte PDF-Dateien als Kundendokument in der DB ab.
 - PDF-Duplikat-Schutz eingefuehrt: identische Inhalte (SHA-256) werden pro Kunde nicht mehrfach gespeichert.
