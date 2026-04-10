@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Mail, Calendar, CheckCircle, AlertCircle, Link2, ChevronDown } from 'lucide-react';
 import { AISettings, GoogleOAuthSettings, MailTransportSettings, PaymentMethodConfig, DEFAULT_PAYMENT_METHODS } from '../types';
 import { getGLMModels } from '../services/zAiService';
-import { runMailBridgeAttachmentSelfTest } from '../services/invoiceEmailService';
 import { getCompanyProfile, saveCompanyProfile, type CompanyProfile } from '../config/companyProfile';
 import { getPaymentMethodsConfig, savePaymentMethodsConfig } from '../services/sqliteService';
 import ConfirmModal from './ConfirmModal';
@@ -92,10 +91,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     setPmNewForm(null);
     setPmDirty(true);
   };
-  const [mailBridgeTestStatus, setMailBridgeTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [mailBridgeAttachmentTestStatus, setMailBridgeAttachmentTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [mailBridgeAttachmentTestMsg, setMailBridgeAttachmentTestMsg] = useState<string>('');
-
   const confirmResolveRef = useRef<((ok: boolean) => void) | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     title: string;
@@ -136,40 +131,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     }
   };
 
-  const handleMailTransportChange = (key: keyof MailTransportSettings, value: string | boolean | number) => {
-    if (!onMailTransportChange) return;
-    onMailTransportChange({
-      ...(mailTransportSettings || {
-        mode: 'gmail_web',
-        bridgeUrl: 'http://127.0.0.1:8787/send',
-        smtpHost: '',
-        smtpPort: 587,
-        smtpSecure: false,
-        smtpUser: '',
-        smtpAppPassword: '',
-        fromEmail: '',
-        fromName: '',
-      }),
-      [key]: value,
-    });
-  };
-
   const envGoogleClientId =
     ((import.meta as any).env?.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined) || '';
   const aiConfigured = Boolean(settings.provider && (settings.provider !== 'zai' || settings.apiKey));
   const googleConfigured = Boolean(googleOAuthSettings?.enabled && googleOAuthSettings?.clientId);
-  const mailConfigured = Boolean(
-    mailTransportSettings?.mode === 'gmail_web' ||
-    (mailTransportSettings?.mode === 'smtp_app_password' &&
-      mailTransportSettings.smtpHost &&
-      mailTransportSettings.smtpUser &&
-      mailTransportSettings.smtpAppPassword &&
-      mailTransportSettings.fromEmail)
-  );
   const setupItems = [
     { label: 'AI', ok: aiConfigured },
     { label: 'Google OAuth', ok: googleConfigured },
-    { label: 'Mail', ok: mailConfigured },
     { label: 'Firma/PDF', ok: Boolean(companyProfile.companyName && companyProfile.email) },
   ];
   const setupDone = setupItems.filter((x) => x.ok).length;
@@ -584,183 +552,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </div>
             </div>
           </details>
-        </div>
-      )}
-
-      {/* Mail Transport Settings */}
-      {onMailTransportChange && (
-        <div className="border-t border-slate-200 pt-3 space-y-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">Mail-Versand</p>
-            <p className="text-xs text-slate-500">
-              Optional per App-Passwort (lokale Mail-Bridge). Kalender bleibt bei Google OAuth.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700" htmlFor="mail-mode">
-              Versandmodus
-            </label>
-            <select
-              id="mail-mode"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={mailTransportSettings?.mode || 'gmail_web'}
-              onChange={(e) => handleMailTransportChange('mode', e.target.value as MailTransportSettings['mode'])}
-            >
-              <option value="gmail_web">Gmail Entwurf im Browser</option>
-              <option value="smtp_app_password">SMTP mit App-Passwort (direkt senden)</option>
-            </select>
-          </div>
-
-          {mailTransportSettings?.mode === 'smtp_app_password' && (
-            <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <label className="text-xs text-slate-700">
-                  Bridge URL
-                  <input
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                    value={mailTransportSettings.bridgeUrl || ''}
-                    onChange={(e) => handleMailTransportChange('bridgeUrl', e.target.value)}
-                    placeholder="http://127.0.0.1:8787/send"
-                  />
-                </label>
-                <label className="text-xs text-slate-700">
-                  SMTP Host
-                  <input
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                    value={mailTransportSettings.smtpHost || ''}
-                    onChange={(e) => handleMailTransportChange('smtpHost', e.target.value)}
-                    placeholder="smtp.gmail.com"
-                  />
-                </label>
-                <label className="text-xs text-slate-700">
-                  SMTP Port
-                  <input
-                    type="number"
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                    value={mailTransportSettings.smtpPort || 587}
-                    onChange={(e) => handleMailTransportChange('smtpPort', Number(e.target.value || 587))}
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-xs text-slate-700 mt-5">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(mailTransportSettings.smtpSecure)}
-                    onChange={(e) => handleMailTransportChange('smtpSecure', e.target.checked)}
-                  />
-                  SMTPS (465) statt STARTTLS (587)
-                </label>
-                <label className="text-xs text-slate-700">
-                  SMTP User
-                  <input
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                    value={mailTransportSettings.smtpUser || ''}
-                    onChange={(e) => handleMailTransportChange('smtpUser', e.target.value)}
-                  />
-                </label>
-                <label className="text-xs text-slate-700">
-                  App-Passwort
-                  <input
-                    type="password"
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                    value={mailTransportSettings.smtpAppPassword || ''}
-                    onChange={(e) => handleMailTransportChange('smtpAppPassword', e.target.value)}
-                  />
-                </label>
-                <label className="text-xs text-slate-700">
-                  From E-Mail
-                  <input
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                    value={mailTransportSettings.fromEmail || ''}
-                    onChange={(e) => handleMailTransportChange('fromEmail', e.target.value)}
-                  />
-                </label>
-                <label className="text-xs text-slate-700">
-                  From Name (optional)
-                  <input
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                    value={mailTransportSettings.fromName || ''}
-                    onChange={(e) => handleMailTransportChange('fromName', e.target.value)}
-                  />
-                </label>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={`px-3 py-2 rounded-md text-sm ${
-                    mailBridgeTestStatus === 'success'
-                      ? 'bg-emerald-600 text-white'
-                      : mailBridgeTestStatus === 'error'
-                        ? 'bg-rose-600 text-white'
-                        : 'bg-slate-900 text-white'
-                  }`}
-                  onClick={async () => {
-                    const url = String(mailTransportSettings.bridgeUrl || '').replace(/\/send\/?$/, '/health');
-                    setMailBridgeTestStatus('testing');
-                    try {
-                      const resp = await fetch(url);
-                      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                      setMailBridgeTestStatus('success');
-                    } catch {
-                      setMailBridgeTestStatus('error');
-                    }
-                  }}
-                >
-                  {mailBridgeTestStatus === 'testing' ? 'Teste…' : 'Mail-Bridge testen'}
-                </button>
-                <span className="text-xs text-slate-600">
-                  Starte lokal: <code>python3 tools/mail_bridge.py --host 127.0.0.1 --port 8787</code>
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={`px-3 py-2 rounded-md text-sm ${
-                    mailBridgeAttachmentTestStatus === 'success'
-                      ? 'bg-emerald-600 text-white'
-                      : mailBridgeAttachmentTestStatus === 'error'
-                        ? 'bg-rose-600 text-white'
-                        : 'bg-slate-900 text-white'
-                  }`}
-                  onClick={async () => {
-                    if (!mailTransportSettings) return;
-                    setMailBridgeAttachmentTestStatus('testing');
-                    setMailBridgeAttachmentTestMsg('');
-                    try {
-                      await runMailBridgeAttachmentSelfTest(mailTransportSettings);
-                      setMailBridgeAttachmentTestStatus('success');
-                      setMailBridgeAttachmentTestMsg('Testmail mit Anhang wurde an From E-Mail gesendet.');
-                    } catch (e) {
-                      setMailBridgeAttachmentTestStatus('error');
-                      setMailBridgeAttachmentTestMsg(e instanceof Error ? e.message : String(e));
-                    }
-                  }}
-                >
-                  {mailBridgeAttachmentTestStatus === 'testing' ? 'Sende Test…' : 'Anhänge-Test senden'}
-                </button>
-                <span className="text-xs text-slate-600">
-                  Sendet eine Testmail mit Mini-Anhang an <code>{mailTransportSettings?.fromEmail || 'From E-Mail'}</code>.
-                </span>
-              </div>
-              {mailBridgeAttachmentTestMsg ? (
-                <div
-                  className={`text-xs rounded-md border px-2 py-1.5 ${
-                    mailBridgeAttachmentTestStatus === 'success'
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                      : 'border-rose-200 bg-rose-50 text-rose-800'
-                  }`}
-                >
-                  {mailBridgeAttachmentTestMsg}
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          <div className="text-xs bg-amber-50 text-amber-900 border border-amber-200 rounded-lg p-3">
-            Kalenderfunktionen (Verfügbarkeit/Termine) laufen weiterhin über Google OAuth/Calendar API.
-          </div>
         </div>
       )}
 
