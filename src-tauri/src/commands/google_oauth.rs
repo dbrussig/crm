@@ -34,6 +34,42 @@ struct UserInfoResponse {
     email: Option<String>,
 }
 
+fn open_browser(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        // Versuche erst absoluten Pfad (funktioniert in App-Bundle), dann relativen
+        let candidates = ["/usr/bin/open", "open"];
+        for cmd in &candidates {
+            match std::process::Command::new(cmd).arg(url).spawn() {
+                Ok(_) => {
+                    eprintln!("[OAuth] Browser geöffnet via '{}'", cmd);
+                    return Ok(());
+                }
+                Err(e) => eprintln!("[OAuth] '{}' fehlgeschlagen: {}", cmd, e),
+            }
+        }
+        return Err("Browser konnte auf macOS nicht geöffnet werden".to_string());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| format!("xdg-open fehlgeschlagen: {}", e))?;
+        return Ok(());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+            .map_err(|e| format!("start fehlgeschlagen: {}", e))?;
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    Err("Unbekanntes Betriebssystem".to_string())
+}
+
 fn random_string(len: usize) -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let seed = SystemTime::now()
@@ -79,26 +115,9 @@ pub async fn google_oauth_start(
     );
     eprintln!("[OAuth] Auth-URL gebaut, öffne Browser...");
 
-    // 4. System-Browser öffnen (macOS: open, Linux: xdg-open, Windows: start)
-    #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg(&auth_url)
-        .spawn()
-        .map_err(|e| format!("Browser konnte nicht geöffnet werden: {}", e))?;
-
-    #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open")
-        .arg(&auth_url)
-        .spawn()
-        .map_err(|e| format!("Browser konnte nicht geöffnet werden: {}", e))?;
-
-    #[cfg(target_os = "windows")]
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &auth_url])
-        .spawn()
-        .map_err(|e| format!("Browser konnte nicht geöffnet werden: {}", e))?;
-
-    eprintln!("[OAuth] Browser geöffnet, warte auf Callback...");
+    // 4. System-Browser öffnen – absoluter Pfad für macOS-Bundle
+    open_browser(&auth_url)?;
+    eprintln!("[OAuth] Browser-Öffnung ausgelöst, warte auf Callback...");
 
     // 5. Auf Callback warten mit Timeout (120 Sekunden)
     let code_result: Arc<Mutex<Option<Result<String, String>>>> = Arc::new(Mutex::new(None));
