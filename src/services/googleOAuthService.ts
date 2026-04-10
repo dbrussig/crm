@@ -74,15 +74,32 @@ export async function connectGoogle(
   if (requestedScope) scopeSet.add(requestedScope);
   const scopes = Array.from(scopeSet);
 
+  // Schritt 1: Port binden + Auth-URL vorbereiten (Rust)
+  let prepared: { auth_url: string; port: number; state: string; verifier: string; redirect_uri: string };
+  try {
+    prepared = await invokeDesktopCommand('google_oauth_prepare', { clientId, scopes });
+  } catch (e: unknown) {
+    throw new Error(friendlyError(String((e as any)?.message ?? e)));
+  }
+
+  // Schritt 2: Browser öffnen via Tauri-Opener-Command (AppHandle nötig)
+  try {
+    await invokeDesktopCommand('open_url_in_browser', { url: prepared.auth_url });
+  } catch (e: unknown) {
+    throw new Error(`Browser konnte nicht geöffnet werden: ${(e as any)?.message ?? e}`);
+  }
+
+  // Schritt 3: Auf Callback warten + Token tauschen (Rust wartet blockierend)
   let result: OAuthCommandResult;
   try {
-    result = await invokeDesktopCommand<OAuthCommandResult>('google_oauth_start', {
+    result = await invokeDesktopCommand<OAuthCommandResult>('google_oauth_exchange', {
       clientId,
-      scopes,
+      redirectUri: prepared.redirect_uri,
+      state: prepared.state,
+      verifier: prepared.verifier,
     });
   } catch (e: unknown) {
-    const msg = String((e as any)?.message ?? e ?? 'Unbekannter Fehler');
-    throw new Error(friendlyError(msg));
+    throw new Error(friendlyError(String((e as any)?.message ?? e)));
   }
 
   const grantedScopes = result.scope
