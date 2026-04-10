@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Mail, Calendar, CheckCircle, AlertCircle, Link2, ChevronDown } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Mail, Calendar, CheckCircle, AlertCircle, Link2, ChevronDown, Users, RefreshCw, Unlink } from 'lucide-react';
 import { AISettings, GoogleOAuthSettings, MailTransportSettings, PaymentMethodConfig, DEFAULT_PAYMENT_METHODS } from '../types';
+import { getConnectionStatus, connectGoogle, disconnectGoogle, type GoogleConnectionStatus } from '../services/googleOAuthService';
 import { getGLMModels } from '../services/zAiService';
 import { getCompanyProfile, saveCompanyProfile, type CompanyProfile } from '../config/companyProfile';
 import { getPaymentMethodsConfig, savePaymentMethodsConfig } from '../services/sqliteService';
@@ -43,6 +44,47 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onTestGmailConnection,
   onClose
 }) => {
+  const [googleStatus, setGoogleStatus] = useState<GoogleConnectionStatus | null>(null);
+  const [googleConnecting, setGoogleConnecting] = useState<'base' | 'calendar' | 'gmail' | 'contacts' | null>(null);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
+  const clientId = googleOAuthSettings?.clientId || '';
+
+  const refreshGoogleStatus = useCallback(async () => {
+    const status = await getConnectionStatus();
+    setGoogleStatus(status);
+  }, []);
+
+  useEffect(() => { refreshGoogleStatus(); }, [refreshGoogleStatus]);
+
+  const handleConnect = async (service?: 'calendar' | 'gmail' | 'contacts') => {
+    if (!clientId) {
+      setGoogleError('Bitte zuerst die OAuth Client-ID im Accordion eintragen.');
+      return;
+    }
+    setGoogleError(null);
+    setGoogleConnecting(service ?? 'base');
+    try {
+      await connectGoogle(clientId, service);
+      await refreshGoogleStatus();
+      if (onGoogleOAuthChange) {
+        onGoogleOAuthChange({ ...(googleOAuthSettings ?? { clientId, enabled: false }), enabled: true });
+      }
+    } catch (e: unknown) {
+      setGoogleError(String((e as any)?.message ?? e));
+    } finally {
+      setGoogleConnecting(null);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    await disconnectGoogle();
+    await refreshGoogleStatus();
+    if (onGoogleOAuthChange) {
+      onGoogleOAuthChange({ ...(googleOAuthSettings ?? { clientId, enabled: false }), enabled: false });
+    }
+  };
+
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(() => getCompanyProfile());
   const [companyDirty, setCompanyDirty] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
@@ -397,83 +439,157 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
 
             {/* Verbindungsstatus */}
+            {/* Status-Kopf */}
             <div className="flex items-center gap-3">
-              {googleOAuthSettings?.enabled ? (
+              {googleStatus?.connected ? (
                 <CheckCircle className="w-6 h-6 text-emerald-500 shrink-0" />
               ) : (
                 <AlertCircle className="w-6 h-6 text-amber-400 shrink-0" />
               )}
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-800">
-                  {googleOAuthSettings?.enabled ? '✅ Aktiviert' : 'Nicht verbunden'}
+                  {googleStatus?.connected ? 'Verbunden' : 'Nicht verbunden'}
                 </p>
-                <p className="text-xs text-slate-500">
-                  {googleOAuthSettings?.enabled
-                    ? 'Google OAuth ist aktiv. Features werden unten angezeigt.'
-                    : 'Verbinde dein Google-Konto, um Gmail & Kalender zu nutzen.'}
+                <p className="text-xs text-slate-500 truncate">
+                  {googleStatus?.connected
+                    ? googleStatus.email ?? 'Google-Konto aktiv'
+                    : 'Verbinde dein Google-Konto für Gmail, Kalender & Kontakte.'}
                 </p>
               </div>
+              {googleStatus?.connected && (
+                <button
+                  type="button"
+                  title="Status aktualisieren"
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                  onClick={refreshGoogleStatus}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
-            {/* Connect / Disconnect Button */}
-            {!googleOAuthSettings?.enabled ? (
+            {/* Fehleranzeige */}
+            {googleError && (
+              <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {googleError}
+              </div>
+            )}
+
+            {/* Nicht verbunden → prominenter Connect-Button */}
+            {!googleStatus?.connected && (
               <button
                 type="button"
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-                onClick={() => {
-                  handleGoogleOAuthChange('enabled', true);
-                  if (!googleOAuthSettings?.clientId && envGoogleClientId) {
-                    handleGoogleOAuthChange('clientId', envGoogleClientId);
-                  }
-                }}
+                disabled={googleConnecting !== null}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-60 transition-colors"
+                onClick={() => handleConnect()}
               >
-                <Link2 className="w-4 h-4" />
-                Mit Google verbinden
+                {googleConnecting === 'base' ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Link2 className="w-4 h-4" />
+                )}
+                {googleConnecting === 'base' ? 'Warte auf Browser…' : 'Mit Google verbinden'}
               </button>
-            ) : (
-              <div className="space-y-3">
-                {/* Features */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2 text-sm text-slate-700">
-                      <Mail className="w-4 h-4 text-slate-400" />
-                      Gmail
-                    </div>
-                    {onTestGmailConnection && (
-                      <button
-                        type="button"
-                        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
-                        disabled={gmailTestStatus === 'testing'}
-                        onClick={() => onTestGmailConnection?.()}
-                      >
-                        {gmailTestStatus === 'testing' ? 'Teste…' : gmailTestStatus === 'success' ? '✅ OK' : gmailTestStatus === 'error' ? '❌ Fehler' : 'testen'}
-                      </button>
-                    )}
+            )}
+
+            {/* Verbunden → per-Service Status */}
+            {googleStatus?.connected && (
+              <div className="space-y-1">
+                {/* Letzte Verbindung */}
+                {googleStatus.connectedAt && (
+                  <p className="text-xs text-slate-400 mb-2">
+                    Verbunden seit {new Date(googleStatus.connectedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
+                  </p>
+                )}
+
+                {/* Gmail */}
+                <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <Mail className="w-4 h-4 text-slate-400" />
+                    Gmail
+                    {googleStatus.gmailConnected
+                      ? <span className="text-xs text-emerald-600 font-medium">✓ aktiv</span>
+                      : <span className="text-xs text-slate-400">nicht autorisiert</span>}
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2 text-sm text-slate-700">
-                      <Calendar className="w-4 h-4 text-slate-400" />
-                      Kalender
-                    </div>
-                    {onTestGoogleConnection && (
-                      <button
-                        type="button"
-                        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
-                        disabled={googleTestStatus === 'testing'}
-                        onClick={() => onTestGoogleConnection?.()}
-                      >
-                        {googleTestStatus === 'testing' ? 'Teste…' : googleTestStatus === 'success' ? '✅ OK' : googleTestStatus === 'error' ? '❌ Fehler' : 'testen'}
-                      </button>
-                    )}
+                  {!googleStatus.gmailConnected ? (
+                    <button
+                      type="button"
+                      disabled={googleConnecting !== null}
+                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      onClick={() => handleConnect('gmail')}
+                    >
+                      {googleConnecting === 'gmail' ? 'Warte…' : 'Freischalten'}
+                    </button>
+                  ) : onTestGmailConnection && (
+                    <button
+                      type="button"
+                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      disabled={gmailTestStatus === 'testing'}
+                      onClick={() => onTestGmailConnection?.()}
+                    >
+                      {gmailTestStatus === 'testing' ? 'Teste…' : gmailTestStatus === 'success' ? '✅ OK' : gmailTestStatus === 'error' ? '❌ Fehler' : 'testen'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Kalender */}
+                <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <Calendar className="w-4 h-4 text-slate-400" />
+                    Kalender
+                    {googleStatus.calendarConnected
+                      ? <span className="text-xs text-emerald-600 font-medium">✓ aktiv</span>
+                      : <span className="text-xs text-slate-400">nicht autorisiert</span>}
                   </div>
+                  {!googleStatus.calendarConnected ? (
+                    <button
+                      type="button"
+                      disabled={googleConnecting !== null}
+                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      onClick={() => handleConnect('calendar')}
+                    >
+                      {googleConnecting === 'calendar' ? 'Warte…' : 'Freischalten'}
+                    </button>
+                  ) : onTestGoogleConnection && (
+                    <button
+                      type="button"
+                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      disabled={googleTestStatus === 'testing'}
+                      onClick={() => onTestGoogleConnection?.()}
+                    >
+                      {googleTestStatus === 'testing' ? 'Teste…' : googleTestStatus === 'success' ? '✅ OK' : googleTestStatus === 'error' ? '❌ Fehler' : 'testen'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Kontakte */}
+                <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <Users className="w-4 h-4 text-slate-400" />
+                    Kontakte
+                    {googleStatus.contactsConnected
+                      ? <span className="text-xs text-emerald-600 font-medium">✓ aktiv</span>
+                      : <span className="text-xs text-slate-400">nicht autorisiert</span>}
+                  </div>
+                  {!googleStatus.contactsConnected && (
+                    <button
+                      type="button"
+                      disabled={googleConnecting !== null}
+                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      onClick={() => handleConnect('contacts')}
+                    >
+                      {googleConnecting === 'contacts' ? 'Warte…' : 'Freischalten'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Trennen */}
                 <button
                   type="button"
-                  className="text-xs text-slate-400 hover:text-red-500 transition-colors"
-                  onClick={() => handleGoogleOAuthChange('enabled', false)}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-500 transition-colors mt-1"
+                  onClick={handleDisconnect}
                 >
+                  <Unlink className="w-3.5 h-3.5" />
                   Verbindung trennen
                 </button>
               </div>
@@ -509,12 +625,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   onChange={(e) => handleGoogleOAuthChange('apiKey', e.target.value)}
                 />
               </div>
-              {typeof window !== 'undefined' && googleOAuthSettings?.clientId && (
-                <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                  <div className="font-semibold mb-1">Bei Fehler 400: redirect_uri_mismatch</div>
-                  <div>Authorized JavaScript Origin in Google Cloud Console:</div>
-                  <div className="mt-1 font-mono bg-white border border-slate-200 rounded px-2 py-1 inline-block break-all">
-                    {window.location.origin}
+              {googleOAuthSettings?.clientId && (
+                <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+                  <div className="font-semibold">Bei Fehler 400: redirect_uri_mismatch</div>
+                  <div>In der Google Cloud Console unter <span className="font-medium">Authorized redirect URIs</span> eintragen:</div>
+                  <div className="font-mono bg-white border border-slate-200 rounded px-2 py-1 inline-block select-all">
+                    http://127.0.0.1
                   </div>
                 </div>
               )}
