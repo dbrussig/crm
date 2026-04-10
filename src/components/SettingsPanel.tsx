@@ -627,11 +627,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </div>
               {googleOAuthSettings?.clientId && (
                 <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
-                  <div className="font-semibold">Bei Fehler 400: redirect_uri_mismatch</div>
-                  <div>In der Google Cloud Console unter <span className="font-medium">Authorized redirect URIs</span> eintragen:</div>
-                  <div className="font-mono bg-white border border-slate-200 rounded px-2 py-1 inline-block select-all">
-                    http://127.0.0.1
+                  <div className="font-semibold">Bei Fehler: redirect_uri_mismatch</div>
+                  <div>
+                    In der Regel ist der OAuth-Client falsch angelegt. Für die Desktop-App bitte eine OAuth Client ID vom Typ{' '}
+                    <span className="font-medium">Desktop App</span> verwenden (kein <span className="font-medium">Web Application</span>).
                   </div>
+                  <div>Für Desktop-App Clients sind keine Authorized JavaScript Origins / Redirect URIs nötig.</div>
                 </div>
               )}
               {envGoogleClientId && (
@@ -661,8 +662,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <span className="font-semibold text-blue-800 block mb-1">Einrichtung</span>
                 <ol className="list-decimal pl-4 space-y-0.5">
                   <li>Google Cloud Projekt: <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">console.cloud.google.com</a></li>
-                  <li>People API + Gmail API aktivieren</li>
-                  <li>OAuth Client ID erstellen (Web Application)</li>
+                  <li>People API + Gmail API + Google Calendar API aktivieren</li>
+                  <li>OAuth Client ID erstellen (Desktop App)</li>
                   <li>Client ID oben eintragen</li>
                 </ol>
               </div>
@@ -1114,8 +1115,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     <ol className="list-decimal pl-4 space-y-1">
                       <li>In Google Cloud Projekt: <strong>Gmail API</strong> aktivieren</li>
                       <li>Gleiche OAuth Client ID wie für Contacts nutzen</li>
-                      <li>Authorized JavaScript Origin: http://localhost:3000</li>
-                      <li>Scopes: <code className="bg-purple-100 px-1 rounded">https://www.googleapis.com/auth/gmail.readonly</code></li>
+                      <li>OAuth Client ID vom Typ <strong>Desktop App</strong> (keine JS Origin nötig)</li>
+                      <li>Scopes: <code className="bg-purple-100 px-1 rounded">https://www.googleapis.com/auth/gmail.modify</code></li>
                     </ol>
                   </div>
 

@@ -1,6 +1,6 @@
 import type { GmailAttachmentSummary, GmailThread, GmailThreadFormatted } from '../types';
 import { googleFetchJson } from './googleAuthService';
-import { requireScope, getValidAccessToken } from './googleOAuthService';
+import { requireScope, getConnectionStatus } from './googleOAuthService';
 
 const DEFAULT_PROCESSED_LABEL_NAME = 'Mietpark CRM/Verarbeitet';
 
@@ -18,7 +18,7 @@ async function getGmailToken(clientId: string, opts?: { force?: boolean }) {
   if (opts?.force) {
     return requireScope(clientId, 'gmail');
   }
-  return getValidAccessToken(clientId);
+  return requireScope(clientId, 'gmail');
 }
 
 function getDefaultClientId(): string {
@@ -176,10 +176,8 @@ function collectAttachments(messageId: string, part?: GmailMessagePart): GmailAt
 
 export async function isGmailAuthenticated(_clientId?: string): Promise<boolean> {
   try {
-    const clientId = (_clientId || getDefaultClientId()).trim();
-    if (!clientId) return false;
-    const token = await getValidAccessToken(clientId);
-    return Boolean(token);
+    const status = await getConnectionStatus();
+    return Boolean(status.connected && status.gmailConnected);
   } catch {
     return false;
   }

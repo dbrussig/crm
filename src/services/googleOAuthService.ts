@@ -10,6 +10,7 @@ import {
   saveTokenSet,
   clearTokenSet,
   isTokenExpired,
+  scopeGranted,
   getConnectionStatus,
   SCOPES_CALENDAR,
   SCOPES_GMAIL,
@@ -44,7 +45,7 @@ function friendlyError(raw: string): string {
   if (raw.includes('invalid_client'))
     return 'Ungültige Client-ID. Bitte in den Einstellungen prüfen.';
   if (raw.includes('redirect_uri_mismatch'))
-    return 'Redirect-URI nicht konfiguriert. Bitte http://127.0.0.1 in der Google Cloud Console eintragen.';
+    return 'Redirect-URI passt nicht. Für die Desktop-App bitte einen OAuth-Client vom Typ „Desktop App“ erstellen (kein „Web Application“).';
   if (raw.includes('Token-Tausch fehlgeschlagen'))
     return 'Token-Tausch fehlgeschlagen. Bitte erneut verbinden.';
   if (raw.includes('Timeout'))
@@ -175,7 +176,7 @@ export async function requireScope(
   const ts = await loadTokenSet();
   const required = SERVICE_SCOPES[service];
 
-  if (!ts || !ts.scopes.includes(required)) {
+  if (!ts || !scopeGranted(ts.scopes, required)) {
     await connectGoogle(clientId, service);
   }
 

@@ -1,6 +1,6 @@
 import type { AvailabilityCheckResult } from '../types';
 import { googleFetchJson } from './googleAuthService';
-import { requireScope, getValidAccessToken } from './googleOAuthService';
+import { requireScope } from './googleOAuthService';
 
 function getDefaultClientId(): string {
   return (
@@ -106,7 +106,7 @@ export async function checkAvailabilityWithClientId(
   timeMax: Date,
   opts: { clientId: string }
 ): Promise<AvailabilityCheckResult> {
-  const token = await getValidAccessToken(opts.clientId);
+  const token = await requireScope(opts.clientId, 'calendar');
   const body = {
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),
@@ -149,7 +149,7 @@ export async function listEventsWithClientId(opts: {
   timeMax: Date;
   maxResults?: number;
 }): Promise<GoogleCalendarEvent[]> {
-  const token = await getValidAccessToken(opts.clientId);
+  const token = await requireScope(opts.clientId, 'calendar');
   const all: GoogleCalendarEvent[] = [];
   let pageToken: string | undefined = undefined;
   const max = Math.max(1, Math.min(250, Number(opts.maxResults || 250)));
@@ -198,7 +198,7 @@ export async function createEvent(
   },
   opts: { clientId: string }
 ): Promise<string> {
-  const token = await getValidAccessToken(opts.clientId);
+  const token = await requireScope(opts.clientId, 'calendar');
   const body = {
     summary: event.summary,
     description: event.description,
@@ -239,7 +239,7 @@ export async function deleteEvent(
   eventId: string,
   opts: { clientId: string }
 ): Promise<void> {
-  const token = await getValidAccessToken(opts.clientId);
+  const token = await requireScope(opts.clientId, 'calendar');
   await googleFetchJson<any>({
     url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
     method: 'DELETE',
@@ -266,7 +266,7 @@ export async function updateEvent(
   },
   opts: { clientId: string }
 ): Promise<void> {
-  const token = await getValidAccessToken(opts.clientId);
+  const token = await requireScope(opts.clientId, 'calendar');
   const body = {
     ...(event.summary ? { summary: event.summary } : {}),
     ...(event.description ? { description: event.description } : {}),
@@ -302,7 +302,7 @@ export async function updateEventLegacy(
 
 export async function testGoogleCalendarConnection(opts: { clientId: string }): Promise<boolean> {
   try {
-    const token = await getValidAccessToken(opts.clientId);
+    const token = await requireScope(opts.clientId, 'calendar');
     await googleFetchJson<any>({ url: 'https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1', token });
     return true;
   } catch {

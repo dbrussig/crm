@@ -1,12 +1,6 @@
 import type { Customer } from '../types';
-import { getAccessToken, googleFetchJson } from './googleAuthService';
-
-const SCOPES = [
-  'openid',
-  'email',
-  'profile',
-  'https://www.googleapis.com/auth/contacts',
-];
+import { googleFetchJson } from './googleAuthService';
+import { requireScope } from './googleOAuthService';
 
 function getDefaultClientId(): string {
   return (
@@ -21,7 +15,7 @@ export async function syncCustomerToGoogleWithClientId(
   opts: { clientId: string }
 ): Promise<{ success: boolean; resourceName?: string; error?: string }> {
   try {
-    const token = await getAccessToken({ clientId: opts.clientId, scopes: SCOPES });
+    const token = await requireScope(opts.clientId, 'contacts');
 
     const body: any = {
       names: [
@@ -71,7 +65,7 @@ export async function deleteGoogleContactWithClientId(
   opts: { clientId: string }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const token = await getAccessToken({ clientId: opts.clientId, scopes: SCOPES });
+    const token = await requireScope(opts.clientId, 'contacts');
     await googleFetchJson<any>({
       url: `https://people.googleapis.com/v1/${resourceName.replace(/^\//, '')}:deleteContact`,
       method: 'DELETE',
@@ -94,7 +88,7 @@ export async function deleteGoogleContact(
 
 export async function testGoogleContactsConnection(opts: { clientId: string }): Promise<boolean> {
   try {
-    const token = await getAccessToken({ clientId: opts.clientId, scopes: SCOPES });
+    const token = await requireScope(opts.clientId, 'contacts');
     // Fetch basic user profile as a cheap token validation.
     await googleFetchJson<any>({
       url: 'https://www.googleapis.com/oauth2/v3/userinfo',

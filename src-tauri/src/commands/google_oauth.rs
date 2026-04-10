@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use rand::RngCore;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -45,13 +46,11 @@ struct UserInfoResponse {
 }
 
 fn random_string(len: usize) -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    let raw = format!("{:x}{:016x}", seed, len as u64 * 0xDEAD_BEEF);
-    URL_SAFE_NO_PAD.encode(raw.as_bytes())[..len.min(43)].to_string()
+    let byte_len = ((len.saturating_mul(3)).saturating_add(3)) / 4; // ceil(len * 3 / 4)
+    let mut bytes = vec![0u8; byte_len.max(1)];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    let s = URL_SAFE_NO_PAD.encode(bytes);
+    s[..len.min(s.len())].to_string()
 }
 
 fn pkce_challenge(verifier: &str) -> String {
@@ -71,7 +70,6 @@ pub async fn google_oauth_prepare(
         .map_err(|e| format!("Port-Bind fehlgeschlagen: {}", e))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let redirect_uri = format!("http://127.0.0.1:{}/callback", port);
-    eprintln!("[OAuth] prepare: Listener auf Port {}", port);
 
     let verifier = random_string(43);
     let challenge = pkce_challenge(&verifier);
@@ -79,7 +77,7 @@ pub async fn google_oauth_prepare(
     let scope_str = scopes.join(" ");
 
     let auth_url = format!(
-        "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}&code_challenge={}&code_challenge_method=S256&access_type=offline&prompt=consent",
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}&code_challenge={}&code_challenge_method=S256&access_type=offline&prompt=consent&include_granted_scopes=true",
         urlencoding::encode(&client_id),
         urlencoding::encode(&redirect_uri),
         urlencoding::encode(&scope_str),
@@ -89,7 +87,6 @@ pub async fn google_oauth_prepare(
 
     // Listener in globalem State parken, damit exchange ihn übernehmen kann
     get_listener_store().lock().unwrap().replace(listener);
-    eprintln!("[OAuth] prepare: URL gebaut, warte auf JS-Browser-Öffnung");
 
     Ok(OAuthPrepareResult { auth_url, port, state, verifier, redirect_uri })
 }
@@ -144,7 +141,6 @@ pub async fn google_oauth_exchange(
                 let mut reader = BufReader::new(&stream);
                 let mut request_line = String::new();
                 let _ = reader.read_line(&mut request_line);
-                eprintln!("[OAuth] exchange: HTTP Request: {}", request_line.trim());
 
                 let path = request_line.split_whitespace().nth(1).unwrap_or("").to_string();
                 let query = path.split('?').nth(1).unwrap_or("").to_string();
@@ -230,9 +226,7 @@ pub async fn google_oauth_exchange(
     let token: OAuthTokenResponse =
         serde_json::from_str(&body).map_err(|e| format!("Token-Parse-Fehler: {}", e))?;
 
-    eprintln!("[OAuth] exchange: Token erhalten. Lade UserInfo...");
     let (email, user_id) = fetch_userinfo(&client, &token.access_token).await;
-    eprintln!("[OAuth] Verbunden als: {}", email.as_deref().unwrap_or("unbekannt"));
 
     Ok(GoogleOAuthResult {
         access_token: token.access_token,
@@ -246,19 +240,43 @@ pub async fn google_oauth_exchange(
 
 /// Öffnet eine URL im System-Browser – wird von JS aufgerufen
 #[tauri::command]
-pub async fn open_url_in_browser(app: tauri::AppHandle, url: String) -> Result<(), String> {
-    use tauri_plugin_opener::OpenerExt;
-    eprintln!("[OAuth] open_url_in_browser: {}", &url[..url.len().min(80)]);
-    app.opener()
-        .open_url(&url, None::<String>)
-        .map_err(|e| format!("Browser konnte nicht geöffnet werden: {}", e))
+pub async fn open_url_in_browser(_app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Ungültige URL für Browser-Öffnung.".to_string());
+    }
+
+    // macOS App Sandbox: `tauri-plugin-opener` nutzt `/usr/bin/open` (Process spawn),
+    // was in der Sandbox oft fehlschlägt. Deshalb direkt über NSWorkspace öffnen.
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_app_kit::NSWorkspace;
+        use objc2_foundation::{NSString, NSURL};
+
+        let ns_string = NSString::from_str(&url);
+        let ns_url = NSURL::URLWithString(&ns_string)
+            .ok_or_else(|| "Ungültige URL für Browser-Öffnung.".to_string())?;
+        let workspace = NSWorkspace::sharedWorkspace();
+        if workspace.openURL(&ns_url) {
+            Ok(())
+        } else {
+            Err("Browser konnte nicht geöffnet werden.".to_string())
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        _app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|e| format!("Browser konnte nicht geöffnet werden: {}", e))
+    }
 }
 
 /// Legacy-Command – bleibt für Abwärtskompatibilität, delegiert intern
 #[tauri::command]
 pub async fn google_oauth_start(
-    client_id: String,
-    scopes: Vec<String>,
+    _client_id: String,
+    _scopes: Vec<String>,
 ) -> Result<GoogleOAuthResult, String> {
     // Wird nicht mehr direkt genutzt – JS nutzt prepare + exchange
     Err("Bitte google_oauth_prepare + google_oauth_exchange verwenden.".to_string())
