@@ -14,6 +14,7 @@ Hinweis zu Google OAuth (Desktop):
 
 - Es wird ein OAuth-Client vom Typ **Desktop App** in der Google Cloud Console benoetigt (kein **Web Application**).
 - Die Autorisierung laeuft ueber System-Browser + Loopback-Callback (`http://127.0.0.1:<port>`). Unter macOS App Sandbox wird der Browser direkt via `NSWorkspace` geoeffnet.
+- Wenn beim Token-Tausch die Meldung `client_secret is missing` auftaucht, wurde sehr wahrscheinlich ein **Web Application**-Client verwendet.
 
 ## Architektur
 

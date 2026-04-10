@@ -53,6 +53,9 @@ function friendlyError(raw: string): string {
     if (lower.includes('invalid_grant')) {
       return 'Google OAuth: invalid_grant (Code abgelaufen/ungültig). Bitte erneut verbinden.';
     }
+    if (lower.includes('client_secret is missing')) {
+      return 'Google OAuth: client_secret fehlt. Du nutzt vermutlich einen OAuth Client vom Typ „Web Application“. Bitte einen Client vom Typ „Desktop App“ erstellen und dessen Client ID verwenden.';
+    }
     if (lower.includes('unauthorized_client')) {
       return 'Google OAuth: unauthorized_client. Bitte OAuth Client Typ „Desktop App“ verwenden.';
     }
