@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod google_oauth;
 pub mod contacts;
 pub mod crm;
 pub mod database;

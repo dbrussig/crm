@@ -1,4 +1,5 @@
 import { getTokenValue, setTokenValue } from '../platform/auth';
+import { isDesktopApp, invokeDesktopCommand } from '../platform/runtime';
 
 type TokenInfo = {
   accessToken: string;
@@ -81,25 +82,43 @@ export async function getAccessToken(opts: {
   const requiredScopes = opts.scopes.map((s) => s.trim()).filter(Boolean);
   if (requiredScopes.length === 0) throw new Error('No Google OAuth scopes configured');
 
-  await ensureGisLoaded();
-
   const scopes = scopesKey(requiredScopes);
   const key = `${clientId}::${scopes}`;
   const persistKey = storageKeyFor(clientId, scopes);
 
-  // Load persistent cache once per key (survives restarts).
+  // Persistierten Token laden (einmalig pro Key)
   if (!opts.force && !storageLoaded[key]) {
     storageLoaded[key] = true;
     const persisted = await loadTokenFromStorage(persistKey);
-    if (persisted) {
-      tokenCache[key] = persisted;
-    }
+    if (persisted) tokenCache[key] = persisted;
   }
 
   const cached = tokenCache[key];
   if (!opts.force && cached && Date.now() < cached.expiresAt && hasAllScopes(cached.scope, requiredScopes)) {
     return cached.accessToken;
   }
+
+  // --- Desktop: nativer Loopback-OAuth-Flow via Tauri ---
+  if (isDesktopApp()) {
+    const result = await invokeDesktopCommand<{
+      access_token: string;
+      expires_in: number;
+      scope: string;
+      refresh_token?: string;
+    }>('google_oauth_start', { clientId, scopes: requiredScopes });
+
+    const info: TokenInfo = {
+      accessToken: result.access_token,
+      expiresAt: Date.now() + result.expires_in * 1000 - 30_000,
+      scope: result.scope || requiredScopes.join(' '),
+    };
+    tokenCache[key] = info;
+    void saveTokenToStorage(persistKey, info);
+    return info.accessToken;
+  }
+
+  // --- Browser: GIS Token Client ---
+  await ensureGisLoaded();
 
   return new Promise<string>((resolve, reject) => {
     const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
@@ -129,8 +148,7 @@ export async function getAccessToken(opts: {
         const expiresInSec = Number(resp.expires_in || 3600);
         const info: TokenInfo = {
           accessToken: resp.access_token,
-          expiresAt: Date.now() + expiresInSec * 1000 - 30_000, // 30s safety window
-          // Store actual granted scopes (if provided) to avoid "insufficientPermissions" surprises.
+          expiresAt: Date.now() + expiresInSec * 1000 - 30_000,
           scope: grantedScope,
         };
         tokenCache[key] = info;
@@ -140,9 +158,7 @@ export async function getAccessToken(opts: {
     });
 
     try {
-      tokenClient.requestAccessToken({
-        prompt: opts.prompt ?? '',
-      });
+      tokenClient.requestAccessToken({ prompt: opts.prompt ?? '' });
     } catch (e: any) {
       reject(e);
     }
