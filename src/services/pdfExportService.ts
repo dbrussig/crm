@@ -2,7 +2,7 @@ import type { CustomerDocument, Invoice, InvoiceItem, InvoiceTemplate } from '..
 import { getCompanyProfile } from '../config/companyProfile';
 import { getInvoiceLayout } from '../config/invoiceLayouts';
 import { fetchInvoiceTemplate } from './invoiceService';
-import { addCustomerDocumentBlob, getDocumentsByCustomer, getInvoiceItems } from './sqliteService';
+import { addCustomerDocumentBlob, getDocumentsByCustomer, getInvoiceItems, getPaymentsByInvoice } from './sqliteService';
 import QRCode from 'qrcode';
 
 function euro(n: number): string {
@@ -271,6 +271,16 @@ async function renderInvoiceHtml(opts: {
   </html>`;
 }
 
+const METHOD_LABELS: Record<string, string> = {
+  Bar: 'Bar',
+  Bank: 'Überweisung',
+  SumUp: 'Kontaktlos mit Karte (SumUp)',
+  PayPal_QR: 'PayPal QR-Code',
+  PayPal_Service: 'PayPal',
+  PayPal_Friends: 'PayPal (Freunde)',
+  Sonstiges: 'Sonstiges',
+};
+
 async function renderMietparkHtml(opts: {
   invoice: Invoice;
   items: InvoiceItem[];
@@ -281,6 +291,16 @@ async function renderMietparkHtml(opts: {
   autoPrint?: boolean;
 }): Promise<string> {
   const { invoice, items, template, totals, company: c, layout } = opts;
+
+  // Zahlungen zur Rechnung laden (für Zahlart und Kaution auf dem Beleg)
+  let invoicePayments: Array<{ kind: string; method: string; amount: number; receivedAt?: number }> = [];
+  if (invoice.id && invoice.id !== 'temp') {
+    try {
+      invoicePayments = await getPaymentsByInvoice(invoice.id);
+    } catch {
+      invoicePayments = [];
+    }
+  }
   const d = layout.defaultsByType[invoice.invoiceType];
   const validUntil =
     invoice.invoiceType === 'Angebot'
@@ -308,17 +328,33 @@ async function renderMietparkHtml(opts: {
   const introTextRaw = invoice.introText || template.defaultIntroText || d.introText || '';
   const introText = resolvePlaceholders(introTextRaw, ctx).trim();
 
-  const paymentLine = (invoice.paymentInfo || template.defaultPaymentInfo || d.paymentInfo || c.paymentMethodsLine || '').trim();
+  const paymentLineRaw = (invoice.paymentInfo || template.defaultPaymentInfo || d.paymentInfo || c.paymentMethodsLine || '').trim();
   const paypalLineRaw = invoice.paypalText || template.defaultPaypalText || d.paypalText || '';
   const paypalLine = resolvePlaceholders(paypalLineRaw, ctx).trim();
+
+  // Zahlart aus echten Payments ableiten (überschreibt paymentLine)
+  const realPayments = invoicePayments.filter(p => p.kind !== 'Kaution');
+  const kautionPayments = invoicePayments.filter(p => p.kind === 'Kaution');
+  let paymentLine = paymentLineRaw;
+  if (realPayments.length > 0) {
+    const methodLabel = METHOD_LABELS[realPayments[0].method] || realPayments[0].method || '';
+    const isPayPal = realPayments[0].method?.startsWith('PayPal');
+    paymentLine = `Bezahlt per ${methodLabel}${isPayPal && c.paypalMeUrl ? ` – ${c.paypalMeUrl}` : ''}`;
+  }
+
+  const kautionLines = kautionPayments.map(k =>
+    `Kaution ${euro(Number(k.amount) || 0)} dankend erhalten (${METHOD_LABELS[k.method] || k.method || 'Bar'})${k.receivedAt ? ' am ' + fmtDateDE(k.receivedAt) : ''}.`
+  ).join(' ');
 
   const taxNoteRaw = invoice.taxNote || template.defaultTaxNote || d.taxNote || c.vatNotice || '';
   const taxNote = taxNoteRaw.trim();
 
+  // depositReceived: echte Kaution-Payments bevorzugen, Fallback auf depositReceivedEnabled
   const depositReceived =
-    invoice.invoiceType === 'Rechnung' && invoice.depositReceivedEnabled && (Number(invoice.depositReceivedAmount) || 0) > 0
-      ? `Kaution in Hoehe von ${euro(Number(invoice.depositReceivedAmount) || 0)} dankend erhalten.`
-      : '';
+    kautionLines ||
+    (invoice.invoiceType === 'Rechnung' && invoice.depositReceivedEnabled && (Number(invoice.depositReceivedAmount) || 0) > 0
+      ? `Kaution in Höhe von ${euro(Number(invoice.depositReceivedAmount) || 0)} dankend erhalten.`
+      : '');
 
   const agbTextRaw = invoice.agbText || template.defaultAgbText || d.agbText || '';
   const agbText = resolvePlaceholders(agbTextRaw, ctx).trim();
@@ -534,8 +570,8 @@ async function renderMietparkHtml(opts: {
 
         <div class="notes">
           ${paymentLine ? `<div class="line">${esc(paymentLine)}</div>` : ''}
-          ${depositReceived ? `<div class="line">${esc(depositReceived)}</div>` : ''}
-          ${paypalLine ? `<div class="line">${esc(paypalLine)}</div>` : ''}
+          ${depositReceived ? `<div class="line" style="font-weight:600;">${esc(depositReceived)}</div>` : ''}
+          ${!realPayments.length && paypalLine ? `<div class="line">${esc(paypalLine)}</div>` : ''}
           ${taxNote ? `<div class="line">${esc(taxNote)}</div>` : ''}
           ${agbLine ? `<div class="line">${esc(agbLine)}</div>` : ''}
         </div>
