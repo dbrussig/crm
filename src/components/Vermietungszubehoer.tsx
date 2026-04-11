@@ -200,12 +200,12 @@ export default function Vermietungszubehoer() {
   async function save() {
     const now = Date.now();
     const name = form.name.trim();
-    const inventoryKey = normalizeKey(form.inventoryKey || form.name);
+    const isEdit = Boolean(editing);
+    const inventoryKey = normalizeKey(form.inventoryKey || (isEdit ? '' : form.name));
     if (!name) {
       showError('Bitte einen Namen eintragen.');
       return;
     }
-    const isEdit = Boolean(editing);
     const payload: Record<string, unknown> = {
       name,
       category: form.category,
