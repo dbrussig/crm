@@ -54,6 +54,14 @@ struct OAuthErrorResponse {
     error_uri: Option<String>,
 }
 
+struct PendingOAuth {
+    listener: TcpListener,
+    state: String,
+    verifier: String,
+    redirect_uri: String,
+    created_at: std::time::Instant,
+}
+
 fn random_string(len: usize) -> String {
     let byte_len = ((len.saturating_mul(3)).saturating_add(3)) / 4; // ceil(len * 3 / 4)
     let mut bytes = vec![0u8; byte_len.max(1)];
@@ -75,6 +83,15 @@ pub async fn google_oauth_prepare(
     client_id: String,
     scopes: Vec<String>,
 ) -> Result<OAuthPrepareResult, String> {
+    {
+        let store = get_oauth_store().lock().unwrap();
+        if let Some(p) = store.as_ref() {
+            if p.created_at.elapsed() < Duration::from_secs(180) {
+                return Err("OAuth-Flow läuft bereits. Bitte kurz warten und erneut versuchen.".to_string());
+            }
+        }
+    }
+
     let listener = TcpListener::bind("127.0.0.1:0")
         .map_err(|e| format!("Port-Bind fehlgeschlagen: {}", e))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
@@ -95,38 +112,44 @@ pub async fn google_oauth_prepare(
         urlencoding::encode(&challenge),
     );
 
-    // Listener in globalem State parken, damit exchange ihn übernehmen kann
-    get_listener_store().lock().unwrap().replace(listener);
+    // OAuth state in globalem Slot parken, damit exchange konsistent ist (kein JS-Race).
+    get_oauth_store().lock().unwrap().replace(PendingOAuth {
+        listener,
+        state: state.clone(),
+        verifier: verifier.clone(),
+        redirect_uri: redirect_uri.clone(),
+        created_at: std::time::Instant::now(),
+    });
 
     Ok(OAuthPrepareResult { auth_url, port, state, verifier, redirect_uri })
 }
 
-// Globaler Listener-Slot (nur ein OAuth-Flow gleichzeitig)
-static PENDING_LISTENER: std::sync::OnceLock<Mutex<Option<TcpListener>>> = std::sync::OnceLock::new();
+// Globaler OAuth-Slot (nur ein OAuth-Flow gleichzeitig)
+static PENDING_OAUTH: std::sync::OnceLock<Mutex<Option<PendingOAuth>>> = std::sync::OnceLock::new();
 
-fn get_listener_store() -> &'static Mutex<Option<TcpListener>> {
-    PENDING_LISTENER.get_or_init(|| Mutex::new(None))
+fn get_oauth_store() -> &'static Mutex<Option<PendingOAuth>> {
+    PENDING_OAUTH.get_or_init(|| Mutex::new(None))
 }
 
 /// Schritt 2: Auf Loopback-Callback warten, Code gegen Token tauschen.
 #[tauri::command]
 pub async fn google_oauth_exchange(
     client_id: String,
-    redirect_uri: String,
-    state: String,
-    verifier: String,
+    _redirect_uri: String,
+    _state: String,
+    _verifier: String,
 ) -> Result<GoogleOAuthResult, String> {
-    eprintln!("[OAuth] exchange: Warte auf Callback...");
-
-    let listener = get_listener_store()
+    let pending = get_oauth_store()
         .lock()
         .unwrap()
         .take()
-        .ok_or_else(|| "Kein aktiver OAuth-Listener. Bitte zuerst google_oauth_prepare aufrufen.".to_string())?;
+        .ok_or_else(|| "Kein aktiver OAuth-Flow. Bitte zuerst google_oauth_prepare aufrufen.".to_string())?;
+
+    let listener = pending.listener;
 
     let code_result: Arc<Mutex<Option<Result<String, String>>>> = Arc::new(Mutex::new(None));
     let code_result_clone = Arc::clone(&code_result);
-    let expected_state = state.clone();
+    let expected_state = pending.state.clone();
 
     let handle = tokio::task::spawn_blocking(move || {
         use std::time::Instant;
@@ -218,9 +241,9 @@ pub async fn google_oauth_exchange(
         .form(&[
             ("code", code.as_str()),
             ("client_id", client_id.as_str()),
-            ("redirect_uri", redirect_uri.as_str()),
+            ("redirect_uri", pending.redirect_uri.as_str()),
             ("grant_type", "authorization_code"),
-            ("code_verifier", verifier.as_str()),
+            ("code_verifier", pending.verifier.as_str()),
         ])
         .send()
         .await
