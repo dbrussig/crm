@@ -251,7 +251,11 @@ fn merge_json(target: &mut Value, updates: &Value) {
     match (target, updates) {
         (Value::Object(target_map), Value::Object(update_map)) => {
             for (key, value) in update_map {
-                target_map.insert(key.clone(), value.clone());
+                if value.is_null() {
+                    target_map.remove(key);
+                } else {
+                    target_map.insert(key.clone(), value.clone());
+                }
             }
         }
         (target_value, update_value) => {

@@ -458,6 +458,9 @@ pub fn upsert_invoice(app: &AppHandle, invoice: &Value) -> Result<(), String> {
     let rental_request_id = string_field_optional(invoice, "rentalRequestId");
     let invoice_type = required_string(invoice, "invoiceType")?;
     let number = required_string(invoice, "invoiceNo")?;
+    let state = string_field_optional(invoice, "state").unwrap_or_else(|| "entwurf".to_string());
+    let service_period_start = optional_number_field(invoice, "servicePeriodStart");
+    let service_period_end = optional_number_field(invoice, "servicePeriodEnd");
     let total_amount = value_to_f64(invoice.get("totalGross")).unwrap_or(0.0);
     let created_at = number_field(invoice, "createdAt");
     let updated_at = number_field(invoice, "updatedAt");
@@ -466,16 +469,31 @@ pub fn upsert_invoice(app: &AppHandle, invoice: &Value) -> Result<(), String> {
     connection
         .execute(
             "INSERT INTO invoices (
-               id, rental_request_id, type, number, total_amount, created_at, updated_at, raw_json
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+               id, rental_request_id, type, number, state, service_period_start, service_period_end, total_amount, created_at, updated_at, raw_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(id) DO UPDATE SET
                rental_request_id = excluded.rental_request_id,
                type = excluded.type,
                number = excluded.number,
+               state = excluded.state,
+               service_period_start = excluded.service_period_start,
+               service_period_end = excluded.service_period_end,
                total_amount = excluded.total_amount,
                updated_at = excluded.updated_at,
                raw_json = excluded.raw_json",
-            params![id, rental_request_id, invoice_type, number, total_amount, created_at, updated_at, raw_json],
+            params![
+                id,
+                rental_request_id,
+                invoice_type,
+                number,
+                state,
+                service_period_start,
+                service_period_end,
+                total_amount,
+                created_at,
+                updated_at,
+                raw_json
+            ],
         )
         .map_err(|error| error.to_string())?;
 
@@ -534,19 +552,127 @@ pub fn replace_invoice_items(app: &AppHandle, invoice_id: &str, items: &[Value])
         let id = required_string(item, "id")?;
         let order_index = optional_number_field(item, "orderIndex").unwrap_or(0);
         let created_at = number_field(item, "createdAt");
+        let assigned_accessory_id = string_field_optional(item, "assignedAccessoryId");
         let raw_json = item.to_string();
 
         transaction
             .execute(
-                "INSERT INTO invoice_items (id, invoice_id, order_index, created_at, raw_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![id, invoice_id, order_index, created_at, raw_json],
+                "INSERT INTO invoice_items (id, invoice_id, order_index, created_at, assigned_accessory_id, raw_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![id, invoice_id, order_index, created_at, assigned_accessory_id, raw_json],
             )
             .map_err(|error| error.to_string())?;
     }
 
     transaction.commit().map_err(|error| error.to_string())?;
     Ok(())
+}
+
+pub fn check_accessory_availability(
+    app: &AppHandle,
+    accessory_id: &str,
+    start_ms: i64,
+    end_ms: i64,
+    exclude_invoice_id: Option<&str>,
+    exclude_invoice_item_id: Option<&str>,
+) -> Result<Value, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare(
+            "SELECT inv.id, inv.number, inv.type, COALESCE(inv.state, ''), inv.service_period_start, inv.service_period_end
+             FROM invoice_items it
+             JOIN invoices inv ON inv.id = it.invoice_id
+             WHERE it.assigned_accessory_id = ?1
+               AND it.assigned_accessory_id IS NOT NULL
+               AND inv.service_period_start IS NOT NULL
+               AND inv.service_period_end IS NOT NULL
+               AND COALESCE(inv.state, '') NOT IN ('storniert', 'abgelehnt', 'archiviert')
+               AND (?2 IS NULL OR inv.id <> ?2)
+               AND (?3 IS NULL OR it.id <> ?3)
+               AND inv.service_period_start < ?5
+               AND inv.service_period_end > ?4
+             ORDER BY inv.service_period_start ASC
+             LIMIT 1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let row = stmt
+        .query_row(
+            params![accessory_id, exclude_invoice_id, exclude_invoice_item_id, start_ms, end_ms],
+            |row| {
+                let invoice_id: String = row.get(0)?;
+                let invoice_no: String = row.get(1)?;
+                let invoice_type: String = row.get(2)?;
+                let invoice_state: String = row.get(3)?;
+                let service_start: i64 = row.get(4)?;
+                let service_end: i64 = row.get(5)?;
+                Ok((invoice_id, invoice_no, invoice_type, invoice_state, service_start, service_end))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    if let Some((invoice_id, invoice_no, invoice_type, invoice_state, service_start, service_end)) = row {
+        return Ok(json!({
+            "isAvailable": false,
+            "conflict": {
+                "invoiceId": invoice_id,
+                "invoiceNo": invoice_no,
+                "invoiceType": invoice_type,
+                "invoiceState": invoice_state,
+                "servicePeriodStart": service_start,
+                "servicePeriodEnd": service_end
+            }
+        }));
+    }
+
+    Ok(json!({ "isAvailable": true }))
+}
+
+pub fn list_accessory_bookings(app: &AppHandle, start_ms: i64, end_ms: i64) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare(
+            "SELECT it.assigned_accessory_id, inv.id, inv.number, inv.type, COALESCE(inv.state, ''), inv.service_period_start, inv.service_period_end
+             FROM invoice_items it
+             JOIN invoices inv ON inv.id = it.invoice_id
+             WHERE it.assigned_accessory_id IS NOT NULL
+               AND TRIM(it.assigned_accessory_id) <> ''
+               AND inv.service_period_start IS NOT NULL
+               AND inv.service_period_end IS NOT NULL
+               AND COALESCE(inv.state, '') NOT IN ('storniert', 'abgelehnt', 'archiviert')
+               AND inv.service_period_start < ?2
+               AND inv.service_period_end > ?1
+             ORDER BY inv.service_period_start ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map(params![start_ms, end_ms], |row| {
+            let accessory_id: String = row.get(0)?;
+            let invoice_id: String = row.get(1)?;
+            let invoice_no: String = row.get(2)?;
+            let invoice_type: String = row.get(3)?;
+            let invoice_state: String = row.get(4)?;
+            let service_start: i64 = row.get(5)?;
+            let service_end: i64 = row.get(6)?;
+            Ok(json!({
+                "accessoryId": accessory_id,
+                "invoiceId": invoice_id,
+                "invoiceNo": invoice_no,
+                "invoiceType": invoice_type,
+                "invoiceState": invoice_state,
+                "servicePeriodStart": service_start,
+                "servicePeriodEnd": service_end
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
 }
 
 fn open_connection(app: &AppHandle) -> Result<Connection, String> {
@@ -574,7 +700,11 @@ fn merge_json(target: &mut Value, updates: &Value) {
     match (target, updates) {
         (Value::Object(target_map), Value::Object(update_map)) => {
             for (key, value) in update_map {
-                target_map.insert(key.clone(), value.clone());
+                if value.is_null() {
+                    target_map.remove(key);
+                } else {
+                    target_map.insert(key.clone(), value.clone());
+                }
             }
         }
         (target_value, update_value) => {

@@ -205,18 +205,19 @@ export default function Vermietungszubehoer() {
       showError('Bitte einen Namen eintragen.');
       return;
     }
-    const payload: Partial<RentalAccessory> = {
+    const isEdit = Boolean(editing);
+    const payload: Record<string, unknown> = {
       name,
       category: form.category,
       inventoryKey,
-      brand: form.brand.trim() || undefined,
-      model: form.model.trim() || undefined,
-      lengthCm: form.lengthCm ? Number(form.lengthCm) : undefined,
-      notes: form.notes.trim() || undefined,
-      photoDataUrl: form.photoDataUrl || undefined,
-      compatibleRelingTypes: form.compatibleRelingTypes.length ? form.compatibleRelingTypes : undefined,
-      minVehicleWidthCm: form.minVehicleWidthCm ? Number(form.minVehicleWidthCm) : undefined,
-      maxVehicleWidthCm: form.maxVehicleWidthCm ? Number(form.maxVehicleWidthCm) : undefined,
+      brand: form.brand.trim() || (isEdit ? null : undefined),
+      model: form.model.trim() || (isEdit ? null : undefined),
+      lengthCm: form.lengthCm ? Number(form.lengthCm) : (isEdit ? null : undefined),
+      notes: form.notes.trim() || (isEdit ? null : undefined),
+      photoDataUrl: form.photoDataUrl || (isEdit ? null : undefined),
+      compatibleRelingTypes: form.compatibleRelingTypes.length ? form.compatibleRelingTypes : (isEdit ? null : undefined),
+      minVehicleWidthCm: form.minVehicleWidthCm ? Number(form.minVehicleWidthCm) : (isEdit ? null : undefined),
+      maxVehicleWidthCm: form.maxVehicleWidthCm ? Number(form.maxVehicleWidthCm) : (isEdit ? null : undefined),
       isActive: form.isActive,
     };
 
