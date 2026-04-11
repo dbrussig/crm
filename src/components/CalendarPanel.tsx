@@ -17,6 +17,10 @@ import {
 import { modifyResource } from '../services/resourceService';
 import { generateInternalAccessoryCalendarEventsForInvoice, trySyncAccessoryCalendarEvents } from '../services/accessoryCalendarSyncService';
 
+function cn(...classes: Array<string | false | null | undefined>): string {
+  return classes.filter(Boolean).join(' ');
+}
+
 function fmtDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -27,6 +31,39 @@ function fmtDateMs(ms: number): string {
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return String(ms);
   return d.toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+type AccessoryMonthBar = {
+  id: string;
+  invoiceId: string;
+  kind: AccessoryCalendarEvent['kind'];
+  title: string;
+  startIdx: number;
+  endExcl: number;
+  track: number;
+  syncStatus: AccessoryCalendarEvent['syncStatus'];
+  lastError: string | null;
+};
+
+function splitAccessoryBarLabel(e: { kind: string; title: string }): { primary: string; secondary: string } {
+  const raw = String(e.title || '').trim();
+  if (!raw) return { primary: '(ohne Titel)', secondary: '' };
+  const parts = raw.split(' – ').map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return { primary: raw, secondary: '' };
+
+  // Booking: Buyer – Träger #12 – 50 € / 135 €
+  if (e.kind === 'booking') {
+    return {
+      primary: parts.slice(0, 2).join(' – ') || raw,
+      secondary: parts.slice(2).join(' – '),
+    };
+  }
+
+  // Pickup/Return: Abholung – Buyer – Träger #12
+  return {
+    primary: parts.slice(0, 2).join(' – ') || raw,
+    secondary: parts.slice(2).join(' – '),
+  };
 }
 
 export default function CalendarPanel(props: {
@@ -314,6 +351,119 @@ export default function CalendarPanel(props: {
     }
     return map;
   }, [accessoryCalendarEvents, dayStarts, monthRange.daysInMonth, roofRacks]);
+
+  const todayIdx = useMemo(() => {
+    const now = new Date();
+    if (now.getFullYear() !== monthRange.year) return -1;
+    if (now.getMonth() !== monthRange.month) return -1;
+    return now.getDate() - 1;
+  }, [monthRange.month, monthRange.year]);
+
+  const rackDotById = useMemo(() => {
+    const dots = [
+      'bg-emerald-500',
+      'bg-blue-500',
+      'bg-amber-400',
+      'bg-purple-500',
+      'bg-rose-400',
+      'bg-indigo-500',
+      'bg-cyan-500',
+      'bg-orange-500',
+    ];
+    const map = new Map<string, string>();
+    for (let i = 0; i < roofRacks.length; i++) {
+      map.set(roofRacks[i].id, dots[i % dots.length]);
+    }
+    return map;
+  }, [roofRacks]);
+
+  const rackRowLayout = useMemo(() => {
+    const monthStart = monthRange.startMs;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const startOfDay = (ms: number) => {
+      const d = new Date(ms);
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    };
+
+    const kindWeight: Record<string, number> = { booking: 0, pickup: 1, return: 2 };
+
+    const layoutByRackId = new Map<
+      string,
+      {
+        rowStart: number;
+        rowSpan: number;
+        bars: AccessoryMonthBar[];
+      }
+    >();
+
+    let rowStart = 2; // header = row 1
+
+    for (const rack of roofRacks) {
+      const ev = accessoryEventsByAccessoryId.get(rack.id) || [];
+      const rawBars: Omit<AccessoryMonthBar, 'track'>[] = ev
+        .filter((e) => e.kind === 'booking' || e.kind === 'pickup' || e.kind === 'return')
+        .filter((e) => e.startTime < monthRange.endMs && e.endTime > monthRange.startMs)
+        .map((e) => {
+          const s0 = startOfDay(e.startTime);
+          const e0 = startOfDay(Math.max(e.startTime, e.endTime - 1));
+          const startIdx = Math.max(0, Math.min(monthRange.daysInMonth - 1, Math.floor((s0 - monthStart) / dayMs)));
+          const endIdxIncl = Math.max(0, Math.min(monthRange.daysInMonth - 1, Math.floor((e0 - monthStart) / dayMs)));
+          const endExcl = Math.max(startIdx + 1, Math.min(monthRange.daysInMonth, endIdxIncl + 1));
+          return {
+            id: e.id,
+            invoiceId: e.invoiceId,
+            kind: e.kind,
+            title: e.title,
+            startIdx,
+            endExcl,
+            syncStatus: e.syncStatus,
+            lastError: e.lastError ?? null,
+          };
+        });
+
+      // Prefer booking in track 0, then stack pickup/return under it when overlapping.
+      rawBars.sort((a, b) => {
+        const wa = kindWeight[String(a.kind)] ?? 9;
+        const wb = kindWeight[String(b.kind)] ?? 9;
+        if (wa !== wb) return wa - wb;
+        const da = a.endExcl - a.startIdx;
+        const db = b.endExcl - b.startIdx;
+        if (db !== da) return db - da;
+        return a.startIdx - b.startIdx;
+      });
+
+      const tracks: AccessoryMonthBar[][] = [];
+      const bars: AccessoryMonthBar[] = [];
+
+      for (const b of rawBars) {
+        let pick = 0;
+        while (true) {
+          const t = tracks[pick] || [];
+          const overlap = t.some((x) => b.startIdx < x.endExcl && b.endExcl > x.startIdx);
+          if (!overlap) break;
+          pick += 1;
+        }
+        if (!tracks[pick]) tracks[pick] = [];
+        const bar: AccessoryMonthBar = { ...b, track: pick };
+        tracks[pick].push(bar);
+        bars.push(bar);
+      }
+
+      const rowSpan = Math.max(tracks.length, 1);
+      layoutByRackId.set(rack.id, { rowStart, rowSpan, bars });
+      rowStart += rowSpan;
+    }
+
+    return { layoutByRackId, totalRows: rowStart - 1 };
+  }, [
+    accessoryEventsByAccessoryId,
+    monthRange.daysInMonth,
+    monthRange.endMs,
+    monthRange.month,
+    monthRange.startMs,
+    monthRange.year,
+    roofRacks,
+  ]);
 
   return (
     <div className="max-w-7xl">
@@ -615,105 +765,119 @@ export default function CalendarPanel(props: {
             {roofRacks.length === 0 ? (
               <div className="mt-3 text-sm text-slate-600">Keine aktiven Dachträger im Zubehörkatalog.</div>
             ) : (
-              <div className="mt-3 overflow-auto rounded-lg border border-slate-200">
+              <div className="mt-3 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
                 <div
                   className="grid text-[11px] leading-none"
                   style={{ gridTemplateColumns: `240px repeat(${monthRange.daysInMonth}, 32px)` }}
                 >
                   {/* Header */}
-                  <div className="sticky left-0 z-20 bg-slate-50 border-b border-r border-slate-200 px-3 py-2 font-semibold text-slate-600">
+                  <div className="sticky left-0 z-30 bg-slate-50 border-b border-r border-slate-200 px-3 py-2 font-semibold text-slate-600">
                     Dachträger
                   </div>
                   {Array.from({ length: monthRange.daysInMonth }).map((_, i) => {
                     const day = i + 1;
-                    const dow = new Date(monthRange.year, monthRange.month, day).getDay(); // 0=So
+                    const date = new Date(monthRange.year, monthRange.month, day);
+                    const dow = date.getDay(); // 0=So
                     const isWeekend = dow === 0 || dow === 6;
+                    const isToday = todayIdx === i;
+                    const dowLabel = date
+                      .toLocaleDateString('de-DE', { weekday: 'short' })
+                      .replace('.', '')
+                      .toUpperCase();
                     return (
                       <div
                         key={`hdr-${day}`}
-                        className={[
-                          'border-b border-slate-200 px-1 py-2 text-center font-semibold',
-                          isWeekend ? 'bg-slate-50 text-slate-500' : 'bg-slate-50 text-slate-600',
-                        ].join(' ')}
-                        title={new Date(monthRange.year, monthRange.month, day).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}
+                        className={cn(
+                          'border-b border-r border-slate-200 px-1 py-2 text-center',
+                          isWeekend ? 'bg-slate-50/80' : 'bg-slate-50',
+                          isToday && 'bg-blue-50'
+                        )}
+                        title={date.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}
                       >
-                        {day}
+                        <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{dowLabel}</div>
+                        <div className="mt-1 flex justify-center">
+                          <span
+                            className={cn(
+                              'h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors',
+                              isToday ? 'bg-blue-600 text-white shadow-sm shadow-blue-200' : 'text-slate-700'
+                            )}
+                          >
+                            {day}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
 
                   {/* Rows */}
                   {roofRacks.map((rack, rowIdx) => {
-                    const row = 2 + rowIdx;
+                    const layout = rackRowLayout.layoutByRackId.get(rack.id);
+                    const row = layout?.rowStart ?? 2 + rowIdx;
+                    const rowSpan = layout?.rowSpan ?? 1;
                     const counts = occupancyCountByAccessoryDay.get(rack.id) || new Array(monthRange.daysInMonth).fill(0);
-                    const ev = accessoryEventsByAccessoryId.get(rack.id) || [];
+                    const dot = rackDotById.get(rack.id) || 'bg-slate-400';
 
-                    const startOfDay = (ms: number) => {
-                      const d = new Date(ms);
-                      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                    };
-                    const monthStart = monthRange.startMs;
-                    const dayMs = 24 * 60 * 60 * 1000;
+                    const bars = (layout?.bars || []).map((e) => {
+                      const gcStart = 2 + e.startIdx;
+                      const gcEnd = 2 + e.endExcl;
+                      const isFailed = e.syncStatus === 'failed';
+                      const isPending = e.syncStatus !== 'synced';
 
-                    const bars = ev
-                      .filter((e) => e.kind === 'booking' || e.kind === 'pickup' || e.kind === 'return')
-                      .map((e) => {
-                        const s0 = startOfDay(e.startTime);
-                        const e0 = startOfDay(Math.max(e.startTime, e.endTime - 1));
-                        const startIdx = Math.max(0, Math.min(monthRange.daysInMonth - 1, Math.floor((s0 - monthStart) / dayMs)));
-                        const endIdxIncl = Math.max(0, Math.min(monthRange.daysInMonth - 1, Math.floor((e0 - monthStart) / dayMs)));
-                        const endExcl = Math.max(startIdx + 1, Math.min(monthRange.daysInMonth, endIdxIncl + 1));
-                        const gcStart = 2 + startIdx;
-                        const gcEnd = 2 + endExcl;
-                        const isFailed = e.syncStatus === 'failed';
-                        const isPending = e.syncStatus !== 'synced';
-                        const baseTone =
-                          e.kind === 'booking'
-                            ? 'bg-blue-600'
-                            : e.kind === 'pickup'
-                              ? 'bg-slate-700'
-                              : 'bg-slate-500';
-                        const label =
-                          e.kind === 'booking'
-                            ? e.title
-                            : e.kind === 'pickup'
-                              ? 'Abholung'
-                              : 'Rückgabe';
-                        return (
-                          <button
-                            key={e.id}
-                            type="button"
-                            className={[
-                              'z-10 h-5 mx-0.5 my-0.5 rounded-md px-1 text-left truncate text-white shadow-sm',
-                              baseTone,
-                              isFailed ? 'ring-2 ring-red-400' : '',
-                              isPending ? 'opacity-80' : '',
-                              'hover:opacity-100',
-                            ].join(' ')}
-                            style={{ gridColumn: `${gcStart} / ${gcEnd}`, gridRow: String(row) }}
-                            title={`${e.title}\n\nStatus: ${e.syncStatus}${e.lastError ? `\n${e.lastError}` : ''}`}
-                            onClick={() => props.onOpenInvoice?.(e.invoiceId)}
-                          >
-                            {label}
-                          </button>
-                        );
-                      });
+                      const baseTone =
+                        e.kind === 'booking'
+                          ? 'bg-blue-600 border-blue-700'
+                          : e.kind === 'pickup'
+                            ? 'bg-slate-800 border-slate-900'
+                            : 'bg-slate-600 border-slate-700';
+
+                      const label = splitAccessoryBarLabel(e);
+
+                      return (
+                        <button
+                          key={e.id}
+                          type="button"
+                          className={cn(
+                            'z-10 mx-0.5 my-0.5 rounded-md px-2 py-1 text-left text-white shadow-sm border',
+                            'transition-all hover:brightness-[0.98] active:scale-[0.99]',
+                            baseTone,
+                            isFailed && 'ring-2 ring-red-400',
+                            isPending && 'opacity-85 hover:opacity-100'
+                          )}
+                          style={{ gridColumn: `${gcStart} / ${gcEnd}`, gridRow: String(row + (e.track || 0)) }}
+                          title={`${e.title}\n\nStatus: ${e.syncStatus}${e.lastError ? `\n${e.lastError}` : ''}`}
+                          onClick={() => props.onOpenInvoice?.(e.invoiceId)}
+                        >
+                          <span className="flex items-start gap-1.5 w-full min-w-0">
+                            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0 mt-1.5', dot)} />
+                            <span className="flex-1 min-w-0 leading-tight">
+                              <span className="block truncate font-bold text-[10px]">{label.primary}</span>
+                              {label.secondary ? (
+                                <span className="block truncate text-[9px] mt-0.5 text-white/80 font-medium">{label.secondary}</span>
+                              ) : null}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    });
 
                     return (
                       <div key={`row-${rack.id}`} className="contents">
                         <div
-                          className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 px-3 py-2 text-xs font-medium text-slate-900 truncate"
-                          style={{ gridRow: String(row) }}
+                          className="sticky left-0 z-30 bg-white border-b border-r border-slate-200 px-3 py-2 text-xs font-medium text-slate-900 truncate flex items-center gap-2"
+                          style={{ gridRow: `${row} / ${row + rowSpan}` }}
                           title={`${String(rack.inventoryKey || '').trim() ? `#${rack.inventoryKey} — ` : ''}${rack.name}`}
                         >
+                          <span className={cn('w-2.5 h-2.5 rounded-full ring-2 ring-white shadow-sm', dot)} />
                           {String(rack.inventoryKey || '').trim() ? `#${rack.inventoryKey} — ` : ''}{rack.name}
                         </div>
 
                         {Array.from({ length: monthRange.daysInMonth }).map((_, i) => {
                           const day = i + 1;
-                          const dow = new Date(monthRange.year, monthRange.month, day).getDay();
+                          const date = new Date(monthRange.year, monthRange.month, day);
+                          const dow = date.getDay();
                           const isWeekend = dow === 0 || dow === 6;
                           const c = counts[i] || 0;
+                          const isToday = todayIdx === i;
                           const cls =
                             c > 1
                               ? 'bg-red-50'
@@ -731,8 +895,12 @@ export default function CalendarPanel(props: {
                           return (
                             <div
                               key={`cell-${rack.id}-${day}`}
-                              className={['border-b border-slate-100', cls].join(' ')}
-                              style={{ gridRow: String(row) }}
+                              className={cn(
+                                'border-b border-r border-slate-100',
+                                cls,
+                                isToday && 'bg-blue-50/40'
+                              )}
+                              style={{ gridRow: `${row} / ${row + rowSpan}` }}
                               title={title}
                             />
                           );
