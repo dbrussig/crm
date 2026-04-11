@@ -264,6 +264,7 @@ export async function createFollowUpInvoiceFromInvoice(
     id: `item_${now}_${idx}_${Math.random().toString(16).slice(2)}`,
     invoiceId: newId,
     createdAt: now,
+    assignedAccessoryId: (it as any).assignedAccessoryId ?? null,
   }));
 
   await addInvoice(next, nextItems);
@@ -334,6 +335,7 @@ export async function reissueInvoice(invoiceId: string): Promise<string> {
     id: `item_${now}_${idx}_${Math.random().toString(16).slice(2)}`,
     invoiceId: newId,
     createdAt: now,
+    assignedAccessoryId: (it as any).assignedAccessoryId ?? null,
   }));
 
   await addInvoice(next, nextItems);
@@ -391,6 +393,8 @@ export async function createInvoiceFromRental(
     quantity: it.quantity,
     taxPercent: it.taxPercent ?? 0,
     createdAt: now,
+    withCarrier: false,
+    assignedAccessoryId: null,
   }));
 
   await addInvoice(invoice, invoiceItems);

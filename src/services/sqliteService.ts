@@ -193,7 +193,14 @@ async function saveInvoices(invoices: Invoice[]) {
 }
 
 async function loadInvoiceItems(): Promise<InvoiceItem[]> {
-  return loadJson<InvoiceItem[]>(KEY_INVOICE_ITEMS, []);
+  const raw = await loadJson<any[]>(KEY_INVOICE_ITEMS, []);
+  return raw.map((it) => ({
+    ...it,
+    withCarrier: Boolean(it?.withCarrier),
+    assignedAccessoryId: typeof it?.assignedAccessoryId === 'string'
+      ? (it.assignedAccessoryId.trim() || null)
+      : (it?.assignedAccessoryId ?? null),
+  })) as InvoiceItem[];
 }
 async function saveInvoiceItems(items: InvoiceItem[]) {
   if (isDesktopApp()) {
@@ -679,11 +686,129 @@ export async function deleteInvoice(id: string): Promise<void> {
 
 export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
   if (isDesktopApp()) {
-    return await invokeDesktopCommand<InvoiceItem[]>('list_invoice_items', { invoiceId });
+    const rows = await invokeDesktopCommand<any[]>('list_invoice_items', { invoiceId });
+    return (rows || []).map((it) => ({
+      ...it,
+      withCarrier: Boolean(it?.withCarrier),
+      assignedAccessoryId: typeof it?.assignedAccessoryId === 'string'
+        ? (it.assignedAccessoryId.trim() || null)
+        : (it?.assignedAccessoryId ?? null),
+    })) as InvoiceItem[];
   }
   return (await loadInvoiceItems())
     .filter((it) => it.invoiceId === invoiceId)
     .sort((a, b) => a.orderIndex - b.orderIndex);
+}
+
+export type AccessoryAvailabilityConflict = {
+  invoiceId: string;
+  invoiceNo: string;
+  invoiceType: Invoice['invoiceType'];
+  invoiceState: Invoice['state'];
+  servicePeriodStart?: number;
+  servicePeriodEnd?: number;
+};
+
+export type AccessoryAvailabilityResult = {
+  isAvailable: boolean;
+  conflict?: AccessoryAvailabilityConflict;
+};
+
+function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  if (!Number.isFinite(aStart) || !Number.isFinite(aEnd) || !Number.isFinite(bStart) || !Number.isFinite(bEnd)) return false;
+  if (aStart >= aEnd || bStart >= bEnd) return false;
+  // Half-open intervals: [start, end)
+  return aStart < bEnd && bStart < aEnd;
+}
+
+export async function checkAccessoryAvailability(
+  accessoryId: string,
+  startMs: number,
+  endMs: number,
+  opts?: { excludeInvoiceId?: string; excludeInvoiceItemId?: string }
+): Promise<AccessoryAvailabilityResult> {
+  const id = String(accessoryId || '').trim();
+  if (!id) return { isAvailable: true };
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return { isAvailable: true };
+
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<AccessoryAvailabilityResult>('check_accessory_availability', {
+      accessoryId: id,
+      startMs,
+      endMs,
+      excludeInvoiceId: opts?.excludeInvoiceId,
+      excludeInvoiceItemId: opts?.excludeInvoiceItemId,
+    });
+  }
+
+  const [invoices, items] = await Promise.all([loadInvoices(), loadInvoiceItems()]);
+  const invoiceById = new Map(invoices.map((inv) => [inv.id, inv]));
+
+  for (const it of items) {
+    if (String(it.assignedAccessoryId || '').trim() !== id) continue;
+    if (opts?.excludeInvoiceItemId && it.id === opts.excludeInvoiceItemId) continue;
+    if (opts?.excludeInvoiceId && it.invoiceId === opts.excludeInvoiceId) continue;
+    const inv = invoiceById.get(it.invoiceId);
+    if (!inv) continue;
+    if (inv.state === 'storniert' || inv.state === 'abgelehnt' || inv.state === 'archiviert') continue;
+    if (typeof inv.servicePeriodStart !== 'number' || typeof inv.servicePeriodEnd !== 'number') continue;
+    if (!rangesOverlap(startMs, endMs, inv.servicePeriodStart, inv.servicePeriodEnd)) continue;
+    return {
+      isAvailable: false,
+      conflict: {
+        invoiceId: inv.id,
+        invoiceNo: inv.invoiceNo,
+        invoiceType: inv.invoiceType,
+        invoiceState: inv.state,
+        servicePeriodStart: inv.servicePeriodStart,
+        servicePeriodEnd: inv.servicePeriodEnd,
+      },
+    };
+  }
+
+  return { isAvailable: true };
+}
+
+export type AccessoryBooking = {
+  accessoryId: string;
+  invoiceId: string;
+  invoiceNo: string;
+  invoiceType: Invoice['invoiceType'];
+  invoiceState: Invoice['state'];
+  servicePeriodStart: number;
+  servicePeriodEnd: number;
+};
+
+export async function listAccessoryBookings(startMs: number, endMs: number): Promise<AccessoryBooking[]> {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return [];
+
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<AccessoryBooking[]>('list_accessory_bookings', { startMs, endMs });
+  }
+
+  const [invoices, items] = await Promise.all([loadInvoices(), loadInvoiceItems()]);
+  const invoiceById = new Map(invoices.map((inv) => [inv.id, inv]));
+  const out: AccessoryBooking[] = [];
+  for (const it of items) {
+    const accessoryId = String(it.assignedAccessoryId || '').trim();
+    if (!accessoryId) continue;
+    const inv = invoiceById.get(it.invoiceId);
+    if (!inv) continue;
+    if (inv.state === 'storniert' || inv.state === 'abgelehnt' || inv.state === 'archiviert') continue;
+    if (typeof inv.servicePeriodStart !== 'number' || typeof inv.servicePeriodEnd !== 'number') continue;
+    if (!rangesOverlap(startMs, endMs, inv.servicePeriodStart, inv.servicePeriodEnd)) continue;
+    out.push({
+      accessoryId,
+      invoiceId: inv.id,
+      invoiceNo: inv.invoiceNo,
+      invoiceType: inv.invoiceType,
+      invoiceState: inv.state,
+      servicePeriodStart: inv.servicePeriodStart,
+      servicePeriodEnd: inv.servicePeriodEnd,
+    });
+  }
+  out.sort((a, b) => a.servicePeriodStart - b.servicePeriodStart);
+  return out;
 }
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────

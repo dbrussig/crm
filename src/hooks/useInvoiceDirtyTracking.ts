@@ -65,6 +65,7 @@ export function useInvoiceDirtyTracking({
         quantity: it.quantity,
         taxPercent: it.taxPercent,
         withCarrier: it.withCarrier,
+        assignedAccessoryId: it.assignedAccessoryId,
       })),
     });
   };

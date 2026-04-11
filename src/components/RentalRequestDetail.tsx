@@ -645,6 +645,8 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
         quantity: 1,
         taxPercent: 0,
         createdAt: Date.now(),
+        withCarrier: false,
+        assignedAccessoryId: null,
       },
     ];
 

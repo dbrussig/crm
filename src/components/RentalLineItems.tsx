@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import type { InvoiceItem, Resource } from '../types';
+import type { InvoiceItem, RentalAccessory, Resource } from '../types';
 import { RENTAL_PRODUCTS, getSuggestedPrice, DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL } from '../config/rentalCatalog';
+import { checkAccessoryAvailability } from '../services/sqliteService';
 
 interface RentalLineItemsProps {
   items: InvoiceItem[];
@@ -10,6 +11,10 @@ interface RentalLineItemsProps {
   onUpdate: (index: number, field: keyof InvoiceItem, value: string | number | boolean) => void;
   onUpdateMulti?: (index: number, updates: Partial<InvoiceItem>) => void;
   resources?: Resource[];
+  accessories?: RentalAccessory[];
+  invoiceId?: string;
+  servicePeriodStartMs?: number;
+  servicePeriodEndMs?: number;
 }
 
 const RESOURCE_TYPE_TO_CATALOG_KEY: Record<string, string> = {
@@ -21,10 +26,22 @@ const RESOURCE_TYPE_TO_CATALOG_KEY: Record<string, string> = {
   'Hüpfburg': 'huepfburg',
 };
 
-export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUpdateMulti, resources }: RentalLineItemsProps) {
+export default function RentalLineItems({
+  items,
+  onAdd,
+  onRemove,
+  onUpdate,
+  onUpdateMulti,
+  resources,
+  accessories,
+  invoiceId,
+  servicePeriodStartMs,
+  servicePeriodEndMs,
+}: RentalLineItemsProps) {
   const useResources = resources && resources.length > 0;
   const firstSelectRef = useRef<HTMLSelectElement | null>(null);
   const prevLengthRef = useRef(items.length);
+  const [accessoryErrorByItemId, setAccessoryErrorByItemId] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (items.length > prevLengthRef.current && firstSelectRef.current) {
@@ -37,6 +54,80 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
     if (onUpdateMulti) { onUpdateMulti(index, updates); return; }
     Object.entries(updates).forEach(([k, v]) => onUpdate(index, k as keyof InvoiceItem, v as string | number | boolean));
   };
+
+  const accessoriesMap = useMemo(() => {
+    const map = new Map<string, RentalAccessory>();
+    for (const a of accessories ?? []) map.set(a.id, a);
+    return map;
+  }, [accessories]);
+
+  const formatAccessoryShort = useMemo(
+    () => (accessoryId: string): string => {
+      const a = accessoriesMap.get(accessoryId);
+      if (!a) return `Träger (${accessoryId})`;
+      const key = String(a.inventoryKey || '').trim();
+      if (key) return /^#/.test(key) ? `Träger ${key}` : `Träger #${key}`;
+      return `Träger ${a.name || a.id}`;
+    },
+    [accessoriesMap]
+  );
+
+  const formatInvoiceNo = useMemo(
+    () => (invoiceNo?: string): string => {
+      const no = String(invoiceNo || '').trim();
+      if (!no) return '#—';
+      return no.startsWith('#') ? no : `#${no}`;
+    },
+    []
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      // No period => clear all local error markers.
+      if (!servicePeriodStartMs || !servicePeriodEndMs) {
+        setAccessoryErrorByItemId((prev) => (Object.keys(prev).length ? {} : prev));
+        return;
+      }
+
+      const relevant = items.filter((it) => Boolean(it.withCarrier) && Boolean(it.assignedAccessoryId));
+      if (relevant.length === 0) {
+        setAccessoryErrorByItemId((prev) => (Object.keys(prev).length ? {} : prev));
+        return;
+      }
+
+      const checks = await Promise.all(relevant.map(async (it) => {
+        const accessoryId = String(it.assignedAccessoryId || '').trim();
+        if (!accessoryId) return { itemId: it.id, message: '' };
+        try {
+          const res = await checkAccessoryAvailability(accessoryId, servicePeriodStartMs, servicePeriodEndMs, {
+            excludeInvoiceId: invoiceId || undefined,
+            excludeInvoiceItemId: it.id,
+          });
+          if (res.isAvailable) return { itemId: it.id, message: '' };
+          const msg = `${formatAccessoryShort(accessoryId)} ist in diesem Zeitraum bereits durch Beleg ${formatInvoiceNo(res.conflict?.invoiceNo)} vergeben.`;
+          return { itemId: it.id, message: msg };
+        } catch (e: any) {
+          const msg = `${formatAccessoryShort(accessoryId)} konnte nicht geprüft werden: ${e?.message || String(e)}`;
+          return { itemId: it.id, message: msg };
+        }
+      }));
+
+      if (cancelled) return;
+
+      setAccessoryErrorByItemId(() => {
+        const next: Record<string, string> = {};
+        for (const { itemId, message } of checks) {
+          if (message) next[itemId] = message;
+        }
+        return next;
+      });
+    }
+
+    void run();
+    return () => { cancelled = true; };
+  }, [items, invoiceId, servicePeriodStartMs, servicePeriodEndMs, formatAccessoryShort, formatInvoiceNo]);
 
   const handleProductChange = (index: number, productKey: string) => {
     if (useResources) {
@@ -117,6 +208,7 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
         const isWochenMode = durationMode === 'Wochen';
         const lineTotal = (item.unitPrice || 0) * (item.quantity || 1);
         const isLast = index === items.length - 1;
+        const accessoryError = accessoryErrorByItemId[item.id] || '';
 
         return (
           <div
@@ -154,7 +246,14 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
                 <input
                   type="checkbox"
                   checked={Boolean(item.withCarrier)}
-                  onChange={(e) => onUpdate(index, 'withCarrier', e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    if (!checked) {
+                      applyUpdate(index, { withCarrier: false, assignedAccessoryId: null });
+                    } else {
+                      applyUpdate(index, { withCarrier: true });
+                    }
+                  }}
                   className="sr-only"
                   aria-label={`Position ${index + 1}: mit Träger`}
                 />
@@ -254,6 +353,52 @@ export default function RentalLineItems({ items, onAdd, onRemove, onUpdate, onUp
                 <Trash2 size={15} aria-hidden="true" />
               </button>
             </div>
+
+            {/* Internes Zubehör (Träger) */}
+            {item.withCarrier && (
+              <div style={{ gridColumn: '1 / -1' }} className="pt-2 pb-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-start">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor={`carrier-${index}`}>
+                      Träger zuweisen
+                    </label>
+                    <select
+                      id={`carrier-${index}`}
+                      value={String(item.assignedAccessoryId || '')}
+                      onChange={(e) => {
+                        const nextId = String(e.target.value || '').trim();
+                        applyUpdate(index, { assignedAccessoryId: nextId ? nextId : null });
+                      }}
+                      className={[
+                        fieldCls,
+                        'w-full',
+                        accessoryError ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500' : '',
+                      ].join(' ')}
+                      title={accessoryError || undefined}
+                      aria-invalid={accessoryError ? 'true' : 'false'}
+                    >
+                      <option value="">Bitte auswählen…</option>
+                      {(accessories ?? [])
+                        .slice()
+                        .sort((a, b) => String(a.inventoryKey || a.name).localeCompare(String(b.inventoryKey || b.name), 'de'))
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {String(a.inventoryKey || '').trim() ? `#${String(a.inventoryKey).trim()} — ` : ''}{a.name}
+                          </option>
+                        ))}
+                    </select>
+                    {accessoryError ? (
+                      <div className="mt-1 text-xs text-red-600">{accessoryError}</div>
+                    ) : null}
+                    {!servicePeriodStartMs || !servicePeriodEndMs ? (
+                      <div className="mt-1 text-xs text-slate-500">
+                        Hinweis: Bitte Mietzeitraum setzen, damit die Verfügbarkeit geprüft werden kann.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}

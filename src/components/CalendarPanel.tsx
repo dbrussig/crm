@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Resource } from '../types';
+import type { RentalAccessory, Resource } from '../types';
 import { listCalendarsWithClientId, type GoogleCalendarListEntry, listEventsWithClientId, type GoogleCalendarEvent } from '../services/googleCalendarService';
-import { getAllResources } from '../services/sqliteService';
+import { getAllAccessories, getAllResources, listAccessoryBookings, type AccessoryBooking } from '../services/sqliteService';
 import { modifyResource } from '../services/resourceService';
 
 function fmtDateTime(iso: string): string {
@@ -10,12 +10,20 @@ function fmtDateTime(iso: string): string {
   return d.toLocaleString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+function fmtDateMs(ms: number): string {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return String(ms);
+  return d.toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
 export default function CalendarPanel(props: { clientId: string; enabled: boolean; onOpenSettings?: () => void }) {
   const [calendars, setCalendars] = useState<GoogleCalendarListEntry[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [accessories, setAccessories] = useState<RentalAccessory[]>([]);
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>('');
   const [days, setDays] = useState<number>(14);
   const [events, setEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [accessoryBookings, setAccessoryBookings] = useState<AccessoryBooking[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assignBusyId, setAssignBusyId] = useState<string | null>(null);
@@ -32,17 +40,33 @@ export default function CalendarPanel(props: { clientId: string; enabled: boolea
     return map;
   }, [resources]);
 
+  const accessoryById = useMemo(() => {
+    const map = new Map<string, RentalAccessory>();
+    for (const a of accessories) map.set(a.id, a);
+    return map;
+  }, [accessories]);
+
+  const accessoryLabel = (accessoryId: string): string => {
+    const a = accessoryById.get(accessoryId);
+    if (!a) return accessoryId;
+    const key = String(a.inventoryKey || '').trim();
+    if (key) return `${key.startsWith('#') ? key : `#${key}`} — ${a.name}`;
+    return a.name || accessoryId;
+  };
+
   async function loadCalendars() {
     if (!canUse) return;
     setLoading(true);
     setError(null);
     try {
-      const [cals, res] = await Promise.all([
+      const [cals, res, acc] = await Promise.all([
         listCalendarsWithClientId({ clientId: props.clientId }),
         getAllResources(),
+        getAllAccessories(),
       ]);
       setCalendars(cals);
       setResources(res);
+      setAccessories(acc);
       if (!selectedCalendarId) {
         const firstResourceCal = res.find((r) => r.googleCalendarId)?.googleCalendarId;
         const pick = firstResourceCal || cals.find((c) => c.primary)?.id || cals[0]?.id || '';
@@ -78,16 +102,40 @@ export default function CalendarPanel(props: { clientId: string; enabled: boolea
     }
   }
 
+  async function loadAccessoryBookings(rangeDays: number) {
+    setError(null);
+    try {
+      const start = new Date();
+      const end = new Date(start.getTime() + Math.max(1, rangeDays) * 24 * 60 * 60 * 1000);
+      const rows = await listAccessoryBookings(start.getTime(), end.getTime());
+      setAccessoryBookings(rows);
+    } catch (e: any) {
+      setAccessoryBookings([]);
+      setError(e?.message || String(e));
+    }
+  }
+
   useEffect(() => {
     void loadCalendars();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canUse]);
 
   useEffect(() => {
+    // Local sources should also work when Google is not connected.
+    getAllResources().then(setResources).catch(() => {});
+    getAllAccessories().then(setAccessories).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!selectedCalendarId) return;
     void loadEvents(selectedCalendarId, days);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCalendarId, days, canUse]);
+
+  useEffect(() => {
+    void loadAccessoryBookings(days);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
 
   const selectedLabel = (() => {
     if (!selectedCalendarId) return '';
@@ -260,7 +308,7 @@ export default function CalendarPanel(props: { clientId: string; enabled: boolea
             ) : (
               <div className="mt-3 space-y-2 max-h-[55vh] overflow-auto">
                 {events.map((e) => (
-                  <div key={e.id} className="rounded-lg border border-slate-200 p-3">
+                  <div key={e.id} className="rounded-lg border border-slate-200 p-3 border-l-4 border-l-emerald-500 bg-emerald-50/20">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-slate-900 truncate">{e.summary || '(ohne Titel)'}</div>
@@ -290,6 +338,43 @@ export default function CalendarPanel(props: { clientId: string; enabled: boolea
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6">
+            <div className="text-sm font-semibold text-slate-800">Zubehör-Buchungen (intern)</div>
+            <div className="text-xs text-slate-500 mt-1">
+              Blau = Zubehör (intern). Reserviert ab Angebot, fest gebucht ab Auftrag/Rechnung.
+            </div>
+
+            {accessoryBookings.length === 0 ? (
+              <div className="mt-3 text-sm text-slate-600">Keine internen Zubehör-Buchungen im Zeitraum.</div>
+            ) : (
+              <div className="mt-3 space-y-2 max-h-[40vh] overflow-auto">
+                {accessoryBookings.map((b) => {
+                  const badge = b.invoiceType === 'Angebot' ? 'Reserviert' : 'Gebucht';
+                  return (
+                    <div
+                      key={`${b.invoiceId}:${b.accessoryId}:${b.servicePeriodStart}`}
+                      className="rounded-lg border border-slate-200 p-3 border-l-4 border-l-blue-500 bg-blue-50/30"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-slate-900 truncate">
+                            {accessoryLabel(b.accessoryId)}
+                          </div>
+                          <div className="text-xs text-slate-600 mt-0.5">
+                            {fmtDateMs(b.servicePeriodStart)} bis {fmtDateMs(b.servicePeriodEnd)} · Beleg #{b.invoiceNo}
+                          </div>
+                          <div className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {badge}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

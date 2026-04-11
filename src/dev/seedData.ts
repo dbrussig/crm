@@ -284,7 +284,9 @@ const mockInvoiceItems: InvoiceItem[] = [
     unitPrice: 120.00,
     quantity: 1,
     taxPercent: 19,
-    createdAt: 1704153600000
+    createdAt: 1704153600000,
+    withCarrier: false,
+    assignedAccessoryId: null,
   },
   {
     id: 'invoice_item_test_002',
@@ -295,7 +297,9 @@ const mockInvoiceItems: InvoiceItem[] = [
     unitPrice: 12.00,
     quantity: 10,
     taxPercent: 19,
-    createdAt: 1704153600000
+    createdAt: 1704153600000,
+    withCarrier: false,
+    assignedAccessoryId: null,
   },
   {
     id: 'invoice_item_test_003',
@@ -306,7 +310,9 @@ const mockInvoiceItems: InvoiceItem[] = [
     unitPrice: 40.00,
     quantity: 1,
     taxPercent: 19,
-    createdAt: 1704240000000
+    createdAt: 1704240000000,
+    withCarrier: false,
+    assignedAccessoryId: null,
   }
 ];
 

@@ -57,6 +57,8 @@ pub fn run() {
             commands::crm::delete_invoice,
             commands::crm::list_invoice_items,
             commands::crm::replace_invoice_items,
+            commands::crm::check_accessory_availability,
+            commands::crm::list_accessory_bookings,
             commands::crm::list_customer_documents,
             commands::crm::upsert_customer_document,
             commands::crm::update_customer_document_meta,

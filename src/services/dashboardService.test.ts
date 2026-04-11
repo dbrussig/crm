@@ -49,6 +49,7 @@ function makeItem(overrides: Partial<InvoiceItem> = {}): InvoiceItem {
     quantity: 1,
     taxPercent: 19,
     createdAt: now,
+    assignedAccessoryId: null,
     ...overrides,
   };
 }

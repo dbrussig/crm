@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS invoices (
     rental_request_id TEXT,
     type TEXT NOT NULL,
     number TEXT NOT NULL,
+    state TEXT,
+    service_period_start INTEGER,
+    service_period_end INTEGER,
     total_amount REAL NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
@@ -97,9 +100,11 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     invoice_id TEXT NOT NULL,
     order_index INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
+    assigned_accessory_id TEXT,
     raw_json TEXT NOT NULL,
     FOREIGN KEY (invoice_id) REFERENCES invoices(id)
 );
+
 
 CREATE TABLE IF NOT EXISTS customer_documents (
     id TEXT PRIMARY KEY,

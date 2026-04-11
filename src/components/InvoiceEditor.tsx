@@ -26,7 +26,8 @@ import AutoSaveIndicator from './AutoSaveIndicator';
 import RentalLineItems from './RentalLineItems';
 import { DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL, getSuggestedPrice } from '../config/rentalCatalog';
 import { fetchAllResources } from '../services/resourceService';
-import type { Resource } from '../types';
+import { fetchAllAccessories } from '../services/accessoryService';
+import type { RentalAccessory, Resource } from '../types';
 import InvoiceHeaderFields from './invoice/InvoiceHeaderFields';
 import InvoiceCustomerBlock from './invoice/InvoiceCustomerBlock';
 import { Card } from './invoice/Card';
@@ -148,7 +149,18 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       pickupTime: initialInvoice?.pickupTime || '',
       returnDate: initialInvoice?.returnDate || '',
       returnTime: initialInvoice?.returnTime || '',
-      items: initialItems.length > 0 ? initialItems : [{ id: 'temp_1', invoiceId: '', name: '', orderIndex: 0, unitPrice: 0, quantity: 1, taxPercent: 0, unit: 'Stück', createdAt: Date.now() }],
+      items: initialItems.length > 0 ? initialItems : [{
+        id: 'temp_1',
+        invoiceId: '',
+        name: '',
+        orderIndex: 0,
+        unitPrice: 0,
+        quantity: 1,
+        taxPercent: 0,
+        unit: 'Stück',
+        createdAt: Date.now(),
+        assignedAccessoryId: null,
+      }],
     },
   });
 
@@ -170,6 +182,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [linkedPaymentsLoading, setLinkedPaymentsLoading] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [accessories, setAccessories] = useState<RentalAccessory[]>([]);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentFormBusy, setPaymentFormBusy] = useState(false);
   const [paymentForm, setPaymentForm] = useState<{ kind: 'Anzahlung' | 'Zahlung' | 'Kaution'; method: string; amount: string; receivedAt: string; note: string }>({
@@ -358,6 +371,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   }, []);
 
   useEffect(() => {
+    fetchAllAccessories().then((rows) => setAccessories(rows.filter((a) => a.isActive))).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     getPaymentMethodsConfig().then((methods) => {
       setPaymentMethods(methods);
       const first = methods.find((m) => m.isActive);
@@ -431,10 +448,12 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     const defaultPrice = getSuggestedPrice(DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL);
     append({
       id: `temp_${Date.now()}`, invoiceId: '',
-      name: `Dachbox 524L (XL) inkl. Träger`,
+      name: `Dachbox 524L (XL)`,
       orderIndex: fields.length,
       unitPrice: defaultPrice, quantity: 1, taxPercent: 0,
       unit: DEFAULT_DURATION_LABEL, createdAt: Date.now(),
+      withCarrier: false,
+      assignedAccessoryId: null,
     } as InvoiceItem);
   };
 
@@ -835,6 +854,10 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             items={fields as InvoiceItem[]}
             onAdd={addPosition} onRemove={removePosition} onUpdate={updatePosition} onUpdateMulti={updatePositionMulti}
             resources={resources.length > 0 ? resources : undefined}
+            accessories={accessories}
+            invoiceId={String(initialInvoice?.id || '')}
+            servicePeriodStartMs={servicePeriodStart ? new Date(servicePeriodStart).getTime() : undefined}
+            servicePeriodEndMs={servicePeriodEnd ? new Date(servicePeriodEnd).getTime() : undefined}
           />
         </Card>
 

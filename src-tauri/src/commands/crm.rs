@@ -138,6 +138,30 @@ pub fn replace_invoice_items(app: tauri::AppHandle, invoiceId: String, items: Ve
 }
 
 #[tauri::command]
+pub fn check_accessory_availability(
+    app: tauri::AppHandle,
+    accessoryId: String,
+    startMs: i64,
+    endMs: i64,
+    excludeInvoiceId: Option<String>,
+    excludeInvoiceItemId: Option<String>,
+) -> Result<Value, String> {
+    repository::check_accessory_availability(
+        &app,
+        &accessoryId,
+        startMs,
+        endMs,
+        excludeInvoiceId.as_deref(),
+        excludeInvoiceItemId.as_deref(),
+    )
+}
+
+#[tauri::command]
+pub fn list_accessory_bookings(app: tauri::AppHandle, startMs: i64, endMs: i64) -> Result<Vec<Value>, String> {
+    repository::list_accessory_bookings(&app, startMs, endMs)
+}
+
+#[tauri::command]
 pub fn list_customer_documents(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
     documents::list_customer_documents(&app)
 }

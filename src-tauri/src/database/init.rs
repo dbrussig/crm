@@ -98,6 +98,9 @@ pub fn ensure_database(app: &AppHandle) -> Result<(), BoxError> {
     let connection = Connection::open(db_path)?;
     connection.execute_batch(SCHEMA_SQL)?;
     ensure_payments_invoice_column(&connection)?;
+    ensure_invoices_hybrid_columns(&connection)?;
+    ensure_invoice_items_hybrid_columns(&connection)?;
+    ensure_hybrid_indexes(&connection)?;
     Ok(())
 }
 
@@ -115,5 +118,61 @@ fn ensure_payments_invoice_column(connection: &Connection) -> Result<(), BoxErro
     if !has_invoice_id {
         connection.execute("ALTER TABLE payments ADD COLUMN invoice_id TEXT", [])?;
     }
+    Ok(())
+}
+
+fn ensure_invoices_hybrid_columns(connection: &Connection) -> Result<(), BoxError> {
+    let mut stmt = connection.prepare("PRAGMA table_info(invoices)")?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    let mut has_state = false;
+    let mut has_service_start = false;
+    let mut has_service_end = false;
+    for row in rows {
+        let name = row?;
+        match name.as_str() {
+            "state" => has_state = true,
+            "service_period_start" => has_service_start = true,
+            "service_period_end" => has_service_end = true,
+            _ => {}
+        }
+    }
+    if !has_state {
+        connection.execute("ALTER TABLE invoices ADD COLUMN state TEXT", [])?;
+    }
+    if !has_service_start {
+        connection.execute("ALTER TABLE invoices ADD COLUMN service_period_start INTEGER", [])?;
+    }
+    if !has_service_end {
+        connection.execute("ALTER TABLE invoices ADD COLUMN service_period_end INTEGER", [])?;
+    }
+    Ok(())
+}
+
+fn ensure_invoice_items_hybrid_columns(connection: &Connection) -> Result<(), BoxError> {
+    let mut stmt = connection.prepare("PRAGMA table_info(invoice_items)")?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    let mut has_assigned_accessory_id = false;
+    for row in rows {
+        let name = row?;
+        if name == "assigned_accessory_id" {
+            has_assigned_accessory_id = true;
+            break;
+        }
+    }
+    if !has_assigned_accessory_id {
+        connection.execute("ALTER TABLE invoice_items ADD COLUMN assigned_accessory_id TEXT", [])?;
+    }
+    Ok(())
+}
+
+fn ensure_hybrid_indexes(connection: &Connection) -> Result<(), BoxError> {
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_invoice_items_assigned_accessory_id ON invoice_items(assigned_accessory_id)",
+        [],
+    )?;
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_invoices_service_period ON invoices(service_period_start, service_period_end)",
+        [],
+    )?;
     Ok(())
 }

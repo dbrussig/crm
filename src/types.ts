@@ -472,6 +472,9 @@ export interface InvoiceItem {
   taxPercent: number;
   createdAt: number;
   withCarrier?: boolean;
+  // Optional link to internal accessory catalog (Vermietungszubehör).
+  // Used for internal availability checks (SQLite) and calendar aggregation.
+  assignedAccessoryId: string | null;
 }
 
 export interface InvoiceTemplate {
