@@ -1137,6 +1137,9 @@ export default function App() {
             clientId={googleOAuthSettings.clientId}
             enabled={Boolean(googleOAuthSettings.enabled)}
             onOpenSettings={() => setActiveView('einstellungen')}
+            onOpenInvoice={async (invoiceId) => {
+              await openInvoiceEditorById(invoiceId);
+            }}
           />
         )}
 

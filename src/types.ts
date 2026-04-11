@@ -358,6 +358,32 @@ export interface AvailabilityCheckResult {
   error?: string;
 }
 
+export type AccessoryCalendarEventKind = 'booking' | 'pickup' | 'return';
+export type AccessoryCalendarSyncStatus = 'pending' | 'synced' | 'failed';
+
+export interface AccessoryCalendarEvent {
+  id: string;
+  invoiceId: string;
+  invoiceItemId?: string | null;
+  accessoryId: string;
+  kind: AccessoryCalendarEventKind;
+  title: string;
+  startTime: number; // ms
+  endTime: number; // ms
+  googleCalendarId?: string | null;
+  googleEventId?: string | null;
+  syncStatus: AccessoryCalendarSyncStatus;
+  lastError?: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AccessoryCalendarMapping {
+  accessoryId: string; // accessory id or "__GLOBAL__"
+  googleCalendarId: string;
+  updatedAt: number;
+}
+
 // Gmail (minimal, UI-facing)
 export interface GmailThread {
   id: string;

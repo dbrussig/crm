@@ -162,6 +162,45 @@ pub fn list_accessory_bookings(app: tauri::AppHandle, startMs: i64, endMs: i64) 
 }
 
 #[tauri::command]
+pub fn upsert_accessory_calendar_mapping(
+    app: tauri::AppHandle,
+    accessoryId: String,
+    googleCalendarId: String,
+) -> Result<(), String> {
+    repository::upsert_accessory_calendar_mapping(&app, &accessoryId, &googleCalendarId, chrono::Utc::now().timestamp_millis())
+}
+
+#[tauri::command]
+pub fn delete_accessory_calendar_mapping(app: tauri::AppHandle, accessoryId: String) -> Result<(), String> {
+    repository::delete_accessory_calendar_mapping(&app, &accessoryId)
+}
+
+#[tauri::command]
+pub fn list_accessory_calendar_mappings(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
+    repository::list_accessory_calendar_mappings(&app)
+}
+
+#[tauri::command]
+pub fn upsert_accessory_calendar_event(app: tauri::AppHandle, event: Value) -> Result<(), String> {
+    repository::upsert_accessory_calendar_event(&app, &event)
+}
+
+#[tauri::command]
+pub fn delete_accessory_calendar_events_for_invoice(app: tauri::AppHandle, invoiceId: String) -> Result<(), String> {
+    repository::delete_accessory_calendar_events_for_invoice(&app, &invoiceId)
+}
+
+#[tauri::command]
+pub fn list_accessory_calendar_events_for_invoice(app: tauri::AppHandle, invoiceId: String) -> Result<Vec<Value>, String> {
+    repository::list_accessory_calendar_events_for_invoice(&app, &invoiceId)
+}
+
+#[tauri::command]
+pub fn list_accessory_calendar_events_range(app: tauri::AppHandle, startMs: i64, endMs: i64) -> Result<Vec<Value>, String> {
+    repository::list_accessory_calendar_events_range(&app, startMs, endMs)
+}
+
+#[tauri::command]
 pub fn list_customer_documents(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
     documents::list_customer_documents(&app)
 }

@@ -101,6 +101,7 @@ pub fn ensure_database(app: &AppHandle) -> Result<(), BoxError> {
     ensure_invoices_hybrid_columns(&connection)?;
     ensure_invoice_items_hybrid_columns(&connection)?;
     ensure_hybrid_indexes(&connection)?;
+    ensure_accessory_calendar_tables(&connection)?;
     Ok(())
 }
 
@@ -174,5 +175,49 @@ fn ensure_hybrid_indexes(connection: &Connection) -> Result<(), BoxError> {
         "CREATE INDEX IF NOT EXISTS idx_invoices_service_period ON invoices(service_period_start, service_period_end)",
         [],
     )?;
+    Ok(())
+}
+
+fn ensure_accessory_calendar_tables(connection: &Connection) -> Result<(), BoxError> {
+    // Tables are created via SCHEMA_SQL, but older DBs need the new tables too.
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS accessory_calendar_mappings (
+            accessory_id TEXT PRIMARY KEY,
+            google_calendar_id TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS accessory_calendar_events (
+            id TEXT PRIMARY KEY,
+            invoice_id TEXT NOT NULL,
+            invoice_item_id TEXT,
+            accessory_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            start_time INTEGER NOT NULL,
+            end_time INTEGER NOT NULL,
+            google_calendar_id TEXT,
+            google_event_id TEXT,
+            sync_status TEXT NOT NULL,
+            last_error TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+        )",
+        [],
+    )?;
+
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_accessory_calendar_events_accessory_time ON accessory_calendar_events(accessory_id, start_time, end_time)",
+        [],
+    )?;
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_accessory_calendar_events_invoice_id ON accessory_calendar_events(invoice_id)",
+        [],
+    )?;
+
     Ok(())
 }

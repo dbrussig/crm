@@ -5,7 +5,22 @@
  * public API but back it with localStorage so the UI can run again.
  */
 
-import type { Customer, CustomerDocument, RentalRequest, Message, Resource, Invoice, InvoiceItem, Payment, DocumentCategory, RentalAccessory, Expense, PaymentMethodConfig } from '../types';
+import type {
+  AccessoryCalendarEvent,
+  AccessoryCalendarMapping,
+  Customer,
+  CustomerDocument,
+  RentalRequest,
+  Message,
+  Resource,
+  Invoice,
+  InvoiceItem,
+  Payment,
+  DocumentCategory,
+  RentalAccessory,
+  Expense,
+  PaymentMethodConfig,
+} from '../types';
 import { DEFAULT_PAYMENT_METHODS } from '../types';
 import { deleteKey, loadJson, saveJson } from './_storage';
 import { idbGet, idbSet } from './idbKv';
@@ -809,6 +824,95 @@ export async function listAccessoryBookings(startMs: number, endMs: number): Pro
   }
   out.sort((a, b) => a.servicePeriodStart - b.servicePeriodStart);
   return out;
+}
+
+const ACCESSORY_CALENDAR_GLOBAL_ID = '__GLOBAL__';
+
+export function getAccessoryCalendarGlobalMappingId(): string {
+  return ACCESSORY_CALENDAR_GLOBAL_ID;
+}
+
+export async function listAccessoryCalendarMappings(): Promise<AccessoryCalendarMapping[]> {
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<AccessoryCalendarMapping[]>('list_accessory_calendar_mappings', {});
+  }
+  return loadJson<AccessoryCalendarMapping[]>('mietpark_crm_accessory_calendar_mappings_v1', []);
+}
+
+export async function setAccessoryCalendarMapping(accessoryId: string, googleCalendarId: string): Promise<void> {
+  const aid = String(accessoryId || '').trim();
+  const cid = String(googleCalendarId || '').trim();
+  if (!aid) throw new Error('accessoryId fehlt');
+  if (!cid) throw new Error('googleCalendarId fehlt');
+
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_accessory_calendar_mapping', { accessoryId: aid, googleCalendarId: cid });
+    return;
+  }
+  const now = Date.now();
+  const all = await listAccessoryCalendarMappings();
+  const idx = all.findIndex((x) => x.accessoryId === aid);
+  const row: AccessoryCalendarMapping = { accessoryId: aid, googleCalendarId: cid, updatedAt: now };
+  if (idx >= 0) all[idx] = row;
+  else all.push(row);
+  await saveJson('mietpark_crm_accessory_calendar_mappings_v1', all);
+}
+
+export async function deleteAccessoryCalendarMapping(accessoryId: string): Promise<void> {
+  const aid = String(accessoryId || '').trim();
+  if (!aid) return;
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_accessory_calendar_mapping', { accessoryId: aid });
+    return;
+  }
+  const all = await listAccessoryCalendarMappings();
+  await saveJson('mietpark_crm_accessory_calendar_mappings_v1', all.filter((x) => x.accessoryId !== aid));
+}
+
+export async function upsertAccessoryCalendarEvent(event: AccessoryCalendarEvent): Promise<void> {
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('upsert_accessory_calendar_event', { event });
+    return;
+  }
+  const key = 'mietpark_crm_accessory_calendar_events_v1';
+  const all = await loadJson<AccessoryCalendarEvent[]>(key, []);
+  const idx = all.findIndex((x) => x.id === event.id);
+  if (idx >= 0) all[idx] = event;
+  else all.push(event);
+  await saveJson(key, all);
+}
+
+export async function deleteAccessoryCalendarEventsForInvoice(invoiceId: string): Promise<void> {
+  const id = String(invoiceId || '').trim();
+  if (!id) return;
+  if (isDesktopApp()) {
+    await invokeDesktopCommand('delete_accessory_calendar_events_for_invoice', { invoiceId: id });
+    return;
+  }
+  const key = 'mietpark_crm_accessory_calendar_events_v1';
+  const all = await loadJson<AccessoryCalendarEvent[]>(key, []);
+  await saveJson(key, all.filter((e) => e.invoiceId !== id));
+}
+
+export async function listAccessoryCalendarEventsForInvoice(invoiceId: string): Promise<AccessoryCalendarEvent[]> {
+  const id = String(invoiceId || '').trim();
+  if (!id) return [];
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<AccessoryCalendarEvent[]>('list_accessory_calendar_events_for_invoice', { invoiceId: id });
+  }
+  const all = await loadJson<AccessoryCalendarEvent[]>('mietpark_crm_accessory_calendar_events_v1', []);
+  return all.filter((e) => e.invoiceId === id).sort((a, b) => a.startTime - b.startTime);
+}
+
+export async function listAccessoryCalendarEventsRange(startMs: number, endMs: number): Promise<AccessoryCalendarEvent[]> {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return [];
+  if (isDesktopApp()) {
+    return await invokeDesktopCommand<AccessoryCalendarEvent[]>('list_accessory_calendar_events_range', { startMs, endMs });
+  }
+  const all = await loadJson<AccessoryCalendarEvent[]>('mietpark_crm_accessory_calendar_events_v1', []);
+  return all
+    .filter((e) => e.startTime < endMs && e.endTime > startMs)
+    .sort((a, b) => a.startTime - b.startTime);
 }
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────

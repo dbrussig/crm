@@ -1,6 +1,7 @@
 import type { Invoice, InvoiceItem, InvoiceState, InvoiceTemplate, InvoiceType, RentalStatus } from '../types';
 import { addInvoice, deleteInvoice, getAllInvoices, getInvoiceItems, updateInvoice } from './sqliteService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
+import { deleteAccessoryCalendarForInvoice, syncAccessoryCalendarForInvoice } from './accessoryCalendarSyncService';
 
 export interface SaveInvoiceContext {
   rentalId: string;
@@ -147,6 +148,7 @@ export async function fetchInvoicesByState(state: InvoiceState): Promise<Invoice
 }
 
 export async function removeInvoice(id: string): Promise<void> {
+  await deleteAccessoryCalendarForInvoice(id);
   return deleteInvoice(id);
 }
 
@@ -450,7 +452,14 @@ export async function saveInvoice(
       createdAt: now,
       updatedAt: now,
     };
-    await addInvoice(inv, items);
+    const nextItems = items.map((it) => ({
+      ...it,
+      invoiceId: id,
+      withCarrier: Boolean((it as any).withCarrier),
+      assignedAccessoryId: (it as any).assignedAccessoryId ?? null,
+    })) as InvoiceItem[];
+    await addInvoice(inv, nextItems);
+    await syncAccessoryCalendarForInvoice(inv, nextItems);
     await applySaveContext(context);
     return id;
   }
@@ -462,7 +471,17 @@ export async function saveInvoice(
     }
   }
 
-  await updateInvoice(invoice.id, invoice as Partial<Invoice>, items);
+  const nextItems = items.map((it) => ({
+    ...it,
+    invoiceId: invoice.id!,
+    withCarrier: Boolean((it as any).withCarrier),
+    assignedAccessoryId: (it as any).assignedAccessoryId ?? null,
+  })) as InvoiceItem[];
+  await updateInvoice(invoice.id, invoice as Partial<Invoice>, nextItems);
+  const refreshed = (await getAllInvoices()).find((x) => x.id === invoice.id) || null;
+  if (refreshed) {
+    await syncAccessoryCalendarForInvoice(refreshed, nextItems);
+  }
   await applySaveContext(context);
   return invoice.id;
 }

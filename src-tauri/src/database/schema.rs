@@ -130,6 +130,37 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     FOREIGN KEY (rental_request_id) REFERENCES rental_requests(id)
 );
 
+-- Accessory (roof rack) calendar sync targets (Google calendar id per accessory, plus optional global mapping).
+CREATE TABLE IF NOT EXISTS accessory_calendar_mappings (
+    accessory_id TEXT PRIMARY KEY,
+    google_calendar_id TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- Accessory calendar events stored locally (source of truth for internal calendar UI; can be synced to Google).
+CREATE TABLE IF NOT EXISTS accessory_calendar_events (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL,
+    invoice_item_id TEXT,
+    accessory_id TEXT NOT NULL,
+    kind TEXT NOT NULL, -- booking | pickup | return
+    title TEXT NOT NULL,
+    start_time INTEGER NOT NULL,
+    end_time INTEGER NOT NULL,
+    google_calendar_id TEXT,
+    google_event_id TEXT,
+    sync_status TEXT NOT NULL, -- pending | synced | failed
+    last_error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_accessory_calendar_events_accessory_time
+  ON accessory_calendar_events(accessory_id, start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_accessory_calendar_events_invoice_id
+  ON accessory_calendar_events(invoice_id);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,

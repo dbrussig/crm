@@ -675,6 +675,208 @@ pub fn list_accessory_bookings(app: &AppHandle, start_ms: i64, end_ms: i64) -> R
     Ok(out)
 }
 
+// ─── Accessory calendar mapping + events ──────────────────────────────────────
+
+pub fn upsert_accessory_calendar_mapping(
+    app: &AppHandle,
+    accessory_id: &str,
+    google_calendar_id: &str,
+    updated_at: i64,
+) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection
+        .execute(
+            "INSERT INTO accessory_calendar_mappings (accessory_id, google_calendar_id, updated_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(accessory_id) DO UPDATE SET
+               google_calendar_id = excluded.google_calendar_id,
+               updated_at = excluded.updated_at",
+            params![accessory_id, google_calendar_id, updated_at],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_accessory_calendar_mapping(app: &AppHandle, accessory_id: &str) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection
+        .execute(
+            "DELETE FROM accessory_calendar_mappings WHERE accessory_id = ?1",
+            params![accessory_id],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_accessory_calendar_mappings(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare("SELECT accessory_id, google_calendar_id, updated_at FROM accessory_calendar_mappings ORDER BY accessory_id ASC")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            let accessory_id: String = row.get(0)?;
+            let google_calendar_id: String = row.get(1)?;
+            let updated_at: i64 = row.get(2)?;
+            Ok(json!({
+                "accessoryId": accessory_id,
+                "googleCalendarId": google_calendar_id,
+                "updatedAt": updated_at
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+pub fn upsert_accessory_calendar_event(app: &AppHandle, event: &Value) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    let id = required_string(event, "id")?;
+    let invoice_id = required_string(event, "invoiceId")?;
+    let invoice_item_id = string_field_optional(event, "invoiceItemId");
+    let accessory_id = required_string(event, "accessoryId")?;
+    let kind = required_string(event, "kind")?;
+    let title = required_string(event, "title")?;
+    let start_time = number_field(event, "startTime");
+    let end_time = number_field(event, "endTime");
+    let google_calendar_id = string_field_optional(event, "googleCalendarId");
+    let google_event_id = string_field_optional(event, "googleEventId");
+    let sync_status = required_string(event, "syncStatus")?;
+    let last_error = string_field_optional(event, "lastError");
+    let created_at = number_field(event, "createdAt");
+    let updated_at = number_field(event, "updatedAt");
+
+    connection
+        .execute(
+            "INSERT INTO accessory_calendar_events (
+               id, invoice_id, invoice_item_id, accessory_id, kind, title, start_time, end_time,
+               google_calendar_id, google_event_id, sync_status, last_error, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+             ON CONFLICT(id) DO UPDATE SET
+               invoice_id = excluded.invoice_id,
+               invoice_item_id = excluded.invoice_item_id,
+               accessory_id = excluded.accessory_id,
+               kind = excluded.kind,
+               title = excluded.title,
+               start_time = excluded.start_time,
+               end_time = excluded.end_time,
+               google_calendar_id = excluded.google_calendar_id,
+               google_event_id = excluded.google_event_id,
+               sync_status = excluded.sync_status,
+               last_error = excluded.last_error,
+               updated_at = excluded.updated_at",
+            params![
+                id,
+                invoice_id,
+                invoice_item_id,
+                accessory_id,
+                kind,
+                title,
+                start_time,
+                end_time,
+                google_calendar_id,
+                google_event_id,
+                sync_status,
+                last_error,
+                created_at,
+                updated_at
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+pub fn delete_accessory_calendar_events_for_invoice(app: &AppHandle, invoice_id: &str) -> Result<(), String> {
+    let connection = open_connection(app)?;
+    connection
+        .execute(
+            "DELETE FROM accessory_calendar_events WHERE invoice_id = ?1",
+            params![invoice_id],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_accessory_calendar_events_for_invoice(app: &AppHandle, invoice_id: &str) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare(
+            "SELECT id, invoice_id, invoice_item_id, accessory_id, kind, title, start_time, end_time,
+                    google_calendar_id, google_event_id, sync_status, last_error, created_at, updated_at
+             FROM accessory_calendar_events
+             WHERE invoice_id = ?1
+             ORDER BY start_time ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![invoice_id], |row| {
+            Ok(json!({
+                "id": row.get::<_, String>(0)?,
+                "invoiceId": row.get::<_, String>(1)?,
+                "invoiceItemId": row.get::<_, Option<String>>(2)?,
+                "accessoryId": row.get::<_, String>(3)?,
+                "kind": row.get::<_, String>(4)?,
+                "title": row.get::<_, String>(5)?,
+                "startTime": row.get::<_, i64>(6)?,
+                "endTime": row.get::<_, i64>(7)?,
+                "googleCalendarId": row.get::<_, Option<String>>(8)?,
+                "googleEventId": row.get::<_, Option<String>>(9)?,
+                "syncStatus": row.get::<_, String>(10)?,
+                "lastError": row.get::<_, Option<String>>(11)?,
+                "createdAt": row.get::<_, i64>(12)?,
+                "updatedAt": row.get::<_, i64>(13)?
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+pub fn list_accessory_calendar_events_range(app: &AppHandle, start_ms: i64, end_ms: i64) -> Result<Vec<Value>, String> {
+    let connection = open_connection(app)?;
+    let mut stmt = connection
+        .prepare(
+            "SELECT id, invoice_id, invoice_item_id, accessory_id, kind, title, start_time, end_time,
+                    google_calendar_id, google_event_id, sync_status, last_error, created_at, updated_at
+             FROM accessory_calendar_events
+             WHERE start_time < ?2 AND end_time > ?1
+             ORDER BY start_time ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![start_ms, end_ms], |row| {
+            Ok(json!({
+                "id": row.get::<_, String>(0)?,
+                "invoiceId": row.get::<_, String>(1)?,
+                "invoiceItemId": row.get::<_, Option<String>>(2)?,
+                "accessoryId": row.get::<_, String>(3)?,
+                "kind": row.get::<_, String>(4)?,
+                "title": row.get::<_, String>(5)?,
+                "startTime": row.get::<_, i64>(6)?,
+                "endTime": row.get::<_, i64>(7)?,
+                "googleCalendarId": row.get::<_, Option<String>>(8)?,
+                "googleEventId": row.get::<_, Option<String>>(9)?,
+                "syncStatus": row.get::<_, String>(10)?,
+                "lastError": row.get::<_, Option<String>>(11)?,
+                "createdAt": row.get::<_, i64>(12)?,
+                "updatedAt": row.get::<_, i64>(13)?
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
 fn open_connection(app: &AppHandle) -> Result<Connection, String> {
     let path = database_path(app).map_err(|error| error.to_string())?;
     let conn = Connection::open(path).map_err(|error| error.to_string())?;

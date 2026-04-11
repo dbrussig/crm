@@ -195,6 +195,7 @@ export async function createEvent(
     end: Date;
     visibility?: 'default' | 'public' | 'private' | 'confidential';
     transparency?: 'opaque' | 'transparent';
+    privateProps?: Record<string, string>;
   },
   opts: { clientId: string }
 ): Promise<string> {
@@ -207,6 +208,7 @@ export async function createEvent(
     // Busy + private by default for rentals.
     visibility: event.visibility || 'private',
     transparency: event.transparency || 'opaque',
+    ...(event.privateProps ? { extendedProperties: { private: event.privateProps } } : {}),
   };
   const resp = await googleFetchJson<{ id: string }>({
     url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
@@ -227,6 +229,7 @@ export async function createEventLegacy(
     end: Date;
     visibility?: 'default' | 'public' | 'private' | 'confidential';
     transparency?: 'opaque' | 'transparent';
+    privateProps?: Record<string, string>;
   }
 ): Promise<string> {
   const clientId = getDefaultClientId();
@@ -263,6 +266,7 @@ export async function updateEvent(
     end: Date;
     visibility?: 'default' | 'public' | 'private' | 'confidential';
     transparency?: 'opaque' | 'transparent';
+    privateProps?: Record<string, string>;
   },
   opts: { clientId: string }
 ): Promise<void> {
@@ -274,6 +278,7 @@ export async function updateEvent(
     end: { dateTime: event.end.toISOString() },
     ...(event.visibility ? { visibility: event.visibility } : {}),
     ...(event.transparency ? { transparency: event.transparency } : {}),
+    ...(event.privateProps ? { extendedProperties: { private: event.privateProps } } : {}),
   };
   await googleFetchJson<any>({
     url: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
@@ -281,6 +286,26 @@ export async function updateEvent(
     token,
     body,
   });
+}
+
+export async function findEventIdByPrivatePropWithClientId(opts: {
+  clientId: string;
+  calendarId: string;
+  timeMin: Date;
+  timeMax: Date;
+  key: string;
+  value: string;
+}): Promise<string | null> {
+  const token = await requireScope(opts.clientId, 'calendar');
+  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(opts.calendarId)}/events`);
+  url.searchParams.set('timeMin', opts.timeMin.toISOString());
+  url.searchParams.set('timeMax', opts.timeMax.toISOString());
+  url.searchParams.set('singleEvents', 'true');
+  url.searchParams.set('maxResults', '10');
+  url.searchParams.set('privateExtendedProperty', `${opts.key}=${opts.value}`);
+  const resp = await googleFetchJson<EventsListResponse>({ url: url.toString(), token });
+  const id = resp.items?.find((it) => Boolean(it?.id))?.id;
+  return id || null;
 }
 
 export async function updateEventLegacy(
@@ -293,6 +318,7 @@ export async function updateEventLegacy(
     end: Date;
     visibility?: 'default' | 'public' | 'private' | 'confidential';
     transparency?: 'opaque' | 'transparent';
+    privateProps?: Record<string, string>;
   }
 ): Promise<void> {
   const clientId = getDefaultClientId();
