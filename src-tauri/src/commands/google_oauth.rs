@@ -138,6 +138,7 @@ pub async fn google_oauth_exchange(
     _redirect_uri: String,
     _state: String,
     _verifier: String,
+    client_secret: Option<String>,
 ) -> Result<GoogleOAuthResult, String> {
     let pending = get_oauth_store()
         .lock()
@@ -236,15 +237,21 @@ pub async fn google_oauth_exchange(
     eprintln!("[OAuth] exchange: Code erhalten, tausche gegen Token...");
 
     let client = Client::new();
+    let mut form: Vec<(&str, &str)> = vec![
+        ("code", code.as_str()),
+        ("client_id", client_id.as_str()),
+        ("redirect_uri", pending.redirect_uri.as_str()),
+        ("grant_type", "authorization_code"),
+        ("code_verifier", pending.verifier.as_str()),
+    ];
+    let client_secret_trimmed = client_secret.as_deref().map(str::trim).unwrap_or("");
+    if !client_secret_trimmed.is_empty() {
+        form.push(("client_secret", client_secret_trimmed));
+    }
+
     let token_resp = client
         .post("https://oauth2.googleapis.com/token")
-        .form(&[
-            ("code", code.as_str()),
-            ("client_id", client_id.as_str()),
-            ("redirect_uri", pending.redirect_uri.as_str()),
-            ("grant_type", "authorization_code"),
-            ("code_verifier", pending.verifier.as_str()),
-        ])
+        .form(&form)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -351,16 +358,23 @@ async fn fetch_userinfo(client: &Client, access_token: &str) -> (Option<String>,
 pub async fn google_token_refresh(
     client_id: String,
     refresh_token: String,
+    client_secret: Option<String>,
 ) -> Result<GoogleOAuthResult, String> {
     eprintln!("[OAuth] Starte Token-Refresh...");
     let client = Client::new();
+    let mut form: Vec<(&str, &str)> = vec![
+        ("client_id", client_id.as_str()),
+        ("grant_type", "refresh_token"),
+        ("refresh_token", refresh_token.as_str()),
+    ];
+    let client_secret_trimmed = client_secret.as_deref().map(str::trim).unwrap_or("");
+    if !client_secret_trimmed.is_empty() {
+        form.push(("client_secret", client_secret_trimmed));
+    }
+
     let resp = client
         .post("https://oauth2.googleapis.com/token")
-        .form(&[
-            ("client_id", client_id.as_str()),
-            ("grant_type", "refresh_token"),
-            ("refresh_token", refresh_token.as_str()),
-        ])
+        .form(&form)
         .send()
         .await
         .map_err(|e| e.to_string())?;

@@ -18,6 +18,7 @@ import {
   SCOPE_PROFILE,
   SCOPE_EMAIL,
 } from './googleTokenStore';
+import { loadGoogleClientSecret } from './googleClientSecretStore';
 
 export type { GoogleConnectionStatus } from './googleTokenStore';
 export { getConnectionStatus, clearTokenSet as disconnectGoogle };
@@ -37,6 +38,13 @@ interface OAuthCommandResult {
   refresh_token?: string;
   email?: string;
   user_id?: string;
+}
+
+async function getClientSecretForDesktop(): Promise<string | undefined> {
+  const stored = await loadGoogleClientSecret().catch(() => null);
+  if (stored) return stored;
+  const env = String((import.meta as any).env?.VITE_GOOGLE_OAUTH_CLIENT_SECRET || '').trim();
+  return env || undefined;
 }
 
 function friendlyError(raw: string): string {
@@ -84,6 +92,7 @@ export async function connectGoogle(
 
   const existingTs = await loadTokenSet();
   const requestedScope = service ? SERVICE_SCOPES[service] : null;
+  const clientSecret = await getClientSecretForDesktop();
 
   // Alle bereits erteilten Scopes + neuen Scope bündeln (inkrementell)
   const alreadyGranted = existingTs?.scopes ?? [];
@@ -114,6 +123,7 @@ export async function connectGoogle(
       redirectUri: prepared.redirect_uri,
       state: prepared.state,
       verifier: prepared.verifier,
+      clientSecret,
     });
   } catch (e: unknown) {
     throw new Error(friendlyError(String((e as any)?.message ?? e)));
@@ -155,9 +165,11 @@ export async function getValidAccessToken(clientId: string): Promise<string> {
   }
 
   try {
+    const clientSecret = await getClientSecretForDesktop();
     const result = await invokeDesktopCommand<OAuthCommandResult>('google_token_refresh', {
       clientId,
       refreshToken: ts.refreshToken,
+      clientSecret,
     });
 
     const grantedScopes = result.scope

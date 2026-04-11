@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Mail, Calendar, CheckCircle, AlertCircle, Link2, ChevronDown, Users, RefreshCw, Unlink } from 'lucide-react';
 import { AISettings, GoogleOAuthSettings, MailTransportSettings, PaymentMethodConfig, DEFAULT_PAYMENT_METHODS } from '../types';
 import { getConnectionStatus, connectGoogle, disconnectGoogle, type GoogleConnectionStatus } from '../services/googleOAuthService';
+import { clearGoogleClientSecret, loadGoogleClientSecret, saveGoogleClientSecret } from '../services/googleClientSecretStore';
 import { getGLMModels } from '../services/zAiService';
 import { getCompanyProfile, saveCompanyProfile, type CompanyProfile } from '../config/companyProfile';
 import { getPaymentMethodsConfig, savePaymentMethodsConfig } from '../services/sqliteService';
@@ -47,6 +48,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [googleStatus, setGoogleStatus] = useState<GoogleConnectionStatus | null>(null);
   const [googleConnecting, setGoogleConnecting] = useState<'base' | 'calendar' | 'gmail' | 'contacts' | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleClientSecret, setGoogleClientSecret] = useState<string>('');
+  const [googleClientSecretLoaded, setGoogleClientSecretLoaded] = useState(false);
 
   const clientId = googleOAuthSettings?.clientId || '';
 
@@ -56,6 +59,22 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   }, []);
 
   useEffect(() => { refreshGoogleStatus(); }, [refreshGoogleStatus]);
+
+  useEffect(() => {
+    let mounted = true;
+    loadGoogleClientSecret()
+      .then((v) => {
+        if (!mounted) return;
+        setGoogleClientSecret(v || '');
+        setGoogleClientSecretLoaded(true);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setGoogleClientSecret('');
+        setGoogleClientSecretLoaded(true);
+      });
+    return () => { mounted = false; };
+  }, []);
 
   const handleConnect = async (service?: 'calendar' | 'gmail' | 'contacts') => {
     if (!clientId) {
@@ -624,6 +643,47 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   value={googleOAuthSettings?.apiKey || ''}
                   onChange={(e) => handleGoogleOAuthChange('apiKey', e.target.value)}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600" htmlFor="google-clientsecret">
+                  OAuth Client Secret (optional)
+                </label>
+                <input
+                  id="google-clientsecret"
+                  type="password"
+                  placeholder="GOCSPX-..."
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={googleClientSecret}
+                  onChange={(e) => setGoogleClientSecret(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-xs"
+                    disabled={!googleClientSecretLoaded}
+                    onClick={async () => {
+                      await saveGoogleClientSecret(googleClientSecret);
+                      setGoogleError(null);
+                    }}
+                  >
+                    Speichern
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-xs"
+                    disabled={!googleClientSecretLoaded}
+                    onClick={async () => {
+                      await clearGoogleClientSecret();
+                      setGoogleClientSecret('');
+                      setGoogleError(null);
+                    }}
+                  >
+                    Löschen
+                  </button>
+                  <span className="text-[11px] text-slate-400">
+                    {googleClientSecretLoaded ? 'Wird im Keychain gespeichert (Desktop).' : 'Lädt…'}
+                  </span>
+                </div>
               </div>
               {googleOAuthSettings?.clientId && (
                 <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
