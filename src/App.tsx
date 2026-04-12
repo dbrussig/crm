@@ -22,7 +22,7 @@ import Inbox from './components/Inbox';
 import { checkAvailabilityWithClientId } from './services/googleCalendarService';
 import { calculateWebsitePrice } from './services/pricingService';
 import CalendarPanel from './components/CalendarPanel';
-import Vermietungszubehoer from './components/Vermietungszubehoer';
+import Zubehoer from './components/Zubehoer';
 import { runDesktopAutoUpdate } from './services/desktopUpdaterService';
 import { formatDisplayRef } from './utils/displayId';
 import { getDashboardFinancials, type DashboardFinancials } from './services/dashboardService';
@@ -966,7 +966,7 @@ export default function App() {
 
         {activeView === 'zubehoer' && (
           <div className="max-w-6xl">
-            <Vermietungszubehoer />
+            <Zubehoer />
           </div>
         )}
 

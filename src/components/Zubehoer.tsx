@@ -76,7 +76,7 @@ const INITIAL_FORM: AccessoryForm = {
   isActive: true,
 };
 
-export default function Vermietungszubehoer() {
+export default function Zubehoer() {
   const [items, setItems] = useState<RentalAccessory[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
