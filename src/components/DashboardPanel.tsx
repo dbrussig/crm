@@ -593,8 +593,9 @@ export default function DashboardPanel(props: DashboardPanelProps) {
   const smartInsights = useMemo<SmartInsight[]>(() => {
     const insights: SmartInsight[] = [];
 
+    const yesterday = today - 86_400_000;
     const overdueReturns = rentals
-      .filter((r) => openRentalStatuses.includes(r.status) && toLocalDayStart(r.rentalEnd) < today)
+      .filter((r) => openRentalStatuses.includes(r.status) && toLocalDayStart(r.rentalEnd) < yesterday)
       .sort((a, b) => a.rentalEnd - b.rentalEnd);
     if (overdueReturns.length) {
       const rental = overdueReturns[0];
