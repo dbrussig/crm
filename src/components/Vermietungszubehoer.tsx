@@ -122,7 +122,8 @@ export default function Vermietungszubehoer() {
         if (!q) return true;
         const hay = `${it.name} ${it.category} ${it.inventoryKey} ${it.brand || ''} ${it.model || ''} ${it.notes || ''}`.toLowerCase();
         return hay.includes(q);
-      });
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }, [items, category, activeOnly, search]);
 
   async function load() {
