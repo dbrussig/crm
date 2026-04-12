@@ -29,7 +29,7 @@ import { addPayment, assignPaymentToInvoice, getAllCustomers, getPaymentsByRenta
 import type { PaymentMethodConfig } from '../types';
 import { DEFAULT_PAYMENT_METHODS } from '../types';
 import { findActiveResourcesForType } from '../services/resourceService';
-import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
+import { saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose, type EmailSendResult } from '../services/invoiceEmailService';
 import { formatDisplayRef } from '../utils/displayId';
 import ConfirmModal from './ConfirmModal';
@@ -2153,9 +2153,21 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                   <div key={inv.id} className="rounded-md border border-gray-200 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-semibold text-gray-900">
-                          {inv.invoiceType} {inv.invoiceNo}
-                        </div>
+                        {onOpenInvoice ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenInvoice(inv.id)}
+                            className="text-sm font-semibold text-blue-700 hover:underline text-left"
+                            aria-label={`${inv.invoiceType} ${inv.invoiceNo || inv.id} im Editor öffnen`}
+                            title="Beleg im Editor öffnen"
+                          >
+                            {inv.invoiceType} {inv.invoiceNo || '(ohne Nummer)'}
+                          </button>
+                        ) : (
+                          <div className="text-sm font-semibold text-gray-900">
+                            {inv.invoiceType} {inv.invoiceNo || '(ohne Nummer)'}
+                          </div>
+                        )}
                         <div className="text-xs text-gray-600">
                           {new Date(inv.invoiceDate).toLocaleDateString('de-DE')} · {typeof invoiceAmountById[inv.id] === 'number' ? `${invoiceAmountById[inv.id].toFixed(2)} €` : '…'}
                         </div>
@@ -2171,13 +2183,15 @@ export const RentalRequestDetail: React.FC<RentalRequestDetailProps> = ({
                             <Pencil size={13} aria-hidden="true" />
                           </button>
                         )}
-                        <button
-                          onClick={() => openInvoicePreview(inv)}
-                          title="PDF-Vorschau öffnen"
-                          className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
-                        >
-                          Ansehen
-                        </button>
+                        {onOpenInvoice ? (
+                          <button
+                            onClick={() => onOpenInvoice(inv.id)}
+                            title="Beleg im Editor öffnen"
+                            className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
+                          >
+                            Öffnen
+                          </button>
+                        ) : null}
                         <button
                           onClick={() => saveInvoicePdfViaPrintDialog(inv)}
                           title="PDF speichern oder drucken"

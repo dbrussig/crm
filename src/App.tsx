@@ -564,6 +564,7 @@ export default function App() {
             invoices={dashboardInvoices}
             payments={dashboardPayments}
             onOpenRental={openDashboardRental}
+            onOpenInvoice={openInvoiceEditorById}
             onOpenOrders={() => setActiveView('vorgaenge')}
           />
         )}

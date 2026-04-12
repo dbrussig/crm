@@ -10,7 +10,7 @@ import { Invoice, RentalRequest, RentalStatus } from '../types';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { memo, useRef, useState } from 'react';
-import { openInvoicePreview, saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
+import { saveInvoicePdfViaPrintDialog } from '../services/pdfExportService';
 import { openInvoiceCompose, type EmailSendResult } from '../services/invoiceEmailService';
 import ConfirmModal from './ConfirmModal';
 
@@ -380,9 +380,25 @@ export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, custome
         {latestInvoice ? (
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[11px] text-gray-600 truncate">
-                Beleg: {latestInvoice.invoiceType} {latestInvoice.invoiceNo}
-              </span>
+              {onEditLatestInvoice ? (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditLatestInvoice(latestInvoice.id);
+                  }}
+                  className="text-[11px] text-blue-700 hover:underline truncate"
+                  aria-label={`Beleg ${latestInvoice.invoiceNo || latestInvoice.id} im Editor öffnen`}
+                  title="Beleg im Editor öffnen"
+                >
+                  Beleg: {latestInvoice.invoiceType} {latestInvoice.invoiceNo || '(ohne Nummer)'}
+                </button>
+              ) : (
+                <span className="text-[11px] text-gray-600 truncate">
+                  Beleg: {latestInvoice.invoiceType} {latestInvoice.invoiceNo || '(ohne Nummer)'}
+                </span>
+              )}
               {getInvoiceStateBadge()}
             </div>
             <div className="flex items-center gap-1">
@@ -400,18 +416,20 @@ export const KanbanCard = memo<KanbanCardProps>(({ rental, customerName, custome
                   ✏️
                 </button>
               ) : null}
-              <button
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void openInvoicePreview(latestInvoice);
-                }}
-                className="px-2 py-0.5 text-[11px] rounded border border-gray-300 hover:bg-white"
-                aria-label={`Beleg ${latestInvoice.invoiceNo} ansehen`}
-                title="Beleg ansehen"
-              >
-                👁️
-              </button>
+              {onEditLatestInvoice ? (
+                <button
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditLatestInvoice(latestInvoice.id);
+                  }}
+                  className="px-2 py-0.5 text-[11px] rounded border border-gray-300 hover:bg-white"
+                  aria-label={`Beleg ${latestInvoice.invoiceNo || latestInvoice.id} im Editor öffnen`}
+                  title="Beleg im Editor öffnen"
+                >
+                  👁️
+                </button>
+              ) : null}
               <button
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
