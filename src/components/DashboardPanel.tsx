@@ -145,7 +145,7 @@ function KpiCard(props: {
   return body;
 }
 
-type DrilldownKey = 'vermietet' | 'offene_auftraege' | 'erwartete_einnahmen';
+type DrilldownKey = 'vermietet' | 'offene_auftraege' | 'erwartete_einnahmen' | 'angezahlt' | 'unbezahlt';
 
 type DrilldownRow = {
   key: string;
@@ -448,13 +448,25 @@ export default function DashboardPanel(props: DashboardPanelProps) {
       open: Math.round(arr.reduce((s, x) => s + x.open, 0) * 100) / 100,
     });
 
+    const toRow = (x: (typeof rows)[0]): DrilldownRow => {
+      const customer = customerById.get(x.rental.customerId);
+      return {
+        key: x.rental.id,
+        title: `${x.inv.invoiceType} ${x.inv.invoiceNo || '(ohne Nummer)'}`,
+        subtitle: customer ? `${customer.firstName} ${customer.lastName}`.trim() : (x.inv.buyerName || x.rental.customerId),
+        meta: `${formatCurrency(x.open)} offen / ${formatCurrency(x.paid)} bezahlt`,
+        invoiceId: x.inv.id,
+        rentalId: x.rental.id,
+      };
+    };
+
     return {
       partial: { count: partial.length, ...sum(partial) },
       unpaid: { count: unpaid.length, ...sum(unpaid) },
-      partialInvoices: partial.map((x) => x.inv),
-      unpaidInvoices: unpaid.map((x) => x.inv),
+      partialRows: partial.map(toRow),
+      unpaidRows: unpaid.map(toRow),
     };
-  }, [openOrderFinancialRows, today]);
+  }, [openOrderFinancialRows, today, customerById]);
 
   const upcomingAppointments = useMemo(() => {
     const in14 = today + 14 * 24 * 60 * 60 * 1000;
@@ -581,12 +593,16 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     if (activeDrilldown === 'vermietet') return activeRentalRows;
     if (activeDrilldown === 'offene_auftraege') return openOrderRows;
     if (activeDrilldown === 'erwartete_einnahmen') return expectedRevenueRows;
+    if (activeDrilldown === 'angezahlt') return ordersPaymentBuckets.partialRows;
+    if (activeDrilldown === 'unbezahlt') return ordersPaymentBuckets.unpaidRows;
     return [];
-  }, [activeDrilldown, activeRentalRows, openOrderRows, expectedRevenueRows]);
+  }, [activeDrilldown, activeRentalRows, openOrderRows, expectedRevenueRows, ordersPaymentBuckets]);
   const activeDrilldownTitle = useMemo(() => {
     if (activeDrilldown === 'vermietet') return 'Vermietet';
     if (activeDrilldown === 'offene_auftraege') return 'Offene Aufträge';
     if (activeDrilldown === 'erwartete_einnahmen') return 'Erwartete Einnahmen';
+    if (activeDrilldown === 'angezahlt') return 'Aufträge angezahlt';
+    if (activeDrilldown === 'unbezahlt') return 'Aufträge unbezahlt';
     return '';
   }, [activeDrilldown]);
 
@@ -761,7 +777,10 @@ export default function DashboardPanel(props: DashboardPanelProps) {
       ) : null}
 
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm h-full flex flex-col">
+        <div
+          className={`bg-white border rounded-xl p-4 shadow-sm h-full flex flex-col cursor-pointer transition-colors ${activeDrilldown === 'angezahlt' ? 'border-amber-400 ring-1 ring-amber-300' : 'border-slate-200 hover:border-amber-300'}`}
+          onClick={() => setActiveDrilldown((c) => (c === 'angezahlt' ? null : 'angezahlt'))}
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-900">Aufträge angezahlt</div>
@@ -776,16 +795,15 @@ export default function DashboardPanel(props: DashboardPanelProps) {
             <div className="h-10 w-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">🕒</div>
           </div>
           <div className="mt-auto pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onOpenOrders}
-              className="text-sm font-medium text-amber-700 hover:underline"
-            >
-              Betroffene Aufträge anzeigen
-            </button>
+            <span className="text-sm font-medium text-amber-700">
+              {activeDrilldown === 'angezahlt' ? 'Schließen ↑' : 'Details anzeigen ↓'}
+            </span>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm h-full flex flex-col">
+        <div
+          className={`bg-white border rounded-xl p-4 shadow-sm h-full flex flex-col cursor-pointer transition-colors ${activeDrilldown === 'unbezahlt' ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200 hover:border-rose-300'}`}
+          onClick={() => setActiveDrilldown((c) => (c === 'unbezahlt' ? null : 'unbezahlt'))}
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-900">Aufträge unbezahlt</div>
@@ -800,13 +818,9 @@ export default function DashboardPanel(props: DashboardPanelProps) {
             <div className="h-10 w-10 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">⛔</div>
           </div>
           <div className="mt-auto pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onOpenOrders}
-              className="text-sm font-medium text-rose-700 hover:underline"
-            >
-              Betroffene Aufträge anzeigen
-            </button>
+            <span className="text-sm font-medium text-rose-700">
+              {activeDrilldown === 'unbezahlt' ? 'Schließen ↑' : 'Details anzeigen ↓'}
+            </span>
           </div>
         </div>
       </div>
