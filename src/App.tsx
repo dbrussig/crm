@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { AISettings, Customer, GmailAttachmentSummary, GoogleOAuthSettings, InboxImportResult, Invoice, InvoiceItem, MailTransportSettings, Payment, RentalRequest, RentalStatus } from './types';
 import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, findCustomerByEmail, createMessage, updateRentalRequest, addCustomerDocumentBlob, getDocumentsByCustomer, getAllResources, updateInvoice, getAllPayments, migrateInvoiceNosStripLeadingZeros } from './services/sqliteService';
 import { MessageBox } from './components/MessageBox';
-import KanbanBoard from './components/KanbanBoard';
 import CustomerList from './components/CustomerList';
 import Stammdaten from './components/Stammdaten';
 import { RentalRequestDetail } from './components/RentalRequestDetail';
@@ -35,7 +34,6 @@ type View =
   | 'dashboard'
   | 'inbox'
   | 'nachrichtenbox'
-  | 'vorgaenge'
   | 'kalender'
   | 'kunden'
   | 'stammdaten'
@@ -131,7 +129,6 @@ export default function App() {
         { id: 'dashboard' as const, label: 'Dashboard', icon: '📊', group: 'Kommunikation' as const },
         { id: 'inbox' as const, label: 'Postfach', icon: '📧', group: 'Kommunikation' as const },
         { id: 'nachrichtenbox' as const, label: 'Nachrichtenbox', icon: '💬', group: 'Kommunikation' as const },
-        { id: 'vorgaenge' as const, label: 'Vorgänge', icon: '📋', group: 'Vorgänge' as const },
         { id: 'kalender' as const, label: 'Kalender', icon: '🗓️', group: 'Vorgänge' as const },
         { id: 'belege' as const, label: 'Belege', icon: '🧾', group: 'Vorgänge' as const },
         { id: 'euer' as const, label: 'EÜR', icon: '💰', group: 'Abrechnung' as const },
@@ -357,14 +354,14 @@ export default function App() {
     }
 
     setSelectedRentalId(rid);
-    setActiveView('vorgaenge');
+    setActiveView('kalender');
   };
 
   const openRentalDirect = (rentalId: string) => {
     const rid = String(rentalId || '').trim();
     if (!rid) return;
     setSelectedRentalId(rid);
-    setActiveView('vorgaenge');
+    setActiveView('kalender');
   };
 
 
@@ -468,7 +465,7 @@ export default function App() {
       updatedAt: now,
     };
     await createRentalRequest(rental);
-    setActiveView('vorgaenge');
+    setActiveView('kalender');
   };
 
   return (
@@ -573,7 +570,7 @@ export default function App() {
             onOpenRental={openDashboardRental}
             onOpenRentalDetail={openRentalDirect}
             onOpenInvoice={openInvoiceEditorById}
-            onOpenOrders={() => setActiveView('vorgaenge')}
+            onOpenOrders={() => setActiveView('kalender')}
           />
         )}
 
@@ -929,7 +926,7 @@ export default function App() {
                       });
                     }
                   }
-                  setActiveView('vorgaenge');
+                  setActiveView('kalender');
                 }
 
                 // 3) Store original message for traceability.
@@ -986,20 +983,6 @@ export default function App() {
           </div>
         )}
 
-        {activeView === 'vorgaenge' && (
-          <div className="max-w-7xl">
-            <h2 className="text-2xl font-bold text-slate-900 mb-4">Vorgänge</h2>
-            <div className="h-[calc(100vh-140px)]">
-              <KanbanBoard
-                customers={customers}
-                onCardClick={(r) => setSelectedRentalId(r.id)}
-                onOpenInvoice={async (invoiceId) => {
-                  await openInvoiceEditorById(invoiceId);
-                }}
-              />
-            </div>
-          </div>
-        )}
 
         {activeView === 'kalender' && (
           <CalendarPanel
