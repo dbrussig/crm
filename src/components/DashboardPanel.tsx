@@ -594,8 +594,9 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     const insights: SmartInsight[] = [];
 
     const yesterday = today - 86_400_000;
+    const rentalIdsWithOpenBalance = new Set(openOrderFinancialRows.map((e) => e.rental.id));
     const overdueReturns = rentals
-      .filter((r) => openRentalStatuses.includes(r.status) && toLocalDayStart(r.rentalEnd) < yesterday)
+      .filter((r) => openRentalStatuses.includes(r.status) && toLocalDayStart(r.rentalEnd) < yesterday && rentalIdsWithOpenBalance.has(r.id))
       .sort((a, b) => a.rentalEnd - b.rentalEnd);
     if (overdueReturns.length) {
       const rental = overdueReturns[0];
