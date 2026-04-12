@@ -29,6 +29,7 @@ import { formatDisplayRef } from './utils/displayId';
 import { getDashboardFinancials, type DashboardFinancials } from './services/dashboardService';
 import { createFollowUpInvoiceWithStatusSync } from './services/workflowService';
 import EinnahmenUeberschussRechnung from './components/EinnahmenUeberschussRechnung';
+import DashboardPanel from './components/DashboardPanel';
 
 type View =
   | 'dashboard'
@@ -142,7 +143,15 @@ export default function App() {
     []
   );
 
-  const openStatuses: RentalStatus[] = ['neu', 'info_fehlt', 'check_verfuegbarkeit', 'angebot_gesendet', 'angenommen', 'uebergabe_rueckgabe'];
+  const openStatuses: RentalStatus[] = [
+    'neu',
+    'info_fehlt',
+    'check_verfuegbarkeit',
+    'angebot_gesendet',
+    'angenommen',
+    'rechnung_gestellt',
+    'uebergabe_rueckgabe',
+  ];
   const toLocalDayStart = (ms: number) => {
     const d = new Date(ms);
     d.setHours(0, 0, 0, 0);
@@ -203,8 +212,7 @@ export default function App() {
         .filter((r) => {
           if (!openStatuses.includes(r.status)) return false;
           const startDay = toLocalDayStart(r.rentalStart);
-          const endDay = toLocalDayStart(r.rentalEnd);
-          return startDay <= today && endDay >= today;
+          return startDay <= today;
         })
         .sort((a, b) => a.rentalEnd - b.rentalEnd),
     [dashboardRentals, today]
@@ -319,6 +327,37 @@ export default function App() {
     setEditingInvoice(loaded.invoice);
     setEditingInvoiceItems(loaded.items);
     setActiveView('beleg_editor');
+  };
+
+  const openDashboardRental = async (rentalId: string) => {
+    const rid = String(rentalId || '').trim();
+    if (!rid) return;
+
+    const invoices = (dashboardInvoices.length ? dashboardInvoices : await fetchAllInvoices())
+      .filter((inv) => String(inv.rentalRequestId || '').trim() === rid);
+
+    if (invoices.length) {
+      const pickLatestOfType = (t: Invoice['invoiceType']) =>
+        invoices
+          .filter((i) => i.invoiceType === t)
+          .sort((a, b) => b.invoiceDate - a.invoiceDate)[0] || null;
+
+      const best =
+        pickLatestOfType('Auftrag') ||
+        pickLatestOfType('Angebot') ||
+        pickLatestOfType('Rechnung') ||
+        invoices.sort((a, b) => b.invoiceDate - a.invoiceDate)[0] ||
+        null;
+
+      if (best?.id) {
+        setSelectedRentalId(null);
+        await openInvoiceEditorById(best.id);
+        return;
+      }
+    }
+
+    setSelectedRentalId(rid);
+    setActiveView('vorgaenge');
   };
 
 
@@ -519,193 +558,14 @@ export default function App() {
           </div>
         )}
         {activeView === 'dashboard' && (
-          <div className="max-w-7xl">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">Dashboard</h2>
-                <p className="mt-1 text-slate-600">Tagesübersicht mit den wichtigsten Aufgaben und Schnellaktionen.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
-                  onClick={() => setActiveView('inbox')}
-                >
-                  Postfach öffnen
-                </button>
-                <button
-                  className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm hover:bg-slate-50"
-                  onClick={() => setActiveView('vorgaenge')}
-                >
-                  Offene Vorgänge
-                </button>
-                <button
-                  className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm hover:bg-slate-50"
-                  onClick={() => setActiveView('belege')}
-                >
-                  Belege prüfen
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 lg:grid-cols-6 gap-3">
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <div className="text-xs text-amber-700">Offene Vorgänge</div>
-                <div className="text-2xl font-semibold text-amber-900">{openRentalsCount}</div>
-              </div>
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-                <div className="text-xs text-indigo-700">Belege Entwurf</div>
-                <div className="text-2xl font-semibold text-indigo-900">{draftInvoicesCount}</div>
-              </div>
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-                <div className="text-xs text-rose-700">Belege Gesendet</div>
-                <div className="text-2xl font-semibold text-rose-900">{pendingInvoicesCount}</div>
-              </div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="text-xs text-emerald-700">Aktiv ausgegeben</div>
-                <div className="text-2xl font-semibold text-emerald-900">{activeIssuedCount}</div>
-              </div>
-              <div
-                className={[
-                  'rounded-xl border p-4',
-                  dashboardFinancials.offeneForderungen > 0
-                    ? 'border-rose-200 bg-rose-50'
-                    : 'border-emerald-200 bg-emerald-50',
-                ].join(' ')}
-              >
-                <div className={dashboardFinancials.offeneForderungen > 0 ? 'text-xs text-rose-700' : 'text-xs text-emerald-700'}>
-                  Offene Forderungen €
-                </div>
-                <div className={dashboardFinancials.offeneForderungen > 0 ? 'text-2xl font-semibold text-rose-900' : 'text-2xl font-semibold text-emerald-900'}>
-                  {formatCurrency(dashboardFinancials.offeneForderungen)}
-                </div>
-              </div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="text-xs text-emerald-700">Monatsumsatz €</div>
-                <div className="text-2xl font-semibold text-emerald-900">{formatCurrency(dashboardFinancials.monatsumsatz)}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="bg-white border border-slate-200 rounded-xl p-4">
-                <div className="text-sm font-semibold text-slate-900">Nächste Mietvorgänge</div>
-                <div className="text-xs text-slate-500 mt-1">Früheste offenen Termine zuerst.</div>
-                <div className="mt-3 space-y-2">
-                  {upcomingRentals.length === 0 ? (
-                    <div className="text-sm text-slate-600">Keine offenen Vorgänge vorhanden.</div>
-                  ) : (
-                    upcomingRentals.map((r) => (
-                      <button
-                        key={r.id}
-                        onClick={() => {
-                          setSelectedRentalId(r.id);
-                          setActiveView('vorgaenge');
-                        }}
-                        className="w-full text-left rounded-lg border border-slate-200 p-3 hover:bg-slate-50"
-                      >
-                        <div className="text-sm font-medium text-slate-900">{r.productType}</div>
-                        <div className="text-xs text-slate-600 mt-0.5">
-                          {new Date(r.rentalStart).toLocaleDateString('de-DE')} bis {new Date(r.rentalEnd).toLocaleDateString('de-DE')} · {r.status}
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-1">
-                          {(() => {
-                            const c = customers.find(cu => cu.id === r.customerId);
-                            return c ? `${c.firstName} ${c.lastName}`.trim() : formatDisplayRef(r.id);
-                          })()}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-xl p-4">
-                <div className="text-sm font-semibold text-slate-900">Rückgabe erwartet</div>
-                <div className="text-xs text-slate-500 mt-1">Aktive Mietvorgänge – Rückgabetermin steht bevor.</div>
-                <div className="mt-3 space-y-2">
-                  {returnExpectedRentals.length === 0 ? (
-                    <div className="text-sm text-slate-600">Keine aktiven Vorgänge.</div>
-                  ) : (
-                    returnExpectedRentals.map((r) => (
-                      <button
-                        key={r.id}
-                        onClick={() => { setSelectedRentalId(r.id); setActiveView('vorgaenge'); }}
-                        className="w-full text-left rounded-lg border border-amber-200 bg-amber-50 p-3 hover:bg-amber-100"
-                      >
-                        <div className="text-sm font-medium text-amber-900">{r.productType}</div>
-                        <div className="text-xs text-amber-800 mt-0.5">
-                          Rückgabe: {new Date(r.rentalEnd).toLocaleDateString('de-DE')} · {r.status}
-                        </div>
-                        <div className="text-[11px] text-amber-700 mt-1">
-                          {(() => { const c = customers.find(cu => cu.id === r.customerId); return c ? `${c.firstName} ${c.lastName}`.trim() : formatDisplayRef(r.id); })()}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-1 lg:grid-cols-1 gap-4">
-              <div className="bg-white border border-slate-200 rounded-xl p-4">
-                <div className="text-sm font-semibold text-slate-900">Heute im Fokus</div>
-                <div className="mt-3 space-y-2">
-                  {/* Übergaben heute */}
-                  {dashboardRentals
-                    .filter((r) => openStatuses.includes(r.status) && toLocalDayStart(r.rentalStart) === toLocalDayStart(Date.now()))
-                    .map((r) => (
-                      <button
-                        key={`start-${r.id}`}
-                        onClick={() => { setSelectedRentalId(r.id); setActiveView('vorgaenge'); }}
-                        className="w-full text-left rounded-lg border border-teal-200 bg-teal-50 p-3 hover:bg-teal-100"
-                      >
-                        <div className="text-sm font-medium text-teal-900">🚀 Übergabe heute: {r.productType}</div>
-                        <div className="text-xs text-teal-700 mt-0.5">
-                          {(() => { const c = customers.find(cu => cu.id === r.customerId); return c ? `${c.firstName} ${c.lastName}`.trim() : r.id; })()}
-                        </div>
-                      </button>
-                    ))}
-                  {/* Rückgaben heute */}
-                  {dashboardRentals
-                    .filter((r) => openStatuses.includes(r.status) && toLocalDayStart(r.rentalEnd) === toLocalDayStart(Date.now()))
-                    .map((r) => (
-                      <button
-                        key={`end-${r.id}`}
-                        onClick={() => { setSelectedRentalId(r.id); setActiveView('vorgaenge'); }}
-                        className="w-full text-left rounded-lg border border-amber-200 bg-amber-50 p-3 hover:bg-amber-100"
-                      >
-                        <div className="text-sm font-medium text-amber-900">🔙 Rückgabe heute: {r.productType}</div>
-                        <div className="text-xs text-amber-700 mt-0.5">
-                          {(() => { const c = customers.find(cu => cu.id === r.customerId); return c ? `${c.firstName} ${c.lastName}`.trim() : r.id; })()}
-                        </div>
-                      </button>
-                    ))}
-                  {/* Überfällige Rechnungen Kurzinfo */}
-                  {dashboardFinancials.ueberfaelligeRechnungen.length > 0 && (
-                    <button
-                      onClick={() => setActiveView('belege')}
-                      className="w-full text-left rounded-lg border border-rose-200 bg-rose-50 p-3 hover:bg-rose-100"
-                    >
-                      <div className="text-sm font-medium text-rose-900">⚠️ {dashboardFinancials.ueberfaelligeRechnungen.length} überfällige Rechnung{dashboardFinancials.ueberfaelligeRechnungen.length === 1 ? '' : 'en'}</div>
-                      <div className="text-xs text-rose-700 mt-0.5">Gesamt offen: {formatCurrency(dashboardFinancials.offeneForderungen)}</div>
-                    </button>
-                  )}
-                  {/* Entwürfe */}
-                  {draftInvoicesCount > 0 && (
-                    <button
-                      onClick={() => setActiveView('belege')}
-                      className="w-full text-left rounded-lg border border-indigo-200 bg-indigo-50 p-3 hover:bg-indigo-100"
-                    >
-                      <div className="text-sm font-medium text-indigo-900">📝 {draftInvoicesCount} Beleg-Entwurf{draftInvoicesCount === 1 ? '' : 'e'} finalisieren</div>
-                    </button>
-                  )}
-                  {/* Alles erledigt */}
-                  {dashboardRentals.filter((r) => openStatuses.includes(r.status) && (toLocalDayStart(r.rentalStart) === toLocalDayStart(Date.now()) || toLocalDayStart(r.rentalEnd) === toLocalDayStart(Date.now()))).length === 0
-                    && dashboardFinancials.ueberfaelligeRechnungen.length === 0
-                    && draftInvoicesCount === 0 && (
-                    <div className="text-sm text-emerald-700">✓ Keine dringenden Aufgaben für heute.</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <DashboardPanel
+            customers={customers}
+            rentals={dashboardRentals}
+            invoices={dashboardInvoices}
+            payments={dashboardPayments}
+            onOpenRental={openDashboardRental}
+            onOpenOrders={() => setActiveView('vorgaenge')}
+          />
         )}
 
         {activeView === 'inbox' && (
