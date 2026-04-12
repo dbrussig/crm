@@ -13,5 +13,9 @@ fi
 rm -rf "$DST_APP"
 ditto "$SRC_APP" "$DST_APP"
 
+find "$DST_APP" -name "._*" -delete
+xattr -cr "$DST_APP"
+codesign --force --deep --sign - "$DST_APP"
+
 echo "Installiert: $DST_APP"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$DST_APP/Contents/Info.plist" | sed 's/^/Version: /'
