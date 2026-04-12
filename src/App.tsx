@@ -360,6 +360,13 @@ export default function App() {
     setActiveView('vorgaenge');
   };
 
+  const openRentalDirect = (rentalId: string) => {
+    const rid = String(rentalId || '').trim();
+    if (!rid) return;
+    setSelectedRentalId(rid);
+    setActiveView('vorgaenge');
+  };
+
 
   const onRentalRequestCreate = async (data: {
     customerId: string;
@@ -564,6 +571,7 @@ export default function App() {
             invoices={dashboardInvoices}
             payments={dashboardPayments}
             onOpenRental={openDashboardRental}
+            onOpenRentalDetail={openRentalDirect}
             onOpenInvoice={openInvoiceEditorById}
             onOpenOrders={() => setActiveView('vorgaenge')}
           />

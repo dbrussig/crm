@@ -21,6 +21,7 @@ type DashboardPanelProps = {
   invoices: Invoice[];
   payments: Payment[];
   onOpenRental: (rentalId: string) => void | Promise<void>;
+  onOpenRentalDetail: (rentalId: string) => void | Promise<void>;
   onOpenInvoice: (invoiceId: string) => void | Promise<void>;
   onOpenOrders: () => void;
 };
@@ -46,11 +47,18 @@ function calcInvoiceGross(items: InvoiceItem[]): number {
   }, 0);
 }
 
-function sumPaymentsForInvoice(payments: Payment[], invoiceId: string): number {
-  const id = String(invoiceId || '').trim();
-  if (!id) return 0;
+function sumClaimPaymentsForContext(payments: Payment[], rentalId?: string, invoiceId?: string): number {
+  const rid = String(rentalId || '').trim();
+  const iid = String(invoiceId || '').trim();
   return payments
-    .filter((p) => String(p.invoiceId || '').trim() === id)
+    .filter((p) => {
+      if (p.kind === 'Kaution') return false;
+      const paymentInvoiceId = String(p.invoiceId || '').trim();
+      const paymentRentalId = String(p.rentalRequestId || '').trim();
+      if (iid && paymentInvoiceId === iid) return true;
+      if (rid && !paymentInvoiceId && paymentRentalId === rid) return true;
+      return false;
+    })
     .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 }
 
@@ -83,13 +91,14 @@ function KpiCard(props: {
   value: string;
   deltaText?: string;
   deltaTone?: 'up' | 'down' | 'neutral';
+  deltaHint?: string;
   iconBgClass: string;
   icon: React.ReactNode;
   sublines?: string[];
   active?: boolean;
   onClick?: () => void;
 }) {
-  const { title, value, deltaText, deltaTone, iconBgClass, icon, sublines, active = false, onClick } = props;
+  const { title, value, deltaText, deltaTone, deltaHint = 'vs. letzter Monat', iconBgClass, icon, sublines, active = false, onClick } = props;
   const toneClass =
     deltaTone === 'up' ? 'text-emerald-700' : deltaTone === 'down' ? 'text-rose-700' : 'text-slate-500';
   const body = (
@@ -112,7 +121,7 @@ function KpiCard(props: {
       {deltaText ? (
         <div className={['mt-3 text-xs font-medium flex items-center gap-1', toneClass].join(' ')}>
           <span>{deltaText}</span>
-          <span className="text-slate-400 font-normal">vs. letzter Monat</span>
+          <span className="text-slate-400 font-normal">{deltaHint}</span>
         </div>
       ) : null}
       {sublines?.length ? (
@@ -147,8 +156,17 @@ type DrilldownRow = {
   rentalId?: string;
 };
 
+type SmartInsight = {
+  key: string;
+  tone: 'amber' | 'rose' | 'emerald' | 'sky';
+  title: string;
+  text: string;
+  invoiceId?: string;
+  rentalId?: string;
+};
+
 export default function DashboardPanel(props: DashboardPanelProps) {
-  const { customers, rentals, invoices, payments, onOpenRental, onOpenInvoice, onOpenOrders } = props;
+  const { customers, rentals, invoices, payments, onOpenRental, onOpenRentalDetail, onOpenInvoice, onOpenOrders } = props;
   const [activeDrilldown, setActiveDrilldown] = useState<DrilldownKey | null>(null);
   const company = useMemo(() => getCompanyProfile(), []);
   const ownerFirstName = useMemo(() => {
@@ -165,6 +183,12 @@ export default function DashboardPanel(props: DashboardPanelProps) {
   const year = useMemo(() => new Date().getFullYear(), []);
   const yearStart = useMemo(() => new Date(year, 0, 1).getTime(), [year]);
   const nextYearStart = useMemo(() => new Date(year + 1, 0, 1).getTime(), [year]);
+  const previousYearStart = useMemo(() => new Date(year - 1, 0, 1).getTime(), [year]);
+  const sameDayLastYearTs = useMemo(() => {
+    const d = new Date(now);
+    d.setFullYear(d.getFullYear() - 1);
+    return d.getTime();
+  }, [now]);
 
   const monthStart = useMemo(() => getMonthStart(new Date()), []);
   const nextMonthStart = useMemo(() => getNextMonthStart(new Date()), []);
@@ -179,31 +203,22 @@ export default function DashboardPanel(props: DashboardPanelProps) {
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   }, [payments, yearStart, nextYearStart]);
 
-  const paymentsMonthTotal = useMemo(() => {
+  const paymentsPrevYearToDateTotal = useMemo(() => {
     return payments
       .filter((p) => {
         const ts = Number(p.receivedAt || p.createdAt || 0);
-        return ts >= monthStart && ts < nextMonthStart;
+        return ts >= previousYearStart && ts <= sameDayLastYearTs;
       })
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-  }, [payments, monthStart, nextMonthStart]);
+  }, [payments, previousYearStart, sameDayLastYearTs]);
 
-  const paymentsPrevMonthTotal = useMemo(() => {
-    return payments
-      .filter((p) => {
-        const ts = Number(p.receivedAt || p.createdAt || 0);
-        return ts >= prevMonthStart && ts < monthStart;
-      })
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-  }, [payments, prevMonthStart, monthStart]);
-
-  const revenueDeltaPct = useMemo(() => {
-    const prev = paymentsPrevMonthTotal;
-    const cur = paymentsMonthTotal;
+  const revenueYearToDateDeltaPct = useMemo(() => {
+    const prev = paymentsPrevYearToDateTotal;
+    const cur = paymentsYearTotal;
     if (prev <= 0 && cur > 0) return 100;
     if (prev <= 0) return 0;
     return Math.round(((cur - prev) / prev) * 1000) / 10; // 1 decimal
-  }, [paymentsPrevMonthTotal, paymentsMonthTotal]);
+  }, [paymentsPrevYearToDateTotal, paymentsYearTotal]);
 
   const customerCount = customers.length;
   const customersThisMonth = useMemo(() => customers.filter((c) => c.createdAt >= monthStart && c.createdAt < nextMonthStart).length, [customers, monthStart, nextMonthStart]);
@@ -298,19 +313,23 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     return rows.sort((a, b) => a.title.localeCompare(b.title, 'de'));
   }, [rentableInvoices, today, latestInvoiceForRental, rentalById, customerById]);
 
+  const isOpenOrderRentalAt = (rental: RentalRequest, dayTs: number) => {
+    if (!['angenommen', 'rechnung_gestellt', 'uebergabe_rueckgabe'].includes(rental.status)) return false;
+    return toLocalDayStart(rental.rentalEnd) >= dayTs;
+  };
+
   const openOrdersCount = useMemo(() => {
-    return rentals.filter((r) => ['angenommen', 'rechnung_gestellt', 'uebergabe_rueckgabe'].includes(r.status)).length;
-  }, [rentals]);
+    return rentals.filter((r) => isOpenOrderRentalAt(r, today)).length;
+  }, [rentals, today]);
 
   const openOrdersPrevMonth = useMemo(() => {
-    // Heuristik: Vergleich nach Erstellungsmonat der Vorgänge
-    const cur = rentals.filter((r) => ['angenommen', 'rechnung_gestellt', 'uebergabe_rueckgabe'].includes(r.status) && r.createdAt >= monthStart && r.createdAt < nextMonthStart).length;
-    const prev = rentals.filter((r) => ['angenommen', 'rechnung_gestellt', 'uebergabe_rueckgabe'].includes(r.status) && r.createdAt >= prevMonthStart && r.createdAt < monthStart).length;
-    return cur - prev;
-  }, [rentals, monthStart, nextMonthStart, prevMonthStart]);
+    const ref = new Date();
+    ref.setMonth(ref.getMonth() - 1);
+    return rentals.filter((r) => isOpenOrderRentalAt(r, toLocalDayStart(ref.getTime()))).length;
+  }, [rentals]);
   const openOrderRows = useMemo<DrilldownRow[]>(() => {
     return rentals
-      .filter((r) => ['angenommen', 'rechnung_gestellt', 'uebergabe_rueckgabe'].includes(r.status))
+      .filter((r) => isOpenOrderRentalAt(r, today))
       .map((r) => {
         const customer = customerById.get(r.customerId);
         const inv = latestInvoiceForRental.get(r.id) || null;
@@ -324,7 +343,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
         };
       })
       .sort((a, b) => a.subtitle.localeCompare(b.subtitle, 'de'));
-  }, [rentals, customerById, latestInvoiceForRental]);
+  }, [rentals, customerById, latestInvoiceForRental, today]);
 
   const [grossByInvoiceId, setGrossByInvoiceId] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -355,62 +374,72 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     };
   }, [relevantInvoices]);
 
-  const expectedRevenue = useMemo(() => {
-    let total = 0;
-    let open = 0;
-    let count = 0;
-    for (const inv of relevantInvoices) {
-      const gross = Number(grossByInvoiceId[inv.id] || 0);
-      const paid = Math.round(sumPaymentsForInvoice(payments, inv.id) * 100) / 100;
-      const invOpen = Math.max(0, Math.round((gross - paid) * 100) / 100);
-      if (gross <= 0) continue;
-      if (invOpen <= 0) continue;
-      count += 1;
-      total += gross;
-      open += invOpen;
-    }
-    total = Math.round(total * 100) / 100;
-    open = Math.round(open * 100) / 100;
-    return { total, open, count };
-  }, [relevantInvoices, grossByInvoiceId, payments]);
-  const expectedRevenueRows = useMemo<DrilldownRow[]>(() => {
-    return relevantInvoices
-      .map((inv) => {
+  const buildOpenOrderFinancialRowsAt = (dayTs: number) => {
+    return rentals
+      .filter((r) => isOpenOrderRentalAt(r, dayTs))
+      .map((r) => {
+        const inv = latestInvoiceForRental.get(r.id) || null;
+        if (!inv?.id) return null;
         const gross = Number(grossByInvoiceId[inv.id] || 0);
-        const paid = Math.round(sumPaymentsForInvoice(payments, inv.id) * 100) / 100;
+        const paid = Math.round(sumClaimPaymentsForContext(payments, r.id, inv.id) * 100) / 100;
         const open = Math.max(0, Math.round((gross - paid) * 100) / 100);
         if (gross <= 0 || open <= 0) return null;
-        const rental = inv.rentalRequestId ? rentalById.get(inv.rentalRequestId) : undefined;
-        const customer = rental ? customerById.get(rental.customerId) : undefined;
+        const customer = customerById.get(r.customerId);
         return {
-          key: inv.id,
-          title: `${inv.invoiceType} ${inv.invoiceNo || '(ohne Nummer)'}`,
-          subtitle: customer ? `${customer.firstName} ${customer.lastName}`.trim() : inv.buyerName,
-          meta: `${formatCurrency(open)} offen von ${formatCurrency(gross)}`,
-          invoiceId: inv.id,
-          rentalId: inv.rentalRequestId,
-        } as DrilldownRow;
+          rental: r,
+          inv,
+          gross,
+          paid,
+          open,
+          row: {
+            key: r.id,
+            title: `${inv.invoiceType} ${inv.invoiceNo || '(ohne Nummer)'}`,
+            subtitle: customer ? `${customer.firstName} ${customer.lastName}`.trim() : (inv.buyerName || r.customerId),
+            meta: `${formatCurrency(open)} Rest offen`,
+            invoiceId: inv.id,
+            rentalId: r.id,
+          } as DrilldownRow,
+        };
       })
-      .filter((row): row is DrilldownRow => Boolean(row))
-      .sort((a, b) => a.title.localeCompare(b.title, 'de'));
-  }, [relevantInvoices, grossByInvoiceId, payments, rentalById, customerById]);
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort((a, b) => a.row.title.localeCompare(b.row.title, 'de'));
+  };
+
+  const openOrderFinancialRows = useMemo(() => buildOpenOrderFinancialRowsAt(today), [
+    rentals,
+    today,
+    latestInvoiceForRental,
+    grossByInvoiceId,
+    payments,
+    customerById,
+  ]);
+
+  const expectedRevenueRows = useMemo<DrilldownRow[]>(() => {
+    return openOrderFinancialRows.map((entry) => entry.row);
+  }, [openOrderFinancialRows]);
+
+  const expectedRevenue = useMemo(() => {
+    const open = Math.round(openOrderFinancialRows.reduce((sum, entry) => sum + entry.open, 0) * 100) / 100;
+    return { total: open, open, count: openOrderFinancialRows.length };
+  }, [openOrderFinancialRows]);
 
   const expectedRevenueDeltaOrders = useMemo(() => {
-    const cur = relevantInvoices.filter((inv) => inv.createdAt >= monthStart && inv.createdAt < nextMonthStart).length;
-    const prev = relevantInvoices.filter((inv) => inv.createdAt >= prevMonthStart && inv.createdAt < monthStart).length;
-    return cur - prev;
-  }, [relevantInvoices, monthStart, nextMonthStart, prevMonthStart]);
+    const ref = new Date();
+    ref.setMonth(ref.getMonth() - 1);
+    return openOrderFinancialRows.length - buildOpenOrderFinancialRowsAt(toLocalDayStart(ref.getTime())).length;
+  }, [openOrderFinancialRows, rentals, latestInvoiceForRental, grossByInvoiceId, payments, customerById]);
 
   const ordersPaymentBuckets = useMemo(() => {
-    const rows = relevantInvoices.map((inv) => {
-      const gross = Number(grossByInvoiceId[inv.id] || 0);
-      const paid = Math.round(sumPaymentsForInvoice(payments, inv.id) * 100) / 100;
-      const open = Math.max(0, Math.round((gross - paid) * 100) / 100);
-      return { inv, gross, paid, open };
-    }).filter((x) => x.gross > 0 && x.open > 0);
+    const rows = openOrderFinancialRows.map((entry) => ({
+      rental: entry.rental,
+      inv: entry.inv,
+      gross: entry.gross,
+      paid: entry.paid,
+      open: entry.open,
+    }));
 
     const partial = rows.filter((x) => x.paid > 0);
-    const unpaid = rows.filter((x) => x.paid <= 0);
+    const unpaid = rows.filter((x) => x.paid <= 0 && toLocalDayStart(x.rental.rentalStart) > today);
 
     const sum = (arr: typeof rows) => ({
       total: Math.round(arr.reduce((s, x) => s + x.gross, 0) * 100) / 100,
@@ -424,17 +453,17 @@ export default function DashboardPanel(props: DashboardPanelProps) {
       partialInvoices: partial.map((x) => x.inv),
       unpaidInvoices: unpaid.map((x) => x.inv),
     };
-  }, [relevantInvoices, grossByInvoiceId, payments]);
+  }, [openOrderFinancialRows, today]);
 
   const upcomingAppointments = useMemo(() => {
-    const in7 = today + 7 * 24 * 60 * 60 * 1000;
+    const in14 = today + 14 * 24 * 60 * 60 * 1000;
     const items: Array<{ kind: 'Übergabe' | 'Rückgabe'; ts: number; rental: RentalRequest }> = [];
     for (const r of rentals) {
       if (!openRentalStatuses.includes(r.status)) continue;
       const startDay = toLocalDayStart(r.rentalStart);
       const endDay = toLocalDayStart(r.rentalEnd);
-      if (startDay >= today && startDay <= in7) items.push({ kind: 'Übergabe', ts: r.rentalStart, rental: r });
-      if (endDay >= today && endDay <= in7) items.push({ kind: 'Rückgabe', ts: r.rentalEnd, rental: r });
+      if (startDay >= today && startDay <= in14) items.push({ kind: 'Übergabe', ts: r.rentalStart, rental: r });
+      if (endDay >= today && endDay <= in14) items.push({ kind: 'Rückgabe', ts: r.rentalEnd, rental: r });
     }
     items.sort((a, b) => a.ts - b.ts);
     return items.slice(0, 10);
@@ -458,8 +487,22 @@ export default function DashboardPanel(props: DashboardPanelProps) {
 
     const cur = sumByMonthForYear(currentYear);
     const prev = sumByMonthForYear(previousYear);
+    const expectedByMonthForYear = (y: number) => {
+      const out = new Array(12).fill(0);
+      for (const entry of openOrderFinancialRows) {
+        const ts = Number(entry.rental.rentalStart || 0);
+        const d = new Date(ts);
+        if (d.getFullYear() !== y) continue;
+        out[d.getMonth()] += Number(entry.open) || 0;
+      }
+      return out.map((v) => Math.round(v * 100) / 100);
+    };
+    const expectedCur = expectedByMonthForYear(currentYear);
+    const expectedPrev = expectedByMonthForYear(previousYear);
     const curTotal = Math.round(cur.reduce((s, v) => s + v, 0) * 100) / 100;
     const prevTotal = Math.round(prev.reduce((s, v) => s + v, 0) * 100) / 100;
+    const expectedCurTotal = Math.round(expectedCur.reduce((s, v) => s + v, 0) * 100) / 100;
+    const expectedPrevTotal = Math.round(expectedPrev.reduce((s, v) => s + v, 0) * 100) / 100;
 
     return {
       labels: months,
@@ -467,10 +510,14 @@ export default function DashboardPanel(props: DashboardPanelProps) {
       prevYear: previousYear,
       cur,
       prev,
+      expectedCur,
+      expectedPrev,
       curTotal,
       prevTotal,
+      expectedCurTotal,
+      expectedPrevTotal,
     };
-  }, [payments]);
+  }, [payments, openOrderFinancialRows]);
 
   const chartData = useMemo(() => {
     return {
@@ -491,6 +538,15 @@ export default function DashboardPanel(props: DashboardPanelProps) {
           backgroundColor: 'rgba(59,130,246,0.08)',
           pointRadius: 2,
           borderDash: [6, 6],
+          tension: 0.35,
+        },
+        {
+          label: `${revenueComparison.curYear} erwartet: ${formatCompact(revenueComparison.expectedCurTotal)} €`,
+          data: revenueComparison.expectedCur,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245,158,11,0.12)',
+          pointRadius: 2,
+          borderDash: [2, 4],
           tension: 0.35,
         },
       ],
@@ -533,6 +589,69 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     return '';
   }, [activeDrilldown]);
 
+  const smartInsights = useMemo<SmartInsight[]>(() => {
+    const insights: SmartInsight[] = [];
+
+    const overdueReturns = rentals
+      .filter((r) => openRentalStatuses.includes(r.status) && toLocalDayStart(r.rentalEnd) < today)
+      .sort((a, b) => a.rentalEnd - b.rentalEnd);
+    if (overdueReturns.length) {
+      const rental = overdueReturns[0];
+      const customer = customerById.get(rental.customerId);
+      const inv = latestInvoiceForRental.get(rental.id);
+      insights.push({
+        key: `overdue-return:${rental.id}`,
+        tone: 'rose',
+        title: `${overdueReturns.length} Rückgabe${overdueReturns.length === 1 ? '' : 'n'} überfällig`,
+        text: `${customer ? `${customer.firstName} ${customer.lastName}`.trim() : rental.productType} hätte am ${new Date(rental.rentalEnd).toLocaleDateString('de-DE')} zurück sein sollen.`,
+        invoiceId: inv?.id,
+        rentalId: rental.id,
+      });
+    }
+
+    if (upcomingAppointments.length) {
+      const nextAppointment = upcomingAppointments[0];
+      const customer = customerById.get(nextAppointment.rental.customerId);
+      const inv = latestInvoiceForRental.get(nextAppointment.rental.id);
+      insights.push({
+        key: `next-appointment:${nextAppointment.kind}:${nextAppointment.rental.id}`,
+        tone: 'emerald',
+        title: `Nächste ${nextAppointment.kind.toLowerCase()} am ${new Date(nextAppointment.ts).toLocaleDateString('de-DE')}`,
+        text: `${nextAppointment.rental.productType}${customer ? ` · ${customer.firstName} ${customer.lastName}`.trim() : ''}`,
+        invoiceId: inv?.id,
+        rentalId: nextAppointment.rental.id,
+      });
+    }
+
+    const largestOpenOrder = [...openOrderFinancialRows].sort((a, b) => b.open - a.open)[0];
+    if (largestOpenOrder) {
+      insights.push({
+        key: `largest-open:${largestOpenOrder.row.key}`,
+        tone: 'sky',
+        title: `Größte offene Forderung: ${formatCurrency(largestOpenOrder.open)}`,
+        text: `${largestOpenOrder.row.title} · ${largestOpenOrder.row.subtitle}`,
+        invoiceId: largestOpenOrder.inv.id,
+        rentalId: largestOpenOrder.row.rentalId,
+      });
+    }
+
+    const partialOrder = openOrderFinancialRows
+      .filter((entry) => entry.paid > 0 && entry.open > 0)
+      .sort((a, b) => b.paid - a.paid)[0];
+    if (partialOrder) {
+      insights.push({
+        key: `partial-order:${partialOrder.row.key}`,
+        tone: 'amber',
+        title: `Anzahlung vorhanden, Rest offen: ${formatCurrency(partialOrder.open)}`,
+        text: `${partialOrder.row.title} · ${formatCurrency(partialOrder.paid)} bereits bezahlt`,
+        invoiceId: partialOrder.inv.id,
+        rentalId: partialOrder.row.rentalId,
+      });
+    }
+
+    return insights.slice(0, 4);
+  }, [rentals, today, customerById, latestInvoiceForRental, upcomingAppointments, openOrderFinancialRows]);
+
   return (
     <div className="max-w-7xl">
       <div className="mb-5">
@@ -546,16 +665,15 @@ export default function DashboardPanel(props: DashboardPanelProps) {
         <KpiCard
           title={`Gesamtumsatz (${year})`}
           value={formatCurrency(paymentsYearTotal)}
-          deltaText={`${revenueDeltaPct >= 0 ? '↗' : '↘'} ${Math.abs(revenueDeltaPct).toFixed(1)}%`}
-          deltaTone={revenueDeltaPct >= 0 ? 'up' : 'down'}
+          deltaText={`${revenueYearToDateDeltaPct >= 0 ? '↗' : '↘'} ${Math.abs(revenueYearToDateDeltaPct).toFixed(1)}%`}
+          deltaTone={revenueYearToDateDeltaPct >= 0 ? 'up' : 'down'}
+          deltaHint="vs. Vorjahreszeitraum"
           iconBgClass="bg-emerald-500 text-white"
           icon={<span className="text-lg font-bold">€</span>}
         />
         <KpiCard
           title="Aktive Kunden"
           value={`${customerCount}`}
-          deltaText={`${customersDelta >= 0 ? '↗' : '↘'} ${customersDelta >= 0 ? '+' : ''}${customersDelta}`}
-          deltaTone={customersDelta >= 0 ? 'up' : 'down'}
           iconBgClass="bg-blue-500 text-white"
           icon={<span className="text-lg font-bold">👥</span>}
         />
@@ -625,7 +743,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
                     {row.rentalId ? (
                       <button
                         type="button"
-                        onClick={() => void onOpenRental(row.rentalId!)}
+                        onClick={() => void onOpenRentalDetail(row.rentalId!)}
                         className="px-2.5 py-1.5 rounded-md border border-slate-300 text-xs hover:bg-white"
                       >
                         Vorgang öffnen
@@ -639,8 +757,8 @@ export default function DashboardPanel(props: DashboardPanelProps) {
         </div>
       ) : null}
 
-      <div className="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm h-full flex flex-col">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-900">Aufträge angezahlt</div>
@@ -654,7 +772,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
             </div>
             <div className="h-10 w-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">🕒</div>
           </div>
-          <div className="mt-4 border-t border-slate-100 pt-3">
+          <div className="mt-auto pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={onOpenOrders}
@@ -664,7 +782,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
             </button>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm h-full flex flex-col">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-900">Aufträge unbezahlt</div>
@@ -678,7 +796,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
             </div>
             <div className="h-10 w-10 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">⛔</div>
           </div>
-          <div className="mt-4 border-t border-slate-100 pt-3">
+          <div className="mt-auto pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={onOpenOrders}
@@ -704,7 +822,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
         {upcomingAppointments.length === 0 ? (
           <div className="h-40 flex flex-col items-center justify-center text-slate-500">
             <div className="text-3xl mb-2">🗓️</div>
-            <div className="text-sm">Keine anstehenden Termine in den nächsten 7 Tagen</div>
+            <div className="text-sm">Keine anstehenden Abhol- oder Rückgabetermine in den nächsten 14 Tagen</div>
           </div>
         ) : (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -741,9 +859,52 @@ export default function DashboardPanel(props: DashboardPanelProps) {
             <span className="text-lg">✨</span>
             <div className="text-sm font-semibold text-slate-900">Smart Insights</div>
           </div>
-          <div className="mt-3 text-sm text-slate-600">
-            Kurz-Insights folgen (z.B. überfällige Rückgaben, offene Zahlungen, bevorstehende Übergaben).
-          </div>
+          {smartInsights.length === 0 ? (
+            <div className="mt-3 text-sm text-slate-600">
+              Keine kritischen Hinweise. Dashboard wirkt aktuell konsistent.
+            </div>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {smartInsights.map((insight) => {
+                const toneClasses =
+                  insight.tone === 'rose'
+                    ? 'bg-rose-50 border-rose-200'
+                    : insight.tone === 'amber'
+                      ? 'bg-amber-50 border-amber-200'
+                      : insight.tone === 'sky'
+                        ? 'bg-sky-50 border-sky-200'
+                        : 'bg-emerald-50 border-emerald-200';
+                return (
+                  <div key={insight.key} className={`rounded-lg border p-3 ${toneClasses}`}>
+                    <div className="text-sm font-semibold text-slate-900">{insight.title}</div>
+                    <div className="mt-1 text-xs text-slate-600">{insight.text}</div>
+                    {(insight.invoiceId || insight.rentalId) ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        {insight.invoiceId ? (
+                          <button
+                            type="button"
+                            onClick={() => void onOpenInvoice(insight.invoiceId!)}
+                            className="px-2.5 py-1.5 rounded-md bg-slate-900 text-white text-xs hover:bg-slate-800"
+                          >
+                            Belegeditor öffnen
+                          </button>
+                        ) : null}
+                        {insight.rentalId ? (
+                          <button
+                            type="button"
+                            onClick={() => void onOpenRentalDetail(insight.rentalId!)}
+                            className="px-2.5 py-1.5 rounded-md border border-slate-300 text-xs hover:bg-white"
+                          >
+                            Vorgang öffnen
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
