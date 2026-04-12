@@ -104,7 +104,7 @@ function KpiCard(props: {
   const body = (
     <div
       className={[
-        'bg-white border rounded-xl p-4 shadow-sm transition-colors',
+        'bg-white border rounded-xl p-4 shadow-sm transition-colors h-full flex flex-col',
         active ? 'border-slate-400 ring-1 ring-slate-300' : 'border-slate-200',
         onClick ? 'cursor-pointer hover:border-slate-300' : '',
       ].join(' ')}
@@ -114,30 +114,32 @@ function KpiCard(props: {
           <div className="text-xs font-semibold text-slate-500">{title}</div>
           <div className="mt-1 text-2xl font-bold text-slate-900">{value}</div>
         </div>
-        <div className={['h-10 w-10 rounded-lg flex items-center justify-center', iconBgClass].join(' ')}>
+        <div className={['h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0', iconBgClass].join(' ')}>
           {icon}
         </div>
       </div>
-      {deltaText ? (
-        <div className={['mt-3 text-xs font-medium flex items-center gap-1', toneClass].join(' ')}>
-          <span>{deltaText}</span>
-          <span className="text-slate-400 font-normal">{deltaHint}</span>
-        </div>
-      ) : null}
-      {sublines?.length ? (
-        <div className="mt-2 space-y-1">
-          {sublines.map((l, idx) => (
-            <div key={idx} className="text-xs text-slate-500">
-              {l}
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <div className="mt-auto">
+        {deltaText ? (
+          <div className={['mt-3 text-xs font-medium flex items-center gap-1', toneClass].join(' ')}>
+            <span>{deltaText}</span>
+            <span className="text-slate-400 font-normal">{deltaHint}</span>
+          </div>
+        ) : null}
+        {sublines?.length ? (
+          <div className="mt-2 space-y-1">
+            {sublines.map((l, idx) => (
+              <div key={idx} className="text-xs text-slate-500">
+                {l}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className="text-left">
+      <button type="button" onClick={onClick} className="text-left h-full w-full">
         {body}
       </button>
     );
@@ -680,7 +682,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-stretch">
         <KpiCard
           title={`Gesamtumsatz (${year})`}
           value={formatCurrency(paymentsYearTotal)}
