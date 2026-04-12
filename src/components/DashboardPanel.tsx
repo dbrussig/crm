@@ -314,6 +314,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
   }, [rentableInvoices, today, latestInvoiceForRental, rentalById, customerById]);
 
   const isOpenOrderRentalAt = (rental: RentalRequest, dayTs: number) => {
+    if (rental.status === 'abgeschlossen') return true;
     if (!['angenommen', 'rechnung_gestellt', 'uebergabe_rueckgabe'].includes(rental.status)) return false;
     return toLocalDayStart(rental.rentalEnd) >= dayTs;
   };
