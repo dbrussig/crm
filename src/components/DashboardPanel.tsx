@@ -257,6 +257,21 @@ export default function DashboardPanel(props: DashboardPanelProps) {
       ])
     );
   }, [relevantInvoices]);
+  const latestOrderInvoiceForRental = useMemo(() => {
+    const grouped = new Map<string, Invoice[]>();
+    for (const inv of relevantInvoices) {
+      if (inv.invoiceType !== 'Auftrag') continue;
+      const rid = String(inv.rentalRequestId || '').trim();
+      if (!rid) continue;
+      grouped.set(rid, [...(grouped.get(rid) || []), inv]);
+    }
+    return new Map(
+      Array.from(grouped.entries()).map(([rid, rows]) => [
+        rid,
+        [...rows].sort((a, b) => (b.invoiceDate || b.createdAt || 0) - (a.invoiceDate || a.createdAt || 0))[0],
+      ])
+    );
+  }, [relevantInvoices]);
 
   const countActiveRentalUnitsAt = (dayTs: number) => {
     const seen = new Set<string>();
@@ -305,7 +320,6 @@ export default function DashboardPanel(props: DashboardPanelProps) {
   }, [rentableInvoices, today, latestInvoiceForRental, rentalById, customerById]);
 
   const isOpenOrderRentalAt = (rental: RentalRequest, dayTs: number) => {
-    if (rental.status === 'abgeschlossen') return true;
     if (!['angenommen', 'rechnung_gestellt', 'uebergabe_rueckgabe'].includes(rental.status)) return false;
     return toLocalDayStart(rental.rentalEnd) >= dayTs;
   };
@@ -370,7 +384,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     return rentals
       .filter((r) => isOpenOrderRentalAt(r, dayTs))
       .map((r) => {
-        const inv = latestInvoiceForRental.get(r.id) || null;
+        const inv = latestOrderInvoiceForRental.get(r.id) || null;
         if (!inv?.id) return null;
         const gross = Number(grossByInvoiceId[inv.id] || 0);
         const paid = Math.round(sumClaimPaymentsForContext(payments, r.id, inv.id) * 100) / 100;
@@ -400,7 +414,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
   const openOrderFinancialRows = useMemo(() => buildOpenOrderFinancialRowsAt(today), [
     rentals,
     today,
-    latestInvoiceForRental,
+    latestOrderInvoiceForRental,
     grossByInvoiceId,
     payments,
     customerById,
@@ -419,7 +433,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     const ref = new Date();
     ref.setMonth(ref.getMonth() - 1);
     return openOrderFinancialRows.length - buildOpenOrderFinancialRowsAt(toLocalDayStart(ref.getTime())).length;
-  }, [openOrderFinancialRows, rentals, latestInvoiceForRental, grossByInvoiceId, payments, customerById]);
+  }, [openOrderFinancialRows, rentals, latestOrderInvoiceForRental, grossByInvoiceId, payments, customerById]);
 
   const ordersPaymentBuckets = useMemo(() => {
     const rows = openOrderFinancialRows.map((entry) => ({

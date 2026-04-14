@@ -17,6 +17,9 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 
 ### Changed
 - Projektregeln verschaerft: Feature-/Fix-PRs muessen `README.md` und `CHANGELOG.md` aktualisieren (CI-Guard).
+- Dashboard-Header vereinfacht: der Begruessungstext unter `Dashboard` entfällt.
+- KPI-Kacheln im Dashboard sind typografisch und in der Hoehe vereinheitlicht; `Erwartete Einnahmen` zeigt keine separate Zeile `Rest offen` mehr.
+- `Aufträge angezahlt` und `Aufträge unbezahlt` verwenden jetzt denselben lokalen Drilldown-Mechanismus wie die oberen Dashboard-Kacheln statt einer Weiterleitung.
 - Belegeditor erweitert: Anzahlung ist jetzt in Angebot und Auftrag optional aktivierbar (persistentes Toggle `depositEnabled`).
 - Folgebeleg-Logik angepasst: Bei `Auftrag -> Rechnung` wird der Ausgangsauftrag archiviert, die Auftragsnummer bleibt unveraendert.
 - Build-Chunks fuer Desktop gezielt aufgeteilt (`Inbox`, `Belege-Workflow`, `PDF-Service`, Vendor-Segmente), um den Main-Chunk deutlich zu verkleinern.
@@ -27,6 +30,11 @@ Alle relevanten Aenderungen an Features und Fixes werden hier dokumentiert.
 - SQLite-Verbindungen setzen jetzt WAL + `busy_timeout` global für robustere Dateizugriffe.
 
 ### Fixed
+- Vite-Produktionsbuild haengt nicht mehr in der Standard-Minifizierung: Desktop-Builds verwenden jetzt `terser` statt `esbuild`-Minify.
+- `npm run tauri:build` installiert erfolgreiche macOS-Builds jetzt automatisch nach `/Applications`; Installation kann optional per `APPLE_SKIP_INSTALL=1` uebersprungen werden.
+- Lokaler Desktop-Build kann per `APPLE_DISABLE_SIGNING=1` ohne Apple-Signing gebaut werden, um File-Provider-/Finder-Metadaten-Probleme im `Documents`-Pfad zu umgehen.
+- Dashboard `Anstehende Termine` nutzt jetzt echte `pickupDate`/`returnDate`-Zeitpunkte statt nur `rentalStart`/`rentalEnd`, sodass bevorstehende Rueckgaben korrekt erscheinen.
+- Dashboard-Filter fuer `Offene Aufträge`, `Aufträge angezahlt` und `Erwartete Einnahmen` berechnen nur noch fachlich offene Auftragsvorgaenge; abgeschlossene Vorgaenge und reine Rechnungen erscheinen dort nicht mehr.
 - Repository-Hygiene verbessert: lokale DB- und nicht-projektbezogene Artefakte bleiben ausserhalb von GitLab.
 - Google OAuth Desktop: Browser-Öffnung unter macOS App Sandbox stabilisiert und Token-Tausch liefert jetzt aussagekräftige Fehlerdetails (z.B. `invalid_grant`).
 - Google OAuth: Klarere Fehlermeldung wenn ein Web-Client verwendet wird (`client_secret is missing`).

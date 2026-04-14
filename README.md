@@ -135,6 +135,9 @@ Ab sofort gilt verbindlich:
 - PDF-Inhalt wird layoutnah aus derselben Beleg-HTML gerendert (mehrseitig), damit Vorschau und gespeicherte Datei visuell uebereinstimmen.
 - Seitenumbrueche werden beim Rendern automatisch an visuell ruhige Zeilen gelegt, um harte Schnitte in Tabellen/Text zu minimieren.
 - Dashboard-Kennzahlen `Offene Vorgänge` und `Aktiv ausgegeben` bewerten Mietdaten tagesbasiert (lokaler Tagesanfang), um UTC/Zeitzonen-Importe korrekt abzubilden.
+- Dashboard `Anstehende Termine` nutzt fuer Abholung/Rueckgabe bevorzugt die expliziten Terminzeitpunkte `pickupDate` und `returnDate`.
+- Dashboard-Kacheln sind optisch vereinheitlicht; `Smart Insights` wurde aus dem Dashboard entfernt.
+- `Offene Aufträge`, `Aufträge angezahlt` und `Erwartete Einnahmen` schliessen abgeschlossene Vorgänge und reine Rechnungen aus.
 
 ## Inbox + Mail-Versand (Desktop)
 
@@ -150,6 +153,11 @@ Ab sofort gilt verbindlich:
 
 - Vite-Build ist in funktionsbezogene Chunks aufgeteilt (`inbox`, `belege-workflow`, `pdf-service`, dedizierte Vendor-Chunks fuer PDF/React/DnD/Date).
 - Dadurch ist der Main-Entry-Chunk deutlich kleiner und Releases laden stabiler in Desktop-Umgebungen.
+- Produktionsbuilds nutzen `terser` statt `esbuild` fuer die Minifizierung, weil der alte Minify-Pfad im Desktop-Projekt haengen konnte.
+- `npm run tauri:build` baut die App und installiert das fertige `.app` Bundle unter macOS automatisch nach `/Applications/CRM Buddy Desktop.app`.
+- Optionale lokale Build-Schalter:
+  - `APPLE_DISABLE_SIGNING=1 npm run tauri:build` baut ohne Apple-Signing
+  - `APPLE_SKIP_INSTALL=1 npm run tauri:build` ueberspringt die Auto-Installation nach `/Applications`
 
 ## Finanz-Dashboard (Option A)
 
