@@ -26,7 +26,8 @@ export default defineConfig({
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
     target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
-    minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
+    // esbuild minification hangs on this production bundle; terser is slower but completes reliably.
+    minify: !process.env.TAURI_ENV_DEBUG ? 'terser' : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
     rollupOptions: {
       output: {

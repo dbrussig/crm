@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Customer, Invoice, InvoiceItem, Payment, RentalRequest, RentalStatus } from '../types';
-import { getCompanyProfile } from '../config/companyProfile';
 import { getInvoiceItems } from '../services/sqliteService';
 import { Line } from 'react-chartjs-2';
 import {
@@ -104,31 +103,31 @@ function KpiCard(props: {
   const body = (
     <div
       className={[
-        'bg-white border rounded-xl p-4 shadow-sm transition-colors h-full flex flex-col',
+        'bg-white border rounded-xl p-4 shadow-sm transition-colors h-full min-h-[168px] flex flex-col',
         active ? 'border-slate-400 ring-1 ring-slate-300' : 'border-slate-200',
         onClick ? 'cursor-pointer hover:border-slate-300' : '',
       ].join(' ')}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs font-semibold text-slate-500">{title}</div>
-          <div className="mt-1 text-2xl font-bold text-slate-900">{value}</div>
+        <div className="min-w-0 flex-1">
+          <div className="min-h-[2.5rem] text-xs font-semibold leading-5 text-slate-500">{title}</div>
+          <div className="mt-1 text-[2.15rem] leading-none font-bold tracking-tight tabular-nums text-slate-900">{value}</div>
         </div>
-        <div className={['h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0', iconBgClass].join(' ')}>
+        <div className={['h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 text-base leading-none', iconBgClass].join(' ')}>
           {icon}
         </div>
       </div>
-      <div className="mt-auto">
+      <div className="mt-auto min-h-[42px] pt-3">
         {deltaText ? (
-          <div className={['mt-3 text-xs font-medium flex items-center gap-1', toneClass].join(' ')}>
+          <div className={['text-xs font-medium leading-5 flex items-center gap-1 tabular-nums', toneClass].join(' ')}>
             <span>{deltaText}</span>
-            <span className="text-slate-400 font-normal">{deltaHint}</span>
+            {deltaHint ? <span className="text-slate-400 font-normal">{deltaHint}</span> : null}
           </div>
         ) : null}
         {sublines?.length ? (
           <div className="mt-2 space-y-1">
             {sublines.map((l, idx) => (
-              <div key={idx} className="text-xs text-slate-500">
+              <div key={idx} className="text-xs leading-5 tabular-nums text-slate-500">
                 {l}
               </div>
             ))}
@@ -139,7 +138,11 @@ function KpiCard(props: {
   );
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className="text-left h-full w-full">
+      <button
+        type="button"
+        onClick={onClick}
+        className="block h-full w-full appearance-none border-0 bg-transparent p-0 text-left"
+      >
         {body}
       </button>
     );
@@ -158,23 +161,9 @@ type DrilldownRow = {
   rentalId?: string;
 };
 
-type SmartInsight = {
-  key: string;
-  tone: 'amber' | 'rose' | 'emerald' | 'sky';
-  title: string;
-  text: string;
-  invoiceId?: string;
-  rentalId?: string;
-};
-
 export default function DashboardPanel(props: DashboardPanelProps) {
   const { customers, rentals, invoices, payments, onOpenRental, onOpenRentalDetail, onOpenInvoice, onOpenOrders } = props;
   const [activeDrilldown, setActiveDrilldown] = useState<DrilldownKey | null>(null);
-  const company = useMemo(() => getCompanyProfile(), []);
-  const ownerFirstName = useMemo(() => {
-    const raw = String(company.ownerName || '').trim();
-    return raw ? raw.split(/\s+/)[0] : '';
-  }, [company.ownerName]);
 
   const now = useMemo(() => new Date(), []);
   const today = useMemo(() => {
@@ -475,10 +464,12 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     const items: Array<{ kind: 'Übergabe' | 'Rückgabe'; ts: number; rental: RentalRequest }> = [];
     for (const r of rentals) {
       if (!openRentalStatuses.includes(r.status)) continue;
-      const startDay = toLocalDayStart(r.rentalStart);
-      const endDay = toLocalDayStart(r.rentalEnd);
-      if (startDay >= today && startDay <= in14) items.push({ kind: 'Übergabe', ts: r.rentalStart, rental: r });
-      if (endDay >= today && endDay <= in14) items.push({ kind: 'Rückgabe', ts: r.rentalEnd, rental: r });
+      const pickupTs = Number(r.pickupDate || r.rentalStart || 0);
+      const returnTs = Number(r.returnDate || r.rentalEnd || 0);
+      const pickupDay = toLocalDayStart(pickupTs);
+      const returnDay = toLocalDayStart(returnTs);
+      if (pickupDay >= today && pickupDay <= in14) items.push({ kind: 'Übergabe', ts: pickupTs, rental: r });
+      if (returnDay >= today && returnDay <= in14) items.push({ kind: 'Rückgabe', ts: returnTs, rental: r });
     }
     items.sort((a, b) => a.ts - b.ts);
     return items.slice(0, 10);
@@ -608,78 +599,10 @@ export default function DashboardPanel(props: DashboardPanelProps) {
     return '';
   }, [activeDrilldown]);
 
-  const smartInsights = useMemo<SmartInsight[]>(() => {
-    const insights: SmartInsight[] = [];
-
-    const yesterday = today - 86_400_000;
-    const rentalIdsWithOpenBalance = new Set(openOrderFinancialRows.map((e) => e.rental.id));
-    const overdueReturns = rentals
-      .filter((r) => openRentalStatuses.includes(r.status) && toLocalDayStart(r.rentalEnd) < yesterday && rentalIdsWithOpenBalance.has(r.id))
-      .sort((a, b) => a.rentalEnd - b.rentalEnd);
-    if (overdueReturns.length) {
-      const rental = overdueReturns[0];
-      const customer = customerById.get(rental.customerId);
-      const inv = latestInvoiceForRental.get(rental.id);
-      insights.push({
-        key: `overdue-return:${rental.id}`,
-        tone: 'rose',
-        title: `${overdueReturns.length} Rückgabe${overdueReturns.length === 1 ? '' : 'n'} überfällig`,
-        text: `${customer ? `${customer.firstName} ${customer.lastName}`.trim() : rental.productType} hätte am ${new Date(rental.rentalEnd).toLocaleDateString('de-DE')} zurück sein sollen.`,
-        invoiceId: inv?.id,
-        rentalId: rental.id,
-      });
-    }
-
-    if (upcomingAppointments.length) {
-      const nextAppointment = upcomingAppointments[0];
-      const customer = customerById.get(nextAppointment.rental.customerId);
-      const inv = latestInvoiceForRental.get(nextAppointment.rental.id);
-      insights.push({
-        key: `next-appointment:${nextAppointment.kind}:${nextAppointment.rental.id}`,
-        tone: 'emerald',
-        title: `Nächste ${nextAppointment.kind.toLowerCase()} am ${new Date(nextAppointment.ts).toLocaleDateString('de-DE')}`,
-        text: `${nextAppointment.rental.productType}${customer ? ` · ${customer.firstName} ${customer.lastName}`.trim() : ''}`,
-        invoiceId: inv?.id,
-        rentalId: nextAppointment.rental.id,
-      });
-    }
-
-    const largestOpenOrder = [...openOrderFinancialRows].sort((a, b) => b.open - a.open)[0];
-    if (largestOpenOrder) {
-      insights.push({
-        key: `largest-open:${largestOpenOrder.row.key}`,
-        tone: 'sky',
-        title: `Größte offene Forderung: ${formatCurrency(largestOpenOrder.open)}`,
-        text: `${largestOpenOrder.row.title} · ${largestOpenOrder.row.subtitle}`,
-        invoiceId: largestOpenOrder.inv.id,
-        rentalId: largestOpenOrder.row.rentalId,
-      });
-    }
-
-    const partialOrder = openOrderFinancialRows
-      .filter((entry) => entry.paid > 0 && entry.open > 0)
-      .sort((a, b) => b.paid - a.paid)[0];
-    if (partialOrder) {
-      insights.push({
-        key: `partial-order:${partialOrder.row.key}`,
-        tone: 'amber',
-        title: `Anzahlung vorhanden, Rest offen: ${formatCurrency(partialOrder.open)}`,
-        text: `${partialOrder.row.title} · ${formatCurrency(partialOrder.paid)} bereits bezahlt`,
-        invoiceId: partialOrder.inv.id,
-        rentalId: partialOrder.row.rentalId,
-      });
-    }
-
-    return insights.slice(0, 4);
-  }, [rentals, today, customerById, latestInvoiceForRental, upcomingAppointments, openOrderFinancialRows]);
-
   return (
     <div className="max-w-7xl">
       <div className="mb-5">
         <h2 className="text-2xl font-bold text-slate-900">Dashboard</h2>
-        <p className="mt-1 text-slate-600">
-          Willkommen zurück{ownerFirstName ? `, ${ownerFirstName}` : ''}. Hier ist die Übersicht für {company.companyName}.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-stretch">
@@ -690,13 +613,13 @@ export default function DashboardPanel(props: DashboardPanelProps) {
           deltaTone={revenueYearToDateDeltaPct >= 0 ? 'up' : 'down'}
           deltaHint="vs. Vorjahreszeitraum"
           iconBgClass="bg-emerald-500 text-white"
-          icon={<span className="text-lg font-bold">€</span>}
+          icon={<span className="font-bold">€</span>}
         />
         <KpiCard
           title="Aktive Kunden"
           value={`${customerCount}`}
           iconBgClass="bg-blue-500 text-white"
-          icon={<span className="text-lg font-bold">👥</span>}
+          icon={<span className="font-bold">👥</span>}
         />
         <KpiCard
           title="Vermietet"
@@ -704,7 +627,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
           deltaText={`${activeRentalsDelta >= 0 ? '↗' : '↘'} ${activeRentalsDelta >= 0 ? '+' : ''}${activeRentalsDelta}`}
           deltaTone={activeRentalsDelta >= 0 ? 'up' : 'down'}
           iconBgClass="bg-amber-500 text-white"
-          icon={<span className="text-lg font-bold">📦</span>}
+          icon={<span className="font-bold">📦</span>}
           active={activeDrilldown === 'vermietet'}
           onClick={() => setActiveDrilldown((current) => (current === 'vermietet' ? null : 'vermietet'))}
         />
@@ -714,7 +637,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
           deltaText={`${openOrdersPrevMonth >= 0 ? '↗' : '↘'} ${openOrdersPrevMonth >= 0 ? '+' : ''}${openOrdersPrevMonth}`}
           deltaTone={openOrdersPrevMonth >= 0 ? 'up' : 'down'}
           iconBgClass="bg-violet-500 text-white"
-          icon={<span className="text-lg font-bold">🧾</span>}
+          icon={<span className="font-bold">🧾</span>}
           active={activeDrilldown === 'offene_auftraege'}
           onClick={() => setActiveDrilldown((current) => (current === 'offene_auftraege' ? null : 'offene_auftraege'))}
         />
@@ -724,8 +647,7 @@ export default function DashboardPanel(props: DashboardPanelProps) {
           deltaText={`${expectedRevenueDeltaOrders >= 0 ? '↗' : '↘'} ${expectedRevenueDeltaOrders >= 0 ? '+' : ''}${expectedRevenueDeltaOrders} Aufträge`}
           deltaTone={expectedRevenueDeltaOrders >= 0 ? 'up' : 'down'}
           iconBgClass="bg-sky-500 text-white"
-          icon={<span className="text-lg font-bold">$</span>}
-          sublines={[`Rest offen: ${formatCurrency(expectedRevenue.open)}`]}
+          icon={<span className="font-bold">$</span>}
           active={activeDrilldown === 'erwartete_einnahmen'}
           onClick={() => setActiveDrilldown((current) => (current === 'erwartete_einnahmen' ? null : 'erwartete_einnahmen'))}
         />
@@ -779,52 +701,34 @@ export default function DashboardPanel(props: DashboardPanelProps) {
       ) : null}
 
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div
-          className={`bg-white border rounded-xl p-4 shadow-sm h-full flex flex-col cursor-pointer transition-colors ${activeDrilldown === 'angezahlt' ? 'border-amber-400 ring-1 ring-amber-300' : 'border-slate-200 hover:border-amber-300'}`}
+        <KpiCard
+          title="Aufträge angezahlt"
+          value={`${ordersPaymentBuckets.partial.count}`}
+          deltaText={`↗ ${formatCurrency(ordersPaymentBuckets.partial.open)} offen`}
+          deltaTone="neutral"
+          deltaHint=""
+          iconBgClass="bg-amber-100 text-amber-700"
+          icon={<span className="font-bold">🕒</span>}
+          sublines={[
+            `${formatCurrency(ordersPaymentBuckets.partial.total)} gesamt / ${formatCurrency(ordersPaymentBuckets.partial.paid)} angezahlt`,
+          ]}
+          active={activeDrilldown === 'angezahlt'}
           onClick={() => setActiveDrilldown((c) => (c === 'angezahlt' ? null : 'angezahlt'))}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Aufträge angezahlt</div>
-              <div className="mt-2 text-2xl font-bold text-amber-600">{ordersPaymentBuckets.partial.count}</div>
-              <div className="mt-1 text-sm text-slate-700">
-                Offen: {formatCurrency(ordersPaymentBuckets.partial.open)}
-              </div>
-              <div className="mt-1 text-xs text-slate-500">
-                {formatCurrency(ordersPaymentBuckets.partial.total)} gesamt / {formatCurrency(ordersPaymentBuckets.partial.paid)} angezahlt / {formatCurrency(ordersPaymentBuckets.partial.open)} Rest
-              </div>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">🕒</div>
-          </div>
-          <div className="mt-auto pt-4 border-t border-slate-100">
-            <span className="text-sm font-medium text-amber-700">
-              {activeDrilldown === 'angezahlt' ? 'Schließen ↑' : 'Details anzeigen ↓'}
-            </span>
-          </div>
-        </div>
-        <div
-          className={`bg-white border rounded-xl p-4 shadow-sm h-full flex flex-col cursor-pointer transition-colors ${activeDrilldown === 'unbezahlt' ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200 hover:border-rose-300'}`}
+        />
+        <KpiCard
+          title="Aufträge unbezahlt"
+          value={`${ordersPaymentBuckets.unpaid.count}`}
+          deltaText={`↘ ${formatCurrency(ordersPaymentBuckets.unpaid.open)} offen`}
+          deltaTone="neutral"
+          deltaHint=""
+          iconBgClass="bg-rose-100 text-rose-700"
+          icon={<span className="font-bold">⛔</span>}
+          sublines={[
+            `${formatCurrency(ordersPaymentBuckets.unpaid.total)} gesamt / ${formatCurrency(ordersPaymentBuckets.unpaid.paid)} angezahlt`,
+          ]}
+          active={activeDrilldown === 'unbezahlt'}
           onClick={() => setActiveDrilldown((c) => (c === 'unbezahlt' ? null : 'unbezahlt'))}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Aufträge unbezahlt</div>
-              <div className="mt-2 text-2xl font-bold text-rose-600">{ordersPaymentBuckets.unpaid.count}</div>
-              <div className="mt-1 text-sm text-slate-700">
-                Offen: {formatCurrency(ordersPaymentBuckets.unpaid.open)}
-              </div>
-              <div className="mt-1 text-xs text-slate-500">
-                {formatCurrency(ordersPaymentBuckets.unpaid.total)} gesamt / {formatCurrency(ordersPaymentBuckets.unpaid.paid)} angezahlt / {formatCurrency(ordersPaymentBuckets.unpaid.open)} Rest
-              </div>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">⛔</div>
-          </div>
-          <div className="mt-auto pt-4 border-t border-slate-100">
-            <span className="text-sm font-medium text-rose-700">
-              {activeDrilldown === 'unbezahlt' ? 'Schließen ↑' : 'Details anzeigen ↓'}
-            </span>
-          </div>
-        </div>
+        />
       </div>
 
       <div className="mt-5 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
@@ -866,64 +770,12 @@ export default function DashboardPanel(props: DashboardPanelProps) {
         )}
       </div>
 
-      <div className="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div className="mt-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           <div className="text-sm font-semibold text-slate-900">Umsatzvergleich {revenueComparison.prevYear} vs {revenueComparison.curYear}</div>
           <div className="mt-3 h-56">
             <Line data={chartData as any} options={chartOptions as any} />
           </div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">✨</span>
-            <div className="text-sm font-semibold text-slate-900">Smart Insights</div>
-          </div>
-          {smartInsights.length === 0 ? (
-            <div className="mt-3 text-sm text-slate-600">
-              Keine kritischen Hinweise. Dashboard wirkt aktuell konsistent.
-            </div>
-          ) : (
-            <div className="mt-3 space-y-3">
-              {smartInsights.map((insight) => {
-                const toneClasses =
-                  insight.tone === 'rose'
-                    ? 'bg-rose-50 border-rose-200'
-                    : insight.tone === 'amber'
-                      ? 'bg-amber-50 border-amber-200'
-                      : insight.tone === 'sky'
-                        ? 'bg-sky-50 border-sky-200'
-                        : 'bg-emerald-50 border-emerald-200';
-                return (
-                  <div key={insight.key} className={`rounded-lg border p-3 ${toneClasses}`}>
-                    <div className="text-sm font-semibold text-slate-900">{insight.title}</div>
-                    <div className="mt-1 text-xs text-slate-600">{insight.text}</div>
-                    {(insight.invoiceId || insight.rentalId) ? (
-                      <div className="mt-2 flex items-center gap-2">
-                        {insight.invoiceId ? (
-                          <button
-                            type="button"
-                            onClick={() => void onOpenInvoice(insight.invoiceId!)}
-                            className="px-2.5 py-1.5 rounded-md bg-slate-900 text-white text-xs hover:bg-slate-800"
-                          >
-                            Belegeditor öffnen
-                          </button>
-                        ) : null}
-                        {insight.rentalId ? (
-                          <button
-                            type="button"
-                            onClick={() => void onOpenRentalDetail(insight.rentalId!)}
-                            className="px-2.5 py-1.5 rounded-md border border-slate-300 text-xs hover:bg-white"
-                          >
-                            Vorgang öffnen
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
     </div>
