@@ -14,16 +14,17 @@ pub fn ensure_app_directories(app: &AppHandle) -> Result<(), BoxError> {
     Ok(())
 }
 
-/// Returns the iCloud Drive documents container if available on this system.
-/// Format: ~/Library/Mobile Documents/iCloud~com~serverraum247~mietparkcrm~desktop/Documents
+/// Returns the iCloud Drive storage directory for CRM Desktop.
+/// Uses the user-visible iCloud Drive folder "CRM Desktop" so that
+/// iOS apps can read/write the same data via iCloud Drive access.
+/// Path: ~/Library/Mobile Documents/com~apple~CloudDocs/CRM Desktop
 pub fn icloud_documents_dir() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
-    let container = "iCloud~com~serverraum247~mietparkcrm~desktop";
     let path = PathBuf::from(home)
         .join("Library")
         .join("Mobile Documents")
-        .join(container)
-        .join("Documents");
+        .join("com~apple~CloudDocs")
+        .join("CRM Desktop");
     if path.exists() {
         Some(path)
     } else {
