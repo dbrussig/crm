@@ -41,6 +41,7 @@ interface CustomerListProps {
   onUpdateCustomer: (id: string, customer: Partial<Customer>) => void;
   onDeleteCustomer: (id: string) => void;
   onCreateInvoice?: (customer: Customer, invoiceType: 'Angebot' | 'Auftrag' | 'Rechnung') => void;
+  onOpenInvoice?: (invoiceId: string) => void;
 }
 
 const CustomerList: React.FC<CustomerListProps> = ({
@@ -54,6 +55,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
   onUpdateCustomer,
   onDeleteCustomer,
   onCreateInvoice,
+  onOpenInvoice,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -1211,6 +1213,10 @@ const CustomerList: React.FC<CustomerListProps> = ({
         <CustomerDocumentsModal
           customer={docsCustomer}
           onClose={() => setDocsCustomer(null)}
+          onOpenInvoice={(invoiceId) => {
+            setDocsCustomer(null);
+            onOpenInvoice?.(invoiceId);
+          }}
         />
       )}
 

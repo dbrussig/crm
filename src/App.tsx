@@ -1030,6 +1030,9 @@ export default function App() {
                 setEditingInvoiceItems([]);
                 setActiveView('beleg_editor');
               }}
+              onOpenInvoice={async (invoiceId) => {
+                await openInvoiceEditorById(invoiceId);
+              }}
             />
           </div>
         )}

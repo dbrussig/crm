@@ -52,7 +52,11 @@ const STATE_LABELS: Record<string, string> = {
   archiviert: 'Archiviert',
 };
 
-export default function CustomerDocumentsModal(props: { customer: Customer; onClose: () => void }) {
+export default function CustomerDocumentsModal(props: {
+  customer: Customer;
+  onClose: () => void;
+  onOpenInvoice?: (invoiceId: string) => void;
+}) {
   const [docs, setDocs] = useState<CustomerDocument[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -234,7 +238,10 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
                     {invoices.map((inv) => (
                       <div
                         key={inv.id}
-                        className="rounded-lg border border-slate-200 p-3 flex items-center justify-between gap-3"
+                        className={`rounded-lg border border-slate-200 p-3 flex items-center justify-between gap-3 ${props.onOpenInvoice ? 'cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-colors' : ''}`}
+                        onClick={() => props.onOpenInvoice?.(inv.id)}
+                        role={props.onOpenInvoice ? 'button' : undefined}
+                        tabIndex={props.onOpenInvoice ? 0 : undefined}
                       >
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-slate-900">
@@ -250,6 +257,11 @@ export default function CustomerDocumentsModal(props: { customer: Customer; onCl
                             {inv.buyerName ? ` | ${inv.buyerName}` : ''}
                           </div>
                         </div>
+                        {props.onOpenInvoice && (
+                          <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        )}
                       </div>
                     ))}
                   </div>
