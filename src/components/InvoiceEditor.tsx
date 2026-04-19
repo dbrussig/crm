@@ -6,14 +6,22 @@
 
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { useForm, useFieldArray, FormProvider } from 'react-hook-form';
-import { ArrowRight, ChevronDown, Download, Eye, FileText, Mail, Save, Send, Truck } from 'lucide-react';
+import ArrowRight from 'lucide-react/dist/esm/icons/arrow-right.js';
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down.js';
+import Download from 'lucide-react/dist/esm/icons/download.js';
+import Eye from 'lucide-react/dist/esm/icons/eye.js';
+import FileText from 'lucide-react/dist/esm/icons/file-text.js';
+import Mail from 'lucide-react/dist/esm/icons/mail.js';
+import Save from 'lucide-react/dist/esm/icons/save.js';
+import Send from 'lucide-react/dist/esm/icons/send.js';
+import Truck from 'lucide-react/dist/esm/icons/truck.js';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import type { InvoiceFormValues } from './invoice/types';
 import InvoicePickupReturnBlock from './invoice/InvoicePickupReturnBlock';
 import { fetchInvoiceTemplate } from '../services/invoiceService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
-import { getPaymentsByInvoice, addPayment, deletePayment, getPaymentMethodsConfig } from '../services/sqliteService';
+import { getPaymentsByInvoice, getPaymentsByRental, addPayment, deletePayment, getPaymentMethodsConfig, getRentalRequest } from '../services/sqliteService';
 import { DEFAULT_PAYMENT_METHODS } from '../types';
 import type { PaymentMethodConfig } from '../types';
 import InvoiceWorkflowBar from './InvoiceWorkflowBar';
@@ -84,6 +92,19 @@ function useMoreActionsDropdown() {
   }, [open]);
 
   return { open, setOpen, wrapRef };
+}
+
+function samePaymentDay(a?: number, b?: number) {
+  if (!a || !b) return false;
+  const da = new Date(a);
+  const db = new Date(b);
+  return da.getFullYear() === db.getFullYear()
+    && da.getMonth() === db.getMonth()
+    && da.getDate() === db.getDate();
+}
+
+function samePaymentAmount(a?: number, b?: number) {
+  return Math.round((Number(a) || 0) * 100) === Math.round((Number(b) || 0) * 100);
 }
 
 // ─── Main Component ───────────────────────────────────────────────
@@ -188,6 +209,47 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [paymentForm, setPaymentForm] = useState<{ kind: 'Anzahlung' | 'Zahlung' | 'Kaution'; method: string; amount: string; receivedAt: string; note: string }>({
     kind: 'Anzahlung', method: '', amount: '', receivedAt: new Date().toISOString().slice(0, 10), note: '',
   });
+
+  useEffect(() => {
+    const rentalId = String(initialInvoice?.rentalRequestId || '').trim();
+    if (!rentalId) return;
+
+    const hasServicePeriod = Boolean(getValues('servicePeriodStart') && getValues('servicePeriodEnd'));
+    const hasPickupReturn =
+      Boolean(getValues('pickupDate') && getValues('returnDate'));
+    if (hasServicePeriod && hasPickupReturn) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const rental = await getRentalRequest(rentalId);
+      if (!rental || cancelled) return;
+
+      if (!hasServicePeriod && rental.rentalStart && rental.rentalEnd) {
+        setValue('servicePeriodStart', new Date(rental.rentalStart).toISOString().slice(0, 10));
+        setValue('servicePeriodEnd', new Date(rental.rentalEnd).toISOString().slice(0, 10));
+      }
+
+      if (!hasPickupReturn) {
+        if (!getValues('pickupDate') && rental.pickupDate) {
+          setValue('pickupDate', new Date(rental.pickupDate).toISOString().slice(0, 10));
+        }
+        if (!getValues('pickupTime') && rental.pickupDate) {
+          setValue('pickupTime', new Date(rental.pickupDate).toTimeString().slice(0, 5));
+        }
+        if (!getValues('returnDate') && rental.returnDate) {
+          setValue('returnDate', new Date(rental.returnDate).toISOString().slice(0, 10));
+        }
+        if (!getValues('returnTime') && rental.returnDate) {
+          setValue('returnTime', new Date(rental.returnDate).toTimeString().slice(0, 5));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialInvoice?.rentalRequestId, getValues, setValue]);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
 
   // Update state when initialInvoice changes (e.g., after save)
@@ -776,21 +838,46 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                           setPaymentFormBusy(true);
                           try {
                             const now = Date.now();
-                            const newPayment: Payment = {
+                            const rentalRequestId = String(initialInvoice?.rentalRequestId || '').trim();
+                            const invoiceId = String(initialInvoice?.id || '').trim();
+                            const receivedAt = paymentForm.receivedAt ? new Date(paymentForm.receivedAt).getTime() : now;
+                            const amount = Number(paymentForm.amount);
+
+                            let nextPayment: Payment = {
                               id: `pay_${now}`,
-                              rentalRequestId: initialInvoice?.rentalRequestId || '',
-                              invoiceId: initialInvoice!.id,
+                              rentalRequestId,
+                              invoiceId,
                               kind: paymentForm.kind,
                               method: paymentForm.method,
-                              amount: Number(paymentForm.amount),
+                              amount,
                               currency: 'EUR',
-                              receivedAt: paymentForm.receivedAt ? new Date(paymentForm.receivedAt).getTime() : now,
+                              receivedAt,
                               note: paymentForm.note.trim() || undefined,
                               source: 'manual',
                               createdAt: now,
                             };
-                            await addPayment(newPayment);
-                            setLinkedPayments((prev) => [newPayment, ...prev]);
+
+                            if (rentalRequestId && invoiceId) {
+                              const rentalPayments = await getPaymentsByRental(rentalRequestId);
+                              const reusable = rentalPayments.find((p) =>
+                                !p.invoiceId &&
+                                p.kind !== 'Kaution' &&
+                                samePaymentAmount(p.amount, amount) &&
+                                samePaymentDay(p.receivedAt || p.createdAt, receivedAt)
+                              );
+                              if (reusable) {
+                                nextPayment = {
+                                  ...reusable,
+                                  invoiceId,
+                                  kind: paymentForm.kind,
+                                  method: paymentForm.method,
+                                  note: paymentForm.note.trim() || reusable.note,
+                                };
+                              }
+                            }
+
+                            await addPayment(nextPayment);
+                            setLinkedPayments((prev) => [nextPayment, ...prev.filter((x) => x.id !== nextPayment.id)]);
                             setShowPaymentForm(false);
                             setPaymentForm((f) => ({ ...f, amount: '', note: '', receivedAt: new Date().toISOString().slice(0, 10) }));
                           } catch {} finally {
@@ -823,7 +910,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         {/* Mietzeitraum */}
         {layout.editorBlocks.includes('servicePeriod') && (
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Mietzeitraum (optional)</h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Mietzeitraum</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="invoice-period-start">Von</label>

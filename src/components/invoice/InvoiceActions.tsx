@@ -1,5 +1,12 @@
 import { RefObject } from 'react';
-import { ArrowRight, ChevronDown, Download, Eye, FileText, Mail, Save, Send } from 'lucide-react';
+import ArrowRight from 'lucide-react/dist/esm/icons/arrow-right.js';
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down.js';
+import Download from 'lucide-react/dist/esm/icons/download.js';
+import Eye from 'lucide-react/dist/esm/icons/eye.js';
+import FileText from 'lucide-react/dist/esm/icons/file-text.js';
+import Mail from 'lucide-react/dist/esm/icons/mail.js';
+import Save from 'lucide-react/dist/esm/icons/save.js';
+import Send from 'lucide-react/dist/esm/icons/send.js';
 import { InvoiceState } from '../../types';
 
 interface InvoiceActionsProps {

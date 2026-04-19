@@ -1,11 +1,28 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Mail, Calendar, CheckCircle, AlertCircle, Link2, ChevronDown, Users, RefreshCw, Unlink } from 'lucide-react';
+import Mail from 'lucide-react/dist/esm/icons/mail.js';
+import Calendar from 'lucide-react/dist/esm/icons/calendar.js';
+import CheckCircle from 'lucide-react/dist/esm/icons/check-circle.js';
+import AlertCircle from 'lucide-react/dist/esm/icons/alert-circle.js';
+import Link2 from 'lucide-react/dist/esm/icons/link-2.js';
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down.js';
+import Users from 'lucide-react/dist/esm/icons/users.js';
+import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw.js';
+import Unlink from 'lucide-react/dist/esm/icons/unlink.js';
 import { AISettings, GoogleOAuthSettings, MailTransportSettings, PaymentMethodConfig, DEFAULT_PAYMENT_METHODS } from '../types';
 import { getConnectionStatus, connectGoogle, disconnectGoogle, type GoogleConnectionStatus } from '../services/googleOAuthService';
 import { clearGoogleClientSecret, loadGoogleClientSecret, saveGoogleClientSecret } from '../services/googleClientSecretStore';
 import { getGLMModels } from '../services/zAiService';
 import { getCompanyProfile, saveCompanyProfile, type CompanyProfile } from '../config/companyProfile';
 import { getPaymentMethodsConfig, savePaymentMethodsConfig } from '../services/sqliteService';
+import {
+  listAppIcons,
+  getCurrentAppIcon,
+  setAppIcon,
+  uploadCustomIcon,
+  getIconThumbnailDataUrl,
+  type IconInfo,
+} from '../services/iconService';
+import { isDesktopApp } from '../platform/runtime';
 import ConfirmModal from './ConfirmModal';
 
 type GoogleTestStatus = 'idle' | 'testing' | 'success' | 'error';
@@ -112,9 +129,94 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [pmEditId, setPmEditId] = useState<string | null>(null);
   const [pmNewForm, setPmNewForm] = useState<{ label: string; feePercent: string; feeFixed: string } | null>(null);
 
+  // --- App Icon state ---
+  const [iconList, setIconList] = useState<IconInfo[]>([]);
+  const [iconThumbnails, setIconThumbnails] = useState<Record<string, string>>({});
+  const [currentIcon, setCurrentIcon] = useState<string>('default');
+  const [iconSaving, setIconSaving] = useState(false);
+  const [iconUploading, setIconUploading] = useState(false);
+  const iconFileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     getPaymentMethodsConfig().then(setPaymentMethods).catch(() => {});
   }, []);
+
+  // Load app icons on mount (desktop only)
+  useEffect(() => {
+    if (!isDesktopApp()) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const icons = await listAppIcons();
+        if (!mounted) return;
+        setIconList(icons);
+
+        const selected = await getCurrentAppIcon();
+        if (!mounted) return;
+        setCurrentIcon(selected);
+
+        // Load thumbnails
+        const thumbMap: Record<string, string> = {};
+        for (const icon of icons) {
+          try {
+            const dataUrl = await getIconThumbnailDataUrl(icon.id);
+            if (dataUrl) thumbMap[icon.id] = dataUrl;
+          } catch { /* skip failed thumbnail */ }
+        }
+        if (!mounted) return;
+        setIconThumbnails(thumbMap);
+      } catch { /* non-desktop or not ready */ }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleSelectIcon = async (iconId: string) => {
+    if (iconSaving) return;
+    setIconSaving(true);
+    try {
+      await setAppIcon(iconId);
+      setCurrentIcon(iconId);
+    } catch (err) {
+      console.error('[icon] Failed to set icon:', err);
+    } finally {
+      setIconSaving(false);
+    }
+  };
+
+  const handleUploadCustomIcon = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset the input so the same file can be selected again
+    if (iconFileInputRef.current) iconFileInputRef.current.value = '';
+
+    if (!file.type.startsWith('image/png')) {
+      alert('Bitte eine PNG-Datei auswählen.');
+      return;
+    }
+
+    setIconUploading(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      const name = file.name.replace(/\.png$/i, '');
+      const newId = await uploadCustomIcon(name, base64);
+      // Add thumbnail for custom icon
+      try {
+        const dataUrl = await getIconThumbnailDataUrl(newId);
+        if (dataUrl) {
+          setIconThumbnails((prev) => ({ ...prev, [newId]: dataUrl }));
+        }
+      } catch { /* skip */ }
+      setCurrentIcon(newId);
+    } catch (err) {
+      console.error('[icon] Upload failed:', err);
+      alert('Fehler beim Hochladen des Icons.');
+    } finally {
+      setIconUploading(false);
+    }
+  };
 
   const handlePmChange = (id: string, field: keyof PaymentMethodConfig, value: string | number | boolean) => {
     setPaymentMethods((prev) => prev.map((m) => m.id === id ? { ...m, [field]: value } : m));
@@ -253,6 +355,97 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           ))}
         </div>
       </div>
+
+      {/* --- App Icon section --- */}
+      {isDesktopApp() && iconList.length > 0 && (
+        <div className="border-t border-slate-200 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">App-Icon</p>
+              <p className="text-xs text-slate-500">Dock-Icon der App ändern. Empfohlen: 1024×1024 PNG.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleSelectIcon('default')}
+                disabled={iconSaving || currentIcon === 'default'}
+                className={[
+                  'text-xs px-2.5 py-1 rounded-lg border transition',
+                  currentIcon === 'default'
+                    ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                ].join(' ')}
+              >
+                Standard
+              </button>
+              <button
+                type="button"
+                onClick={() => iconFileInputRef.current?.click()}
+                disabled={iconUploading}
+                className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition disabled:opacity-50"
+              >
+                {iconUploading ? 'Lädt…' : 'Eigenes Icon hochladen'}
+              </button>
+              <input
+                ref={iconFileInputRef}
+                type="file"
+                accept="image/png"
+                className="hidden"
+                onChange={handleUploadCustomIcon}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {iconList.map((icon) => {
+              const isSelected = currentIcon === icon.id;
+              const thumbSrc = iconThumbnails[icon.id];
+              return (
+                <button
+                  key={icon.id}
+                  type="button"
+                  onClick={() => handleSelectIcon(icon.id)}
+                  disabled={iconSaving}
+                  className={[
+                    'relative flex flex-col items-center justify-center rounded-lg border p-2 transition hover:bg-slate-50',
+                    isSelected
+                      ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50/40'
+                      : 'border-slate-200'
+                  ].join(' ')}
+                >
+                  {thumbSrc ? (
+                    <img
+                      src={thumbSrc}
+                      alt={icon.label}
+                      className="w-12 h-12 rounded object-contain"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center text-slate-400 text-lg">
+                      ?
+                    </div>
+                  )}
+                  <span className="mt-1 text-[11px] text-slate-600 leading-tight text-center truncate w-full">
+                    {icon.label}
+                  </span>
+                  {isSelected && (
+                    <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-blue-500 flex items-center justify-center">
+                      <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {currentIcon !== 'default' && (
+            <p className="mt-2 text-[11px] text-slate-400">
+              Aktuell: <span className="font-medium text-slate-600">{currentIcon}</span>
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-slate-800">AI-Einstellungen</p>

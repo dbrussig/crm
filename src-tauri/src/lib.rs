@@ -16,6 +16,7 @@ pub fn run() {
                 eprintln!("[iCloud] Migration fehlgeschlagen (non-fatal): {}", error);
             }
             database::init::ensure_database(&app_handle)?;
+            commands::icon::apply_saved_icon(&app_handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -82,6 +83,11 @@ pub fn run() {
             commands::google_oauth::google_oauth_prepare,
             commands::google_oauth::google_oauth_exchange,
             commands::google_oauth::google_token_refresh,
+            commands::icon::list_app_icons,
+            commands::icon::get_current_app_icon,
+            commands::icon::set_app_icon,
+            commands::icon::upload_custom_icon,
+            commands::icon::get_icon_thumbnail_base64,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

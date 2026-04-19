@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
-import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Euro, Calendar, Paperclip, RefreshCw, Download, Eye, X, Upload, ChevronRight, FileDown } from 'lucide-react';
+import { format } from 'date-fns/format';
+import { de } from 'date-fns/locale/de';
+import Plus from 'lucide-react/dist/esm/icons/plus.js';
+import Pencil from 'lucide-react/dist/esm/icons/pencil.js';
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2.js';
+import TrendingUp from 'lucide-react/dist/esm/icons/trending-up.js';
+import TrendingDown from 'lucide-react/dist/esm/icons/trending-down.js';
+import Euro from 'lucide-react/dist/esm/icons/euro.js';
+import Calendar from 'lucide-react/dist/esm/icons/calendar.js';
+import Paperclip from 'lucide-react/dist/esm/icons/paperclip.js';
+import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw.js';
+import Download from 'lucide-react/dist/esm/icons/download.js';
+import Eye from 'lucide-react/dist/esm/icons/eye.js';
+import X from 'lucide-react/dist/esm/icons/x.js';
+import Upload from 'lucide-react/dist/esm/icons/upload.js';
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right.js';
+import FileDown from 'lucide-react/dist/esm/icons/file-down.js';
 import type { Invoice, Payment, Expense, ExpenseAttachment, RecurringInterval, RentalRequest, PaymentMethodConfig } from '../types';
 import { DEFAULT_PAYMENT_METHODS } from '../types';
 import { getAllExpenses, createExpense, updateExpense, deleteExpense, getPaymentMethodsConfig } from '../services/sqliteService';
@@ -49,6 +63,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
   const [drilldownMethodKey, setDrilldownMethodKey] = useState<string | null>(null);
   const [isRecurringChecked, setIsRecurringChecked] = useState(false);
   const [paymentMethodsConfig, setPaymentMethodsConfig] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
+  const [expenseFormError, setExpenseFormError] = useState<string | null>(null);
 
   useEffect(() => { loadExpenses(); }, []);
   useEffect(() => { getPaymentMethodsConfig().then(setPaymentMethodsConfig).catch(() => {}); }, []);
@@ -96,27 +111,99 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
     return paymentMethodsConfig.find(m => m.id === methodId)?.label || methodId;
   };
 
-  // Direkt aus Payments (tatsächlich eingegangene Zahlungen, Kaution und Duplikate ausschließen)
+  // === Einnahmen-Logik ===
+  // Regel: Pro Vorgang (rentalRequestId) wird maximal ein Eintrag gezeigt.
+  //   - Wenn eine Rechnung (RE) existiert → RE mit Rechnungsbetrag zeigen
+  //   - Wenn nur ein Auftrag (AU) mit Anzahlung existiert → AU mit Anzahlungsbetrag zeigen
+  //   - Kautionen werden nie gezeigt
+  //   - Duplikate (gleicher Vorgang + Tag + Betrag) werden gefiltert
+
+  // 1. Finde alle Vorgänge, die eine Rechnung haben (AU/AN wurde zu RE weitergeführt)
+  const rentalToRechnung = new Map<string, Invoice>(); // rentalRequestId → Rechnung
+  invoices.forEach(inv => {
+    // Rechnungen nach rentalRequestId indizieren (nur aktive, nicht Entwurf/Storniert)
+    if (inv.invoiceType === 'Rechnung' && inv.state !== 'storniert' && inv.state !== 'entwurf') {
+      const rrId = (inv as any).rentalRequestId;
+      if (rrId && !rentalToRechnung.has(rrId)) {
+        rentalToRechnung.set(rrId, inv);
+      }
+    }
+  });
+
+  // 2. Payments verarbeiten
   const seenPaymentIds = new Set<string>();
   const seenPaymentKeys = new Set<string>();
+  const seenRechnungIds = new Set<string>();
+
+  // Sammle Rechnungs-Einträge die aus AU-Payments abgeleitet wurden
+  interface IncomeEntry {
+    paymentId: string; date: number; invoiceNo: string; customerName: string;
+    methodId: string; methodLabel: string; amount: number; fee: number; provider: string | undefined;
+  }
+  const rechnungEntries: IncomeEntry[] = [];
+
   const incomePayments = payments
     .filter(p => new Date(p.receivedAt || p.createdAt).getFullYear() === selectedYear)
     .filter(p => {
       if (p.kind === 'Kaution') return false;
       if (seenPaymentIds.has(p.id)) return false;
       seenPaymentIds.add(p.id);
-      // 1. Gemeinsamen "Wurzel-Anker" (Rental/Vorgang) finden, egal ob Zahlung an Rechnung oder Vorgang hängt
+
+      // Rechnung/Vorgang zu diesem Payment finden
+      const inv = invoices.find(i => i.id === p.invoiceId)
+        || (p.rentalRequestId ? invoices.find(i => (i as any).rentalRequestId === p.rentalRequestId) : undefined);
+
+      // Prüfen ob dieser Payment zu einem Auftrag gehört, der durch eine Rechnung ersetzt wurde
+      const effectiveRentalId = p.rentalRequestId || (inv as any)?.rentalRequestId;
+      if (effectiveRentalId && rentalToRechnung.has(effectiveRentalId)) {
+        const rechnung = rentalToRechnung.get(effectiveRentalId)!;
+        // Ersten Payment pro Rechnung erzeugt den Rechnungs-Eintrag
+        if (!seenRechnungIds.has(rechnung.id)) {
+          seenRechnungIds.add(rechnung.id);
+          const rechnungItems = (rechnung as any)._items;
+          const rechnungAmount = rechnungItems
+            ? rechnungItems.reduce((s: number, it: any) => s + (it.unitPrice || 0) * (it.quantity || 1), 0)
+            : Number(p.amount) || 0;
+          const rental = rentals.find(r => r.id === effectiveRentalId);
+          const customerId = p.customerId || rechnung.companyId || rental?.customerId || '';
+          const customerName = customerMap.get(customerId)
+            || rechnung.buyerName
+            || (rental ? customerMap.get(rental.customerId || '') : undefined)
+            || p.payerName
+            || 'Unbekannt';
+          // Gebühren aller Payments dieses Vorgangs summieren
+          const vorgangFees = payments
+            .filter(vp => (vp.rentalRequestId === effectiveRentalId || vp.invoiceId === rechnung.id) && vp.kind !== 'Kaution')
+            .reduce((sum, vp) => {
+              const storedFee = (vp as any).fee;
+              const vpAmount = Number(vp.amount) || 0;
+              const vpMethod = vp.method || '';
+              return sum + ((storedFee !== undefined && storedFee !== null && Number(storedFee) > 0)
+                ? Number(storedFee)
+                : calcFee(vpAmount, vpMethod));
+            }, 0);
+          rechnungEntries.push({
+            paymentId: `rechnung_${rechnung.id}`,
+            date: rechnung.invoiceDate,
+            invoiceNo: rechnung.invoiceNo,
+            customerName,
+            methodId: '',
+            methodLabel: 'Rechnung',
+            amount: rechnungAmount,
+            fee: vorgangFees,
+            provider: undefined,
+          });
+        }
+        return false; // AU-Payment verwerfen, RE-Eintrag wird stattdessen gezeigt
+      }
+
+      // Normaler Payment (kein AU→RE Fall)
       let rootAnchor = p.rentalRequestId;
       if (!rootAnchor && p.invoiceId) {
-        const linkedInv = invoices.find(i => i.id === p.invoiceId);
-        rootAnchor = (linkedInv as any)?.rentalRequestId;
+        rootAnchor = (inv as any)?.rentalRequestId;
       }
       const finalAnchor = rootAnchor || p.invoiceId || 'unlinked';
-
-      // 2. Datum auf den reinen Tag (YYYY-MM-DD) normieren, um Zeitstempel-Abweichungen zu ignorieren
       const dateDay = new Date(p.receivedAt || p.createdAt).toISOString().split('T')[0];
-
-      // 3. Inhaltliche Duplikate filtern (Gleicher Vorgang + gleicher Tag + gleicher Betrag, kind ignorieren)
       const key = `${finalAnchor}|${p.amount}|${dateDay}`;
       if (seenPaymentKeys.has(key)) return false;
       seenPaymentKeys.add(key);
@@ -124,7 +211,6 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
       return true;
     })
     .map(p => {
-      // Rechnung direkt oder über den verknüpften Vorgang finden
       const inv = invoices.find(i => i.id === p.invoiceId)
         || (p.rentalRequestId ? invoices.find(i => (i as any).rentalRequestId === p.rentalRequestId) : undefined);
       const rental = p.rentalRequestId ? rentals.find(r => r.id === p.rentalRequestId) : undefined;
@@ -139,8 +225,6 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
         || '-';
       const amount = Number(p.amount) || 0;
       const methodId = p.method || '';
-      // Gebühr: nur gespeichertes fee-Feld verwenden wenn es explizit > 0 ist UND definiert,
-      // sonst immer aus Config berechnen (damit manuelle Zahlungen auch Gebühren erhalten)
       const storedFee = (p as any).fee;
       const fee = (storedFee !== undefined && storedFee !== null && Number(storedFee) > 0)
         ? Number(storedFee)
@@ -157,6 +241,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
         provider: (p as any).provider,
       };
     })
+    .concat(rechnungEntries)
     .sort((a, b) => b.date - a.date);
 
   const totalIncome = incomePayments.reduce((s, p) => s + p.amount, 0);
@@ -195,14 +280,37 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const dateStr = fd.get('date') as string;
+    const parsedDate = dateStr ? new Date(`${dateStr}T00:00:00`).getTime() : NaN;
+    const amount = parseFloat(fd.get('amount') as string);
+    const isRecurring = fd.get('isRecurring') === 'on';
+    const recurringInterval = isRecurring
+      ? (fd.get('recurringInterval') as RecurringInterval | null)
+      : null;
+
+    if (!dateStr || Number.isNaN(parsedDate)) {
+      setExpenseFormError(isRecurring ? 'Bitte ein gültiges Datum für "Gültig ab" eintragen.' : 'Bitte ein gültiges Datum eintragen.');
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setExpenseFormError('Bitte einen gültigen Betrag größer 0 eintragen.');
+      return;
+    }
+
+    if (isRecurring && !recurringInterval) {
+      setExpenseFormError('Bitte ein Intervall für die wiederkehrende Ausgabe wählen.');
+      return;
+    }
+
+    setExpenseFormError(null);
     const data = {
-      date: new Date(dateStr).getTime(),
-      amount: parseFloat(fd.get('amount') as string) || 0,
+      date: parsedDate,
+      amount,
       description: (fd.get('description') as string)?.trim() || undefined,
       invoiceIssuer: (fd.get('invoiceIssuer') as string)?.trim() || undefined,
-      isRecurring: fd.get('isRecurring') === 'on',
-      recurringInterval: fd.get('isRecurring') === 'on'
-        ? (fd.get('recurringInterval') as RecurringInterval)
+      isRecurring,
+      recurringInterval: isRecurring
+        ? (recurringInterval as RecurringInterval)
         : undefined,
       attachment: expenseAttachment || editingExpense?.attachment || undefined,
     };
@@ -219,6 +327,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
       await loadExpenses();
     } catch (err) {
       console.error('Error saving expense', err);
+      setExpenseFormError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.');
     }
   };
 
@@ -232,6 +341,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
     setEditingExpense(null);
     setExpenseAttachment(null);
     setIsRecurringChecked(false);
+    setExpenseFormError(null);
     setIsExpenseModalOpen(true);
   };
 
@@ -239,6 +349,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
     setEditingExpense(exp);
     setExpenseAttachment(exp.attachment || null);
     setIsRecurringChecked(exp.isRecurring);
+    setExpenseFormError(null);
     setIsExpenseModalOpen(true);
   };
 
@@ -480,13 +591,18 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <h2 className="text-lg font-semibold text-slate-900">{editingExpense ? 'Ausgabe bearbeiten' : 'Neue Betriebsausgabe'}</h2>
-              <button onClick={() => { setIsExpenseModalOpen(false); setEditingExpense(null); setExpenseAttachment(null); }} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setIsExpenseModalOpen(false); setEditingExpense(null); setExpenseAttachment(null); setExpenseFormError(null); }} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={handleSaveExpense} className="p-6 space-y-4">
+              {expenseFormError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {expenseFormError}
+                </div>
+              )}
               <div>
-                <label className="block text-sm font-medium text-slate-700">Datum</label>
+                <label className="block text-sm font-medium text-slate-700">{isRecurringChecked ? 'Gültig ab' : 'Datum'}</label>
                 <input type="date" name="date" required
                   defaultValue={editingExpense ? new Date(editingExpense.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
                   className="mt-1 block w-full h-10 rounded-md border border-slate-300 px-3 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm" />
@@ -521,7 +637,9 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
                       <option value="yearly">Jährlich</option>
                     </select>
                   )}
-                  <p className="text-xs text-slate-500 mt-1">Betrag wird auf Jahressumme hochgerechnet</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {isRecurringChecked ? 'Gültig-ab-Datum bestimmt, ab wann die Ausgabe in der Jahresansicht berücksichtigt wird.' : 'Betrag wird auf Jahressumme hochgerechnet'}
+                  </p>
                 </div>
               </div>
               <div>
@@ -560,7 +678,7 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
               </div>
               <div className="flex flex-row-reverse gap-2 pt-2">
                 <button type="submit" className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Speichern</button>
-                <button type="button" onClick={() => { setIsExpenseModalOpen(false); setEditingExpense(null); setExpenseAttachment(null); }}
+                <button type="button" onClick={() => { setIsExpenseModalOpen(false); setEditingExpense(null); setExpenseAttachment(null); setExpenseFormError(null); }}
                   className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Abbrechen</button>
               </div>
             </form>

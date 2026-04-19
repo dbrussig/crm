@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import Check from 'lucide-react/dist/esm/icons/check.js';
 import type { InvoiceType } from '../types';
 
 interface InvoiceWorkflowBarProps {

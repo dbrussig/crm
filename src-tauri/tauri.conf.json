@@ -27,6 +27,11 @@
   "bundle": {
     "active": true,
     "targets": ["app", "dmg"],
+    "resources": [
+      "icons/icon.icns",
+      "icons/variants/*",
+      "icons/thumbnails/*"
+    ],
     "macOS": {
       "signingIdentity": null,
       "entitlements": "Entitlements.plist"

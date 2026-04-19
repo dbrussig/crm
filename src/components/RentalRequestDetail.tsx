@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Pencil } from 'lucide-react';
+import Pencil from 'lucide-react/dist/esm/icons/pencil.js';
 import { RentalRequest, Customer, Invoice, InvoiceItem, InvoiceType, Payment, RentalStatus, MailTransportSettings } from '../types';
 import {
   fetchAllRentalRequests,

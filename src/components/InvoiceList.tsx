@@ -5,7 +5,10 @@
  */
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { Eye, Mail, Pencil, Trash2 } from 'lucide-react';
+import Eye from 'lucide-react/dist/esm/icons/eye.js';
+import Mail from 'lucide-react/dist/esm/icons/mail.js';
+import Pencil from 'lucide-react/dist/esm/icons/pencil.js';
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2.js';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, MailTransportSettings } from '../types';
 import {
   fetchAllInvoices,

@@ -3,7 +3,7 @@ import { getCompanyProfile } from '../config/companyProfile';
 import { getInvoiceLayout } from '../config/invoiceLayouts';
 import { fetchInvoiceTemplate } from './invoiceService';
 import { addCustomerDocumentBlob, getDocumentsByCustomer, getInvoiceItems, getPaymentsByInvoice } from './sqliteService';
-import QRCode from 'qrcode';
+import qrcode from 'qrcode-generator';
 
 function euro(n: number): string {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n);
@@ -31,6 +31,13 @@ function esc(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br/>');
+}
+
+function createQrSvg(data: string): string {
+  const qr = qrcode(0, 'M');
+  qr.addData(data, 'Byte');
+  qr.make();
+  return qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
 }
 
 function fmtDateDE(ms?: number): string {
@@ -446,7 +453,7 @@ async function renderMietparkHtml(opts: {
   const shouldShowQr = Boolean(d.showPaypalQr);
   if (shouldShowQr && c.paypalMeUrl) {
     try {
-      qrSvg = await QRCode.toString(c.paypalMeUrl, { type: 'svg', margin: 0, scale: 4 });
+      qrSvg = createQrSvg(c.paypalMeUrl);
     } catch {
       qrSvg = '';
     }

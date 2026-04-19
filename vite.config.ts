@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const host = process.env.TAURI_DEV_HOST;
+const enableHmr = process.env.VITE_ENABLE_HMR === 'true';
 
 export default defineConfig({
   clearScreen: false,
@@ -12,7 +13,9 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: host || false,
-    hmr: host
+    hmr: !enableHmr
+      ? false
+      : host
       ? {
           protocol: 'ws',
           host,
@@ -24,6 +27,17 @@ export default defineConfig({
     },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
+  optimizeDeps: {
+    // Automatic dependency discovery walks the full CRM graph in dev and can hang on heavy
+    // PDF/QR/transitive CommonJS packages. Keep dev startup deterministic.
+    noDiscovery: true,
+    include: [
+      '@tanstack/react-query',
+      'react',
+      'react-dom/client',
+      'react/jsx-runtime',
+    ],
+  },
   build: {
     target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
     // esbuild minification hangs on this production bundle; terser is slower but completes reliably.
@@ -40,7 +54,7 @@ export default defineConfig({
             if (id.includes('@dnd-kit')) return 'vendor-dnd';
             if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'vendor-chart';
             if (id.includes('react-datepicker') || id.includes('date-fns')) return 'vendor-date';
-            if (id.includes('jszip') || id.includes('qrcode') || id.includes('lodash-es')) return 'vendor-utils';
+            if (id.includes('jszip') || id.includes('qrcode-generator') || id.includes('lodash-es')) return 'vendor-utils';
             return 'vendor';
           }
           if (id.includes('/src/services/pdfExportService')) return 'pdf-service';

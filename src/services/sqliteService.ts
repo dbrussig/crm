@@ -615,7 +615,11 @@ export async function addAccessory(accessory: RentalAccessory): Promise<void> {
 
 export async function updateAccessory(id: string, updates: Partial<RentalAccessory>): Promise<void> {
   if (isDesktopApp()) {
-    await invokeDesktopCommand('update_accessory', { id, updates });
+    const accessories = await loadAccessories();
+    const current = accessories.find((accessory) => accessory.id === id);
+    if (!current) throw new Error('Accessory not found');
+    const next: RentalAccessory = { ...current, ...updates, updatedAt: Date.now() };
+    await invokeDesktopCommand('upsert_accessory', { accessory: next });
     return;
   }
   const accessories = await loadAccessories();

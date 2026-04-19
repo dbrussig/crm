@@ -49,7 +49,7 @@ function calcInvoiceGross(items: InvoiceItem[]): number {
 function sumClaimPaymentsForContext(payments: Payment[], rentalId?: string, invoiceId?: string): number {
   const rid = String(rentalId || '').trim();
   const iid = String(invoiceId || '').trim();
-  return payments
+  const relevant = payments
     .filter((p) => {
       if (p.kind === 'Kaution') return false;
       const paymentInvoiceId = String(p.invoiceId || '').trim();
@@ -57,8 +57,26 @@ function sumClaimPaymentsForContext(payments: Payment[], rentalId?: string, invo
       if (iid && paymentInvoiceId === iid) return true;
       if (rid && !paymentInvoiceId && paymentRentalId === rid) return true;
       return false;
-    })
-    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    });
+
+  const deduped = relevant.filter((payment) => {
+    const paymentInvoiceId = String(payment.invoiceId || '').trim();
+    if (paymentInvoiceId) return true;
+
+    const paymentRentalId = String(payment.rentalRequestId || '').trim();
+    const paymentDay = toLocalDayStart(Number(payment.receivedAt || payment.createdAt || 0));
+    const paymentAmount = Math.round((Number(payment.amount) || 0) * 100);
+
+    return !relevant.some((other) => {
+      if (other.id === payment.id) return false;
+      if (!String(other.invoiceId || '').trim()) return false;
+      return String(other.rentalRequestId || '').trim() === paymentRentalId
+        && toLocalDayStart(Number(other.receivedAt || other.createdAt || 0)) === paymentDay
+        && Math.round((Number(other.amount) || 0) * 100) === paymentAmount;
+    });
+  });
+
+  return deduped.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 }
 
 function getMonthStart(d: Date) {

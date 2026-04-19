@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2.js';
 import type { InvoiceItem, RentalAccessory, Resource } from '../types';
 import { RENTAL_PRODUCTS, getSuggestedPrice, DEFAULT_PRODUCT_KEY, DEFAULT_DURATION_LABEL } from '../config/rentalCatalog';
 import { checkAccessoryAvailability } from '../services/sqliteService';
@@ -141,14 +141,13 @@ export default function RentalLineItems({
     applyUpdate(index, { name: product.label, unit: product.durations[0].label, unitPrice: product.durations[0].price, quantity: 1 });
   };
 
-  const handleDurationChange = (index: number, productKey: string, durationLabel: string, resourceName?: string) => {
+  const getDurationUpdates = (productKey: string, durationLabel: string, resourceName?: string): Partial<InvoiceItem> => {
     if (useResources && resourceName) {
-      applyUpdate(index, { name: resourceName, unit: durationLabel });
-      return;
+      return { name: resourceName, unit: durationLabel };
     }
     const price = getSuggestedPrice(productKey, durationLabel);
     const product = RENTAL_PRODUCTS.find((p) => p.key === productKey);
-    applyUpdate(index, { name: product?.label ?? productKey, unit: durationLabel, unitPrice: price });
+    return { name: product?.label ?? productKey, unit: durationLabel, unitPrice: price };
   };
 
   const handleDaysChange = (index: number, days: number) => {
@@ -278,8 +277,7 @@ export default function RentalLineItems({
                   } else if (val === 'Wochen') {
                     applyUpdate(index, { ...(useResources && resource ? { name: resource.name } : {}), unit: `${durationWeeks} Woche${durationWeeks !== 1 ? 'n' : ''}`, quantity: durationWeeks });
                   } else {
-                    handleDurationChange(index, productKey, val, resource?.name);
-                    applyUpdate(index, { quantity: 1 });
+                    applyUpdate(index, { ...getDurationUpdates(productKey, val, resource?.name), quantity: 1 });
                   }
                 }}
                 className={`${fieldCls} w-full`}
