@@ -1018,6 +1018,18 @@ export default function App() {
                 await deleteCustomer(id);
                 await loadCustomers();
               }}
+              onCreateInvoice={(customer, invoiceType) => {
+                setEditingInvoiceContext(null);
+                setEditingInvoice({
+                  companyId: customer.id,
+                  buyerName: `${customer.firstName} ${customer.lastName}`.trim(),
+                  buyerAddress: [customer.address.street, `${customer.address.zipCode} ${customer.address.city}`.trim()].filter(Boolean).join('\n'),
+                  salutation: customer.salutation || '',
+                  invoiceType,
+                });
+                setEditingInvoiceItems([]);
+                setActiveView('beleg_editor');
+              }}
             />
           </div>
         )}
