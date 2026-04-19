@@ -18,7 +18,7 @@ import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right.js';
 import FileDown from 'lucide-react/dist/esm/icons/file-down.js';
 import type { Invoice, Payment, Expense, ExpenseAttachment, RecurringInterval, RentalRequest, PaymentMethodConfig } from '../types';
 import { DEFAULT_PAYMENT_METHODS } from '../types';
-import { getAllExpenses, createExpense, updateExpense, deleteExpense, getPaymentMethodsConfig } from '../services/sqliteService';
+import { getAllExpenses, createExpense, updateExpense, deleteExpense, getPaymentMethodsConfig, getInvoiceItems } from '../services/sqliteService';
 
 interface EUeRProps {
   invoices: Invoice[];
@@ -64,9 +64,33 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
   const [isRecurringChecked, setIsRecurringChecked] = useState(false);
   const [paymentMethodsConfig, setPaymentMethodsConfig] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
   const [expenseFormError, setExpenseFormError] = useState<string | null>(null);
+  // Cache: Invoice-Items pro Invoice-ID (geladen für REs die in der EÜR angezeigt werden)
+  const [invoiceItemsCache, setInvoiceItemsCache] = useState<Record<string, number>>({}); // invoiceId → total
 
   useEffect(() => { loadExpenses(); }, []);
   useEffect(() => { getPaymentMethodsConfig().then(setPaymentMethodsConfig).catch(() => {}); }, []);
+
+  // Invoice-Items für alle Rechnungen (RE) asynchron laden
+  useEffect(() => {
+    const rechnungen = invoices.filter(inv =>
+      inv.invoiceType === 'Rechnung' && inv.state !== 'storniert' && inv.state !== 'entwurf'
+    );
+    if (rechnungen.length === 0) return;
+    let cancelled = false;
+    Promise.all(rechnungen.map(async (inv) => {
+      try {
+        const items = await getInvoiceItems(inv.id);
+        const total = items.reduce((s, it) => s + (it.unitPrice || 0) * (it.quantity || 1), 0);
+        return { id: inv.id, total };
+      } catch { return null; }
+    })).then(results => {
+      if (cancelled) return;
+      const cache: Record<string, number> = {};
+      for (const r of results) { if (r) cache[r.id] = r.total; }
+      setInvoiceItemsCache(cache);
+    });
+    return () => { cancelled = true; };
+  }, [invoices]);
 
   const loadExpenses = async () => {
     try {
@@ -160,10 +184,13 @@ export default function EinnahmenUeberschussRechnung({ invoices, payments, custo
         // Ersten Payment pro Rechnung erzeugt den Rechnungs-Eintrag
         if (!seenRechnungIds.has(rechnung.id)) {
           seenRechnungIds.add(rechnung.id);
+          const cachedTotal = invoiceItemsCache[rechnung.id];
           const rechnungItems = (rechnung as any)._items;
-          const rechnungAmount = rechnungItems
-            ? rechnungItems.reduce((s: number, it: any) => s + (it.unitPrice || 0) * (it.quantity || 1), 0)
-            : Number(p.amount) || 0;
+          const rechnungAmount = cachedTotal !== undefined
+            ? cachedTotal
+            : rechnungItems
+              ? rechnungItems.reduce((s: number, it: any) => s + (it.unitPrice || 0) * (it.quantity || 1), 0)
+              : Number(p.amount) || 0;
           const rental = rentals.find(r => r.id === effectiveRentalId);
           const customerId = p.customerId || rechnung.companyId || rental?.customerId || '';
           const customerName = customerMap.get(customerId)
