@@ -98,12 +98,12 @@ export default function CustomerDocumentsModal(props: {
         getAllInvoices(),
       ]);
       setDocs(d);
-      // Filter Angebote + Auftraege for this customer
+      // Filter Angebote, Auftraege & Rechnungen for this customer
       setInvoices(
         allInvoices.filter(
           (inv) =>
             inv.companyId === props.customer.id &&
-            (inv.invoiceType === 'Angebot' || inv.invoiceType === 'Auftrag')
+            (inv.invoiceType === 'Angebot' || inv.invoiceType === 'Auftrag' || inv.invoiceType === 'Rechnung')
         )
       );
     } catch (e: any) {
@@ -233,7 +233,7 @@ export default function CustomerDocumentsModal(props: {
               {/* ---- Angebote & Aufträge section ---- */}
               {invoices.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Angebote & Aufträge</h3>
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Angebote, Aufträge & Rechnungen</h3>
                   <div className="space-y-2">
                     {invoices.map((inv) => (
                       <div

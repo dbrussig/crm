@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback, createPortal } from 'react';
 import { Customer, GoogleOAuthSettings, MailTransportSettings } from '../types';
 import { syncCustomerToGoogle, deleteGoogleContact } from '../services/googleContactsService';
 import { getDatabaseStats } from '../services/indexedDBService';
@@ -73,6 +73,23 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const [photoIndex, setPhotoIndex] = useState<number>(0);
   const [docsCustomer, setDocsCustomer] = useState<Customer | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const dropdownBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // Close dropdown on scroll or Escape
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const close = () => setDropdownOpen(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [dropdownOpen]);
   const [lastMessageByCustomerId, setLastMessageByCustomerId] = useState<Record<string, number>>({});
   const [lastGmailByCustomerId, setLastGmailByCustomerId] = useState<Record<string, number>>({});
   const [docAggByCustomerId, setDocAggByCustomerId] = useState<Record<string, { count: number; bytes: number }>>({});
@@ -1092,7 +1109,22 @@ const CustomerList: React.FC<CustomerListProps> = ({
                         {/* Dropdown für sekundäre Aktionen */}
                         <div className="relative">
                           <button
-                            onClick={() => setDropdownOpen(dropdownOpen === customer.id ? null : customer.id)}
+                            ref={(el) => { dropdownBtnRefs.current[customer.id] = el; }}
+                            onClick={() => {
+                              if (dropdownOpen === customer.id) {
+                                setDropdownOpen(null);
+                              } else {
+                                const el = dropdownBtnRefs.current[customer.id];
+                                if (el) {
+                                  const rect = el.getBoundingClientRect();
+                                  // Position dropdown below the button, right-aligned
+                                  const top = rect.bottom + 4;
+                                  const left = Math.max(0, rect.right - 224); // 224 = w-56 = 14rem = 224px
+                                  setDropdownPos({ top, left });
+                                }
+                                setDropdownOpen(customer.id);
+                              }
+                            }}
                             className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
                             title="Weitere Aktionen"
                             aria-label={`Weitere Aktionen für ${customer.firstName} ${customer.lastName}`}
@@ -1101,94 +1133,6 @@ const CustomerList: React.FC<CustomerListProps> = ({
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                             </svg>
                           </button>
-                          
-                          {dropdownOpen === customer.id && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
-                              <div className="py-1">
-                                <button
-                                  onClick={() => {
-                                    setEmailHistoryCustomer(customer);
-                                    setDropdownOpen(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                  </svg>
-                                  E-Mail Historie
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setDocsCustomer(customer);
-                                    setDropdownOpen(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4h9" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v16H4z" />
-                                  </svg>
-                                  Dokumente
-                                  {docAggByCustomerId[customer.id]?.count ? (
-                                    <span className="ml-auto text-xs text-slate-500">({docAggByCustomerId[customer.id].count})</span>
-                                  ) : null}
-                                </button>
-                                <div className="border-t border-slate-100 my-1" />
-                                <button
-                                  onClick={() => {
-                                    onCreateInvoice?.(customer, 'Angebot');
-                                    setDropdownOpen(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                  Angebot erstellen
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    onCreateInvoice?.(customer, 'Auftrag');
-                                    setDropdownOpen(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                  </svg>
-                                  Auftrag erstellen
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    onCreateInvoice?.(customer, 'Rechnung');
-                                    setDropdownOpen(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                                  </svg>
-                                  Rechnung erstellen
-                                </button>
-                                <div className="border-t border-slate-100 my-1" />
-                                <button
-                                  onClick={() => {
-                                    void handleSyncToGoogle(customer);
-                                    setDropdownOpen(null);
-                                  }}
-                                  disabled={!!customer.googleContactResourceId}
-                                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  </svg>
-                                  {customer.googleContactResourceId ? 'In Google Kontakten' : 'Zu Google hinzufügen'}
-                                </button>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -1199,6 +1143,115 @@ const CustomerList: React.FC<CustomerListProps> = ({
           </div>
         </div>
       )}
+
+      {/* Portal-rendered dropdown menu – rendered in document.body so it is never clipped by overflow-hidden / scrollable parents */}
+      {dropdownOpen && (() => {
+        const customer = sortedCustomers.find(c => c.id === dropdownOpen);
+        if (!customer) return null;
+        return createPortal(
+          <>
+            {/* Invisible backdrop to close on click outside */}
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+              onClick={() => setDropdownOpen(null)}
+            />
+            <div
+              style={{
+                position: 'fixed',
+                top: dropdownPos.top,
+                left: dropdownPos.left,
+                zIndex: 9999,
+              }}
+              className="w-56 bg-white rounded-lg shadow-lg border border-slate-200"
+            >
+              <div className="py-1">
+                <button
+                  onClick={() => {
+                    setEmailHistoryCustomer(customer);
+                    setDropdownOpen(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  E-Mail Historie
+                </button>
+                <button
+                  onClick={() => {
+                    setDocsCustomer(customer);
+                    setDropdownOpen(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4h9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v16H4z" />
+                  </svg>
+                  Dokumente
+                  {docAggByCustomerId[customer.id]?.count ? (
+                    <span className="ml-auto text-xs text-slate-500">({docAggByCustomerId[customer.id].count})</span>
+                  ) : null}
+                </button>
+                <div className="border-t border-slate-100 my-1" />
+                <button
+                  onClick={() => {
+                    onCreateInvoice?.(customer, 'Angebot');
+                    setDropdownOpen(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Angebot erstellen
+                </button>
+                <button
+                  onClick={() => {
+                    onCreateInvoice?.(customer, 'Auftrag');
+                    setDropdownOpen(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  Auftrag erstellen
+                </button>
+                <button
+                  onClick={() => {
+                    onCreateInvoice?.(customer, 'Rechnung');
+                    setDropdownOpen(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  Rechnung erstellen
+                </button>
+                <div className="border-t border-slate-100 my-1" />
+                <button
+                  onClick={() => {
+                    void handleSyncToGoogle(customer);
+                    setDropdownOpen(null);
+                  }}
+                  disabled={!!customer.googleContactResourceId}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {customer.googleContactResourceId ? 'In Google Kontakten' : 'Zu Google hinzufügen'}
+                </button>
+              </div>
+            </div>
+          </>,
+          document.body,
+        );
+      })()}
 
       {emailHistoryCustomer && (
         <CustomerEmailHistoryModal
