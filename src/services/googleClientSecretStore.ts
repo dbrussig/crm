@@ -1,16 +1,17 @@
 /**
  * googleClientSecretStore.ts
- * Speichert den Google OAuth Client Secret sicher (Desktop: Keychain).
+ * Speichert den Google OAuth Client Secret.
  *
  * Hinweis: Bei Desktop-App OAuth ist der "Client Secret" in der Praxis nicht geheim,
- * aber er sollte trotzdem nicht unverschlüsselt im localStorage liegen.
+ * daher vermeiden wir hier bewusst den Keychain-Roundtrip und halten ihn in
+ * der normalen App-Konfiguration.
  */
-import { getTokenValue, setTokenValue, clearTokenValue } from '../platform/auth';
+import { getStoredString, removeStoredValue, setStoredString } from '../platform/storage';
 
 const CLIENT_SECRET_KEY = 'google_oauth_client_secret_v1';
 
 export async function loadGoogleClientSecret(): Promise<string | null> {
-  const raw = await getTokenValue(CLIENT_SECRET_KEY);
+  const raw = await getStoredString(CLIENT_SECRET_KEY);
   const v = String(raw || '').trim();
   return v ? v : null;
 }
@@ -21,10 +22,9 @@ export async function saveGoogleClientSecret(secret: string): Promise<void> {
     await clearGoogleClientSecret();
     return;
   }
-  await setTokenValue(CLIENT_SECRET_KEY, v);
+  await setStoredString(CLIENT_SECRET_KEY, v);
 }
 
 export async function clearGoogleClientSecret(): Promise<void> {
-  await clearTokenValue(CLIENT_SECRET_KEY);
+  await removeStoredValue(CLIENT_SECRET_KEY);
 }
-

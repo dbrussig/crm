@@ -100,22 +100,39 @@ async function saveCustomers(customers: Customer[]) {
 }
 
 async function loadRentals(): Promise<RentalRequest[]> {
+  const normalizeRentals = (rentals: RentalRequest[], resources: Resource[]): RentalRequest[] => {
+    const resourceCalendarById = new Map(
+      resources
+        .filter((resource) => resource?.id)
+        .map((resource) => [resource.id, String(resource.googleCalendarId || '').trim()] as const)
+    );
+
+    return rentals.map((r) => {
+      const resolvedCalendarId =
+        String(r.googleCalendarId || '').trim() ||
+        (r.resourceId ? resourceCalendarById.get(r.resourceId) || '' : '');
+      const needsDefaultDeposit =
+        (r.productType === 'Heckbox' || r.productType === 'Dachbox XL' || r.productType === 'Dachbox L' || r.productType === 'Dachbox M') &&
+        (r.deposit === undefined || r.deposit === null || Number.isNaN(Number(r.deposit)));
+
+      return {
+        ...r,
+        googleCalendarId: resolvedCalendarId || undefined,
+        deposit: needsDefaultDeposit ? 150 : r.deposit,
+        roofRackInventoryKey: normalizeRoofRackInventoryKey((r as any).roofRackInventoryKey),
+      } as RentalRequest;
+    });
+  };
+
   if (isDesktopApp()) {
-    return await invokeDesktopCommand<RentalRequest[]>('list_rental_requests');
+    const [rentals, resources] = await Promise.all([
+      invokeDesktopCommand<RentalRequest[]>('list_rental_requests'),
+      loadResources(),
+    ]);
+    return normalizeRentals(rentals, resources);
   }
   const raw = await loadJson<RentalRequest[]>(KEY_RENTALS, []);
-  // Normalize defaults for older data:
-  // - Deposit: Heckbox + Dachboxen => 150 EUR (if not set)
-  return raw.map((r) => {
-    const needsDefaultDeposit =
-      (r.productType === 'Heckbox' || r.productType === 'Dachbox XL' || r.productType === 'Dachbox L' || r.productType === 'Dachbox M') &&
-      (r.deposit === undefined || r.deposit === null || Number.isNaN(Number(r.deposit)));
-    return {
-      ...r,
-      deposit: needsDefaultDeposit ? 150 : r.deposit,
-      roofRackInventoryKey: normalizeRoofRackInventoryKey((r as any).roofRackInventoryKey),
-    } as RentalRequest;
-  });
+  return normalizeRentals(raw, await loadResources());
 }
 async function saveRentals(rentals: RentalRequest[]) {
   if (isDesktopApp()) {

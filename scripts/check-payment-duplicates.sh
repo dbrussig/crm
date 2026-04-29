@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DB_PATH="${1:-$HOME/Library/Application Support/com.serverraum247.mietparkcrm.desktop/data/mietpark-crm.db}"
+DEFAULT_ICLOUD_DB="$HOME/Library/Mobile Documents/com~apple~CloudDocs/CRM Desktop/data/mietpark-crm.db"
+DEFAULT_LEGACY_DB="$HOME/Library/Application Support/com.serverraum247.mietparkcrm.desktop/data/mietpark-crm.db"
+
+if [[ $# -ge 1 && -n "${1:-}" ]]; then
+  DB_PATH="$1"
+elif [[ -f "$DEFAULT_ICLOUD_DB" ]]; then
+  DB_PATH="$DEFAULT_ICLOUD_DB"
+else
+  DB_PATH="$DEFAULT_LEGACY_DB"
+fi
 
 if [[ ! -f "$DB_PATH" ]]; then
   echo "DB nicht gefunden: $DB_PATH" >&2

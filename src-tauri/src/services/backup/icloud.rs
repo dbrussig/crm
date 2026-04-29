@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 
-use crate::database::init::icloud_documents_dir;
+use crate::database::init::icloud_documents_dir_for_app;
 
 use super::providers::{BackupInfo, BackupProvider};
 
@@ -17,8 +17,7 @@ impl ICloudBackupProvider {
     }
 
     fn backups_dir(&self) -> Option<PathBuf> {
-        let _ = &self.app;
-        let icloud = icloud_documents_dir()?;
+        let icloud = icloud_documents_dir_for_app(&self.app)?;
         let dir = icloud.join("backups");
         fs::create_dir_all(&dir).ok()?;
         Some(dir)

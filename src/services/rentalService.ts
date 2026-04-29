@@ -1,5 +1,5 @@
 import type { RentalRequest, RentalStatus } from '../types';
-import { addRentalRequest, getAllRentalRequests, getCustomerById, getRentalRequest, updateRentalRequest } from './sqliteService';
+import { addRentalRequest, getAllRentalRequests, getCustomerById, getRentalRequest, getAllResources, updateRentalRequest } from './sqliteService';
 import { createEventLegacy, deleteEventLegacy } from './googleCalendarService';
 
 const CLOSED_STATUSES: RentalStatus[] = ['archiviert', 'abgeschlossen', 'abgelehnt', 'storniert', 'noshow'];
@@ -162,6 +162,19 @@ function relingLabel(v: any): string {
   return `Reling: ${s}`;
 }
 
+async function resolveGoogleCalendarId(rental: RentalRequest): Promise<string | undefined> {
+  const direct = String(rental.googleCalendarId || '').trim();
+  if (direct) return direct;
+
+  const resourceId = String(rental.resourceId || '').trim();
+  if (!resourceId) return undefined;
+
+  const resources = await getAllResources();
+  const match = resources.find((resource) => resource.id === resourceId);
+  const fallback = String(match?.googleCalendarId || '').trim();
+  return fallback || undefined;
+}
+
 export async function createRentalRequest(rental: RentalRequest): Promise<void> {
   return addRentalRequest(rental);
 }
@@ -296,7 +309,12 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
   // in missingInfo via calculateMissingInfo(). We must not block the workflow
   // when Google OAuth / calendar integration is not configured.
 
-  if (newStatus === 'angenommen' && rental.googleCalendarId && !rental.googleEventId) {
+  const resolvedCalendarId = await resolveGoogleCalendarId(rental);
+  if (resolvedCalendarId && !rental.googleCalendarId) {
+    updates.googleCalendarId = resolvedCalendarId;
+  }
+
+  if (newStatus === 'angenommen' && resolvedCalendarId && !rental.googleEventId) {
     try {
       const cust = await getCustomerById(rental.customerId).catch(() => null);
       const customerName = cust ? `${cust.firstName || ''} ${cust.lastName || ''}`.trim() : '';
@@ -314,7 +332,7 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
         vehicle ? `Fahrzeug: ${vehicle}` : '',
       ].filter(Boolean);
 
-      const eventId = await createEventLegacy(rental.googleCalendarId, {
+      const eventId = await createEventLegacy(resolvedCalendarId, {
         // Busy + private per requirement ("beschaeftigt" + "vertraulich")
         summary: parts.join(' | '),
         description:
@@ -336,7 +354,7 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
     }
   }
 
-  if (newStatus === 'abgelehnt' && rental.googleCalendarId) {
+  if (newStatus === 'abgelehnt' && resolvedCalendarId) {
     try {
       const cust = await getCustomerById(rental.customerId).catch(() => null);
       const customerName = cust ? `${cust.firstName || ''} ${cust.lastName || ''}`.trim() : '';
@@ -357,13 +375,13 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
       // If a previous event exists, replace it with a declined marker event.
       if (rental.googleEventId) {
         try {
-          await deleteEventLegacy(rental.googleCalendarId, rental.googleEventId);
+          await deleteEventLegacy(resolvedCalendarId, rental.googleEventId);
         } catch (e) {
           console.error('Failed to delete existing calendar event before declined marker:', e);
         }
       }
 
-      const declinedEventId = await createEventLegacy(rental.googleCalendarId, {
+      const declinedEventId = await createEventLegacy(resolvedCalendarId, {
         summary: summaryParts.join(' | '),
         description:
           `Status: Angebot abgelehnt\n` +
@@ -386,9 +404,9 @@ export async function transitionStatus(rentalId: string, newStatus: RentalStatus
     }
   }
 
-  if (newStatus === 'storniert' && rental.googleCalendarId && rental.googleEventId) {
+  if (newStatus === 'storniert' && resolvedCalendarId && rental.googleEventId) {
     try {
-      await deleteEventLegacy(rental.googleCalendarId, rental.googleEventId);
+      await deleteEventLegacy(resolvedCalendarId, rental.googleEventId);
       updates.googleEventId = undefined;
     } catch (e) {
       console.error('Failed to delete calendar event:', e);
@@ -403,9 +421,10 @@ export async function archiveRentalRequest(rentalId: string, reason?: string): P
   if (!rental) throw { error: 'Vorgang nicht gefunden' };
 
   // If there is a calendar event, best-effort delete it when archiving.
-  if (rental.googleCalendarId && rental.googleEventId) {
+  const resolvedCalendarId = await resolveGoogleCalendarId(rental);
+  if (resolvedCalendarId && rental.googleEventId) {
     try {
-      await deleteEventLegacy(rental.googleCalendarId, rental.googleEventId);
+      await deleteEventLegacy(resolvedCalendarId, rental.googleEventId);
     } catch (e) {
       // Non-fatal: archiving should still proceed.
       console.error('Failed to delete calendar event during archive:', e);

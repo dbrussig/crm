@@ -124,7 +124,7 @@ fn thumbnails_resource_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// Directory for custom uploaded icons (lives next to the DB in app data).
 fn custom_icons_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = if let Some(icloud) = crate::database::init::icloud_documents_dir() {
+    let dir = if let Some(icloud) = crate::database::init::icloud_documents_dir_for_app(app) {
         icloud.join("custom-icons")
     } else {
         app.path()

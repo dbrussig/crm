@@ -3,11 +3,13 @@ import type { Customer, RentalRequest } from '../types';
 
 const {
   getRentalRequestMock,
+  getAllResourcesMock,
   getCustomerByIdMock,
   updateRentalRequestMock,
   createEventLegacyMock,
 } = vi.hoisted(() => ({
   getRentalRequestMock: vi.fn(),
+  getAllResourcesMock: vi.fn(),
   getCustomerByIdMock: vi.fn(),
   updateRentalRequestMock: vi.fn(),
   createEventLegacyMock: vi.fn(),
@@ -16,6 +18,7 @@ const {
 vi.mock('./sqliteService', () => ({
   addRentalRequest: vi.fn(),
   getAllRentalRequests: vi.fn(),
+  getAllResources: getAllResourcesMock,
   getCustomerById: getCustomerByIdMock,
   getRentalRequest: getRentalRequestMock,
   updateRentalRequest: updateRentalRequestMock,
@@ -69,6 +72,7 @@ function makeCustomer(overrides: Partial<Customer> = {}): Customer {
 describe('rental workflow with test customer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getAllResourcesMock.mockResolvedValue([]);
   });
 
   it('uses pickup/return timestamps for calendar event when moving to angenommen', async () => {
@@ -95,6 +99,51 @@ describe('rental workflow with test customer', () => {
       expect.objectContaining({
         status: 'angenommen',
         googleEventId: 'evt_123',
+      })
+    );
+  });
+
+  it('falls back to the resource calendar when the rental itself has no googleCalendarId', async () => {
+    const rental = makeRental({
+      googleCalendarId: undefined,
+      resourceId: 'resource_heckbox',
+      productType: 'Heckbox',
+      ahkPresent: 'ja',
+    });
+    const customer = makeCustomer();
+
+    getRentalRequestMock.mockResolvedValue(rental);
+    getAllResourcesMock.mockResolvedValue([
+      {
+        id: 'resource_heckbox',
+        name: 'Heckbox',
+        type: 'Heckbox',
+        googleCalendarId: 'resource-calendar@example.com',
+        isActive: true,
+        createdAt: Date.now(),
+        dailyRate: 90,
+        deposit: 150,
+      },
+    ]);
+    getCustomerByIdMock.mockResolvedValue(customer);
+    createEventLegacyMock.mockResolvedValue('evt_resource');
+    updateRentalRequestMock.mockResolvedValue(undefined);
+
+    await transitionStatus(rental.id, 'angenommen');
+
+    expect(createEventLegacyMock).toHaveBeenCalledWith(
+      'resource-calendar@example.com',
+      expect.objectContaining({
+        start: expect.any(Date),
+        end: expect.any(Date),
+      })
+    );
+    expect(updateRentalRequestMock).toHaveBeenCalledWith(
+      rental.id,
+      expect.objectContaining({
+        status: 'angenommen',
+        googleCalendarId: 'resource-calendar@example.com',
+        googleEventId: 'evt_resource',
       })
     );
   });

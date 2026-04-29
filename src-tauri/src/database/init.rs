@@ -7,6 +7,34 @@ use tauri::{path::BaseDirectory, AppHandle, Manager};
 use super::schema::SCHEMA_SQL;
 
 type BoxError = Box<dyn std::error::Error>;
+const PROD_IDENTIFIER: &str = "com.serverraum247.mietparkcrm.desktop";
+const PROD_ICLOUD_FOLDER: &str = "CRM Desktop";
+
+fn is_production_identifier(identifier: &str) -> bool {
+    identifier.trim() == PROD_IDENTIFIER
+}
+
+pub fn icloud_documents_dir_for_identifier(identifier: &str) -> Option<PathBuf> {
+    if !is_production_identifier(identifier) {
+        return None;
+    }
+
+    let home = std::env::var("HOME").ok()?;
+    let path = PathBuf::from(home)
+        .join("Library")
+        .join("Mobile Documents")
+        .join("com~apple~CloudDocs")
+        .join(PROD_ICLOUD_FOLDER);
+    if path.exists() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+pub fn icloud_documents_dir_for_app(app: &AppHandle) -> Option<PathBuf> {
+    icloud_documents_dir_for_identifier(&app.config().identifier)
+}
 
 pub fn ensure_app_directories(app: &AppHandle) -> Result<(), BoxError> {
     let app_dir = app.path().resolve("data", BaseDirectory::AppData)?;
@@ -19,21 +47,11 @@ pub fn ensure_app_directories(app: &AppHandle) -> Result<(), BoxError> {
 /// iOS apps can read/write the same data via iCloud Drive access.
 /// Path: ~/Library/Mobile Documents/com~apple~CloudDocs/CRM Desktop
 pub fn icloud_documents_dir() -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    let path = PathBuf::from(home)
-        .join("Library")
-        .join("Mobile Documents")
-        .join("com~apple~CloudDocs")
-        .join("CRM Desktop");
-    if path.exists() {
-        Some(path)
-    } else {
-        None
-    }
+    icloud_documents_dir_for_identifier(PROD_IDENTIFIER)
 }
 
 pub fn database_path(app: &AppHandle) -> Result<PathBuf, BoxError> {
-    if let Some(icloud_dir) = icloud_documents_dir() {
+    if let Some(icloud_dir) = icloud_documents_dir_for_app(app) {
         let data_dir = icloud_dir.join("data");
         fs::create_dir_all(&data_dir)?;
         return Ok(data_dir.join("mietpark-crm.db"));
@@ -43,7 +61,7 @@ pub fn database_path(app: &AppHandle) -> Result<PathBuf, BoxError> {
 }
 
 pub fn docs_base_dir(app: &AppHandle) -> Result<PathBuf, BoxError> {
-    if let Some(icloud_dir) = icloud_documents_dir() {
+    if let Some(icloud_dir) = icloud_documents_dir_for_app(app) {
         let docs_dir = icloud_dir.join("documents");
         fs::create_dir_all(&docs_dir)?;
         return Ok(docs_dir);
@@ -57,7 +75,7 @@ pub fn docs_base_dir(app: &AppHandle) -> Result<PathBuf, BoxError> {
 /// Best-effort migration from legacy AppData into iCloud container.
 /// Legacy files remain as backup and are not deleted.
 pub fn migrate_data_to_icloud(app: &AppHandle) -> Result<bool, BoxError> {
-    let Some(icloud_dir) = icloud_documents_dir() else {
+    let Some(icloud_dir) = icloud_documents_dir_for_app(app) else {
         return Ok(false);
     };
 

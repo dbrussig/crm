@@ -245,6 +245,7 @@ export interface PriceOverride {
 export interface RentalRequest {
   id: string;
   customerId: string;
+  resourceId?: string;
   productType: ProductType;
   status: RentalStatus;
   gmailThreadId?: string;
