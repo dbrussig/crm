@@ -17,7 +17,7 @@ vi.mock('./sqliteService', () => ({
   deleteInvoice: mocks.deleteInvoiceMock,
 }));
 
-import { createFollowUpInvoiceFromInvoice } from './invoiceService';
+import { createFollowUpInvoiceFromInvoice, prepareNextInvoiceNo } from './invoiceService';
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   const now = Date.now();
@@ -99,5 +99,22 @@ describe('createFollowUpInvoiceFromInvoice', () => {
 
     expect(id).toBe('inv_order_existing');
     expect(mocks.addInvoiceMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('prepareNextInvoiceNo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the next free order number for the current year', async () => {
+    mocks.getAllInvoicesMock.mockResolvedValue([
+      makeInvoice({ invoiceType: 'Auftrag', invoiceNo: 'AU-2026-3' }),
+      makeInvoice({ invoiceType: 'Auftrag', invoiceNo: 'AU-2026-4' }),
+    ]);
+
+    const next = await prepareNextInvoiceNo('Auftrag', new Date('2026-04-28T10:00:00Z'));
+
+    expect(next).toBe('AU-2026-5');
   });
 });

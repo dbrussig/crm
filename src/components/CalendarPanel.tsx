@@ -6,7 +6,7 @@ import Columns3 from 'lucide-react/dist/esm/icons/columns-3.js';
 import Grid3X3 from 'lucide-react/dist/esm/icons/grid-3x3.js';
 import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw.js';
 import Search from 'lucide-react/dist/esm/icons/search.js';
-import type { AccessoryCalendarMapping, Invoice, InvoiceItem, RentalAccessory, Resource } from '../types';
+import type { Invoice, InvoiceItem, Resource } from '../types';
 import {
   listCalendarsWithClientId,
   listEventsWithClientId,
@@ -14,14 +14,9 @@ import {
   type GoogleCalendarListEntry,
 } from '../services/googleCalendarService';
 import {
-  deleteAccessoryCalendarMapping,
-  getAccessoryCalendarGlobalMappingId,
-  getAllAccessories,
   getAllInvoices,
   getAllResources,
   getInvoiceItems,
-  listAccessoryCalendarMappings,
-  setAccessoryCalendarMapping,
 } from '../services/sqliteService';
 import { modifyResource } from '../services/resourceService';
 
@@ -30,7 +25,7 @@ function cn(...classes: Array<string | false | null | undefined>): string {
 }
 
 type CalendarView = 'month' | 'week';
-type CalendarItemKind = 'resource' | 'accessory' | 'invoice' | 'google';
+type CalendarItemKind = 'resource' | 'invoice' | 'google';
 
 type CalendarItem = {
   id: string;
@@ -53,6 +48,7 @@ type CalendarEntry = {
   end: Date;
   invoiceId?: string;
   invoiceNo?: string;
+  rentalRequestId?: string;
   htmlLink?: string;
   isGoogleOnly?: boolean;
 };
@@ -142,6 +138,20 @@ function fmtMonth(date: Date): string {
   return date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 }
 
+function parseRentalRequestIdFromDescription(description?: string): string | null {
+  const raw = String(description || '');
+  const match = /(?:^|\n)\s*Vorgang:\s*([^\n]+)/i.exec(raw);
+  return match?.[1]?.trim() || null;
+}
+
+function invoiceTypeRank(invoice: Invoice): number {
+  const type = String(invoice.invoiceType || '');
+  if (type === 'Rechnung') return 3;
+  if (type === 'Auftrag') return 2;
+  if (type === 'Angebot') return 1;
+  return 0;
+}
+
 function normalizeText(value: string): string {
   return value
     .toLowerCase()
@@ -200,16 +210,14 @@ export default function CalendarPanel(props: {
   onOpenSettings?: () => void;
   onOpenInvoice?: (invoiceId: string) => void;
 }) {
-  const [view, setView] = useState<CalendarView>('month');
+  const [view, setView] = useState<CalendarView>('week');
   const [focusDate, setFocusDate] = useState<Date>(() => new Date());
   const [filterId, setFilterId] = useState<string>('all');
   const [calendars, setCalendars] = useState<GoogleCalendarListEntry[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
-  const [accessories, setAccessories] = useState<RentalAccessory[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoiceItemsByInvoiceId, setInvoiceItemsByInvoiceId] = useState<Map<string, InvoiceItem[]>>(new Map());
   const [googleEventsByCalendarId, setGoogleEventsByCalendarId] = useState<Map<string, GoogleCalendarEvent[]>>(new Map());
-  const [accessoryMappings, setAccessoryMappings] = useState<AccessoryCalendarMapping[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncingGoogle, setSyncingGoogle] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,8 +230,6 @@ export default function CalendarPanel(props: {
   const visibleStart = useMemo(() => startOfDay(visibleDays[0] || new Date()), [visibleDays]);
   const visibleEnd = useMemo(() => endOfDay(visibleDays[visibleDays.length - 1] || new Date()), [visibleDays]);
   const visibleWeeks = useMemo(() => (view === 'month' ? monthMatrix(focusDate) : [weekDays(focusDate)]), [focusDate, view]);
-
-  const accessoryById = useMemo(() => new Map(accessories.map((accessory) => [accessory.id, accessory])), [accessories]);
 
   const resourceByCalendarId = useMemo(() => {
     const map = new Map<string, Resource>();
@@ -248,42 +254,61 @@ export default function CalendarPanel(props: {
       });
     }
 
-    for (const accessory of accessories.filter((a) => a.isActive)) {
-      items.push({
-        id: makeCalendarItemId('accessory', accessory.id),
-        name: accessory.inventoryKey ? `#${accessory.inventoryKey} ${accessory.name}` : accessory.name,
-        kind: 'accessory',
-        category: accessory.category,
-        colorKey: pickColor(colorIndex++),
-      });
-    }
-
     return items.sort((a, b) => {
       if (a.kind !== b.kind) return a.kind === 'resource' ? -1 : 1;
       return a.name.localeCompare(b.name, 'de');
     });
-  }, [accessories, resources]);
+  }, [resources]);
 
   const itemById = useMemo(() => new Map(calendarItems.map((item) => [item.id, item])), [calendarItems]);
 
   const loadLocalData = useCallback(async () => {
     setError(null);
     try {
-      const [nextResources, nextAccessories, nextInvoices, nextMappings] = await Promise.all([
+      const [nextResources, nextInvoices] = await Promise.all([
         getAllResources(),
-        getAllAccessories(),
         getAllInvoices(),
-        listAccessoryCalendarMappings(),
       ]);
 
-      const activeInvoices = nextInvoices.filter((invoice) => ACTIVE_INVOICE_STATES.has(invoice.state));
-      const entries = await Promise.all(activeInvoices.map(async (invoice) => [invoice.id, await getInvoiceItems(invoice.id)] as const));
+      const activeInvoices = nextInvoices.filter((invoice) => {
+        if (!ACTIVE_INVOICE_STATES.has(invoice.state)) return false;
+        const nextId = String(invoice.replacesInvoiceId || '').trim();
+        if (!nextId) return true;
+        return !nextInvoices.some((candidate) => candidate.id === nextId);
+      });
+
+      const bestByRentalId = new Map<string, Invoice>();
+      const standaloneInvoices: Invoice[] = [];
+      for (const invoice of activeInvoices) {
+        const rentalId = String(invoice.rentalRequestId || '').trim();
+        if (!rentalId) {
+          standaloneInvoices.push(invoice);
+          continue;
+        }
+
+        const current = bestByRentalId.get(rentalId);
+        if (!current) {
+          bestByRentalId.set(rentalId, invoice);
+          continue;
+        }
+
+        const currentRank = invoiceTypeRank(current);
+        const nextRank = invoiceTypeRank(invoice);
+        if (nextRank > currentRank) {
+          bestByRentalId.set(rentalId, invoice);
+          continue;
+        }
+        if (nextRank === currentRank && Number(invoice.updatedAt || 0) > Number(current.updatedAt || 0)) {
+          bestByRentalId.set(rentalId, invoice);
+        }
+      }
+
+      const visibleInvoices = [...standaloneInvoices, ...bestByRentalId.values()];
+      const entries = await Promise.all(visibleInvoices.map(async (invoice) => [invoice.id, await getInvoiceItems(invoice.id)] as const));
 
       setResources(nextResources);
-      setAccessories(nextAccessories);
-      setInvoices(activeInvoices);
+      setInvoices(visibleInvoices);
       setInvoiceItemsByInvoiceId(new Map(entries));
-      setAccessoryMappings(nextMappings);
     } catch (err: any) {
       setError(err?.message || String(err));
     }
@@ -303,7 +328,6 @@ export default function CalendarPanel(props: {
 
       const calendarIds = Array.from(new Set([
         ...resources.map((resource) => resource.googleCalendarId).filter((id): id is string => Boolean(id)),
-        ...accessoryMappings.map((mapping) => mapping.googleCalendarId).filter((id): id is string => Boolean(id)),
       ]));
 
       const rows: Array<readonly [string, GoogleCalendarEvent[]]> = await Promise.all(
@@ -330,7 +354,7 @@ export default function CalendarPanel(props: {
     } finally {
       setSyncingGoogle(false);
     }
-  }, [accessoryMappings, canUseGoogle, props.clientId, resources, visibleEnd, visibleStart]);
+  }, [canUseGoogle, props.clientId, resources, visibleEnd, visibleStart]);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -378,34 +402,31 @@ export default function CalendarPanel(props: {
           end: range.end,
           invoiceId: invoice.id,
           invoiceNo: invoice.invoiceNo,
+          rentalRequestId: invoice.rentalRequestId,
         });
       }
 
       for (const item of items) {
-        const accessory = item.assignedAccessoryId ? accessoryById.get(item.assignedAccessoryId) : undefined;
         const resource = matchResource(item.name, resources);
-        const calendarItemId = accessory
-          ? makeCalendarItemId('accessory', accessory.id)
-          : resource
-            ? makeCalendarItemId('resource', resource.id)
-            : makeCalendarItemId('invoice', item.id);
+        const calendarItemId = resource
+          ? makeCalendarItemId('resource', resource.id)
+          : makeCalendarItemId('invoice', item.id);
         const calendarItem = itemById.get(calendarItemId);
-        const itemName = accessory
-          ? (accessory.inventoryKey ? `#${accessory.inventoryKey} ${accessory.name}` : accessory.name)
-          : resource?.name || item.name;
+        const itemName = resource?.name || item.name;
 
         out.push({
           id: `invoice-item:${item.id}`,
           itemId: calendarItemId,
           itemName,
-          itemKind: accessory ? 'accessory' : resource ? 'resource' : 'invoice',
+          itemKind: resource ? 'resource' : 'invoice',
           colorKey: calendarItem?.colorKey || 'slate',
-          title: accessory ? `${item.name} + ${itemName}` : item.name,
+          title: item.name,
           subtitle: sharedSubtitle,
           start: range.start,
           end: range.end,
           invoiceId: invoice.id,
           invoiceNo: invoice.invoiceNo,
+          rentalRequestId: invoice.rentalRequestId,
         });
       }
     }
@@ -419,9 +440,13 @@ export default function CalendarPanel(props: {
         const start = new Date(event.start);
         const end = new Date(event.end);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+        const googleRentalRequestId = parseRentalRequestIdFromDescription(event.description);
 
         const duplicatesLocal = out.some((entry) =>
-          entry.itemId === itemId && sameDay(entry.start, start) && normalizeText(entry.title) === normalizeText(event.summary || '')
+          entry.itemId === itemId && (
+            (googleRentalRequestId && entry.rentalRequestId === googleRentalRequestId) ||
+            (sameDay(entry.start, start) && normalizeText(entry.title) === normalizeText(event.summary || ''))
+          )
         );
         if (duplicatesLocal) continue;
 
@@ -448,7 +473,6 @@ export default function CalendarPanel(props: {
       return a.start.getTime() - b.start.getTime();
     });
   }, [
-    accessoryById,
     calendars,
     googleEventsByCalendarId,
     invoiceItemsByInvoiceId,
@@ -497,17 +521,6 @@ export default function CalendarPanel(props: {
       setNotice({ tone: 'error', text: 'Konnte Kalender nicht speichern: ' + (err?.message || String(err)) });
     } finally {
       setAssignBusyId(null);
-    }
-  };
-
-  const saveAccessoryMapping = async (accessoryId: string, googleCalendarId: string) => {
-    try {
-      if (!googleCalendarId) await deleteAccessoryCalendarMapping(accessoryId);
-      else await setAccessoryCalendarMapping(accessoryId, googleCalendarId);
-      setAccessoryMappings(await listAccessoryCalendarMappings());
-      setNotice({ tone: 'info', text: 'Kalender-Zuordnung gespeichert.' });
-    } catch (err: any) {
-      setNotice({ tone: 'error', text: 'Konnte Kalender nicht speichern: ' + (err?.message || String(err)) });
     }
   };
 
@@ -658,8 +671,6 @@ export default function CalendarPanel(props: {
     );
   };
 
-  const globalAccessoryCalendarId = accessoryMappings.find((mapping) => mapping.accessoryId === getAccessoryCalendarGlobalMappingId())?.googleCalendarId || '';
-
   return (
     <div className="space-y-6 h-full flex flex-col bg-slate-50/50 -m-6 p-6">
       {notice && (
@@ -746,11 +757,6 @@ export default function CalendarPanel(props: {
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </optgroup>
-              <optgroup label="Zubehör">
-                {filterOptions.filter((item) => item.kind === 'accessory').map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </optgroup>
               {filterOptions.some((item) => item.kind === 'invoice') ? (
                 <optgroup label="Weitere Artikel">
                   {filterOptions.filter((item) => item.kind === 'invoice').map((item) => (
@@ -809,71 +815,10 @@ export default function CalendarPanel(props: {
             );
           })}
           {filterOptions.filter((item) => item.kind !== 'invoice').length === 0 ? (
-            <span className="text-xs text-slate-500">Keine Ressourcen oder Zubehörartikel vorhanden.</span>
+            <span className="text-xs text-slate-500">Keine Vermietungsgegenstände vorhanden.</span>
           ) : null}
         </div>
       </div>
-
-      <details className="rounded-lg border border-slate-200 bg-white p-3">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-800 select-none">Google Kalender-Zuordnung (Dachträger)</summary>
-        <div className="mt-3 text-xs text-slate-500">Optional: Globaler Kalender für alle Dachträger oder Kalender pro Dachträger. Pro-Dachträger überschreibt global.</div>
-
-        {!canUseGoogle ? (
-          <div className="mt-3 text-sm text-slate-600">Google OAuth ist nicht verbunden.</div>
-        ) : (
-          <div className="mt-3 space-y-3">
-            <div className="rounded-md border border-slate-200 p-3">
-              <div className="text-xs font-semibold text-slate-700 mb-1">Globaler Dachträger-Kalender</div>
-              <select
-                className="w-full px-2 py-1 rounded-md border border-slate-200 bg-white text-sm"
-                value={globalAccessoryCalendarId}
-                onChange={(event) => void saveAccessoryMapping(getAccessoryCalendarGlobalMappingId(), event.target.value)}
-                disabled={syncingGoogle}
-                aria-label="Globaler Dachträger Kalender"
-              >
-                <option value="">- kein Kalender -</option>
-                {calendars.map((calendar) => (
-                  <option key={calendar.id} value={calendar.id}>
-                    {(calendar.primary ? '[Primary] ' : '')}{calendar.summary || calendar.id}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              {accessories.filter((accessory) => accessory.isActive && accessory.category === 'Dachträger').map((accessory) => {
-                const current = accessoryMappings.find((mapping) => mapping.accessoryId === accessory.id)?.googleCalendarId || '';
-                const effective = current || globalAccessoryCalendarId;
-                return (
-                  <div key={accessory.id} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 p-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate">
-                        {accessory.inventoryKey ? `#${accessory.inventoryKey} - ` : ''}{accessory.name}
-                      </div>
-                      <div className="text-xs text-slate-600 truncate">Effektiv: {effective || '-'}</div>
-                    </div>
-                    <select
-                      className="px-2 py-1 rounded-md border border-slate-200 bg-white text-sm max-w-[360px]"
-                      value={current}
-                      disabled={syncingGoogle}
-                      onChange={(event) => void saveAccessoryMapping(accessory.id, event.target.value)}
-                      aria-label={`Kalender zuordnen fuer Dachträger ${accessory.name}`}
-                      title="Kalender pro Dachträger setzen"
-                    >
-                      <option value="">- global verwenden -</option>
-                      {calendars.map((calendar) => (
-                        <option key={calendar.id} value={calendar.id}>
-                          {(calendar.primary ? '[Primary] ' : '')}{calendar.summary || calendar.id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </details>
 
       <details className="rounded-lg border border-slate-200 bg-white p-3">
         <summary className="cursor-pointer text-sm font-semibold text-slate-800 select-none">Kalender-Zuordnung pflegen (Vermietungsgegenstände)</summary>

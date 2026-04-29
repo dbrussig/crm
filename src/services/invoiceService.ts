@@ -118,6 +118,10 @@ async function genInvoiceNo(type: InvoiceType, now = new Date(), maxAttempts = 1
   return `${prefix}-${yyyy}-${ts}`;
 }
 
+export async function prepareNextInvoiceNo(type: InvoiceType, now = new Date()): Promise<string> {
+  return genInvoiceNo(type, now);
+}
+
 async function isInvoiceNoDuplicate(no: string, excludeId?: string): Promise<boolean> {
   const all = await getAllInvoices();
   const normalized = String(no || '').trim().toUpperCase();

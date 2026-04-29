@@ -18,7 +18,7 @@ import Truck from 'lucide-react/dist/esm/icons/truck.js';
 import { Invoice, InvoiceItem, InvoiceType, InvoiceState, Customer, InvoiceTemplate, Payment } from '../types';
 import type { InvoiceFormValues } from './invoice/types';
 import InvoicePickupReturnBlock from './invoice/InvoicePickupReturnBlock';
-import { fetchInvoiceTemplate } from '../services/invoiceService';
+import { fetchInvoiceTemplate, prepareNextInvoiceNo } from '../services/invoiceService';
 import { getDefaultInvoiceLayoutId, getInvoiceLayout } from '../config/invoiceLayouts';
 import { getCompanyProfile } from '../config/companyProfile';
 import { getPaymentsByInvoice, getPaymentsByRental, addPayment, deletePayment, getPaymentMethodsConfig, getRentalRequest } from '../services/sqliteService';
@@ -258,6 +258,24 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       setState(initialInvoice.state);
     }
   }, [initialInvoice?.state]);
+
+  useEffect(() => {
+    if (initialInvoice?.id) return;
+    if (String(initialInvoice?.invoiceNo || '').trim()) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const nextInvoiceNo = await prepareNextInvoiceNo(invoiceType);
+      if (cancelled) return;
+      if (String(getValues('invoiceNo') || '').trim()) return;
+      setValue('invoiceNo', nextInvoiceNo, { shouldDirty: false });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialInvoice?.id, initialInvoice?.invoiceNo, invoiceType, getValues, setValue]);
 
   // ─── Watched Fields (reactive for JSX rendering) ───────────────
   // Gruppiert für bessere Performance (~7 statt 21 Subscriptions)

@@ -143,9 +143,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
       }
     }
 
-    if (!formData.email?.trim()) {
-      newErrors.email = 'E-Mail ist Pflichtfeld';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (formData.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Ungültiges E-Mail-Format';
     }
     if (!formData.phone?.trim()) {
@@ -355,7 +353,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, allCustomers = []
               {errors.phone && <p className="mt-0.5 text-xs text-red-600">{errors.phone}</p>}
             </div>
             <div>
-              <label className={labelCls}>E-Mail <span className="text-red-500">*</span></label>
+              <label className={labelCls}>E-Mail</label>
               <input
                 type="email"
                 value={formData.email}

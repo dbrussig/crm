@@ -12,7 +12,7 @@ import { generateRentalId } from './services/rentalIdService';
 import { fetchAllRentalRequests } from './services/rentalService';
 import { InvoiceList } from './components/InvoiceList';
 import { InvoiceEditor } from './components/InvoiceEditor';
-import { fetchAllInvoices, fetchInvoiceById, reissueInvoice, saveInvoice, type SaveInvoiceContext } from './services/invoiceService';
+import { fetchAllInvoices, fetchInvoiceById, prepareNextInvoiceNo, reissueInvoice, saveInvoice, type SaveInvoiceContext } from './services/invoiceService';
 import SettingsPanel from './components/SettingsPanel';
 import { testZAiConnection } from './services/zAiService';
 import { findActiveResourcesForType } from './services/resourceService';
@@ -1018,7 +1018,8 @@ export default function App() {
                 await deleteCustomer(id);
                 await loadCustomers();
               }}
-              onCreateInvoice={(customer, invoiceType) => {
+              onCreateInvoice={async (customer, invoiceType) => {
+                const invoiceNo = await prepareNextInvoiceNo(invoiceType);
                 setEditingInvoiceContext(null);
                 setEditingInvoice({
                   companyId: customer.id,
@@ -1026,6 +1027,7 @@ export default function App() {
                   buyerAddress: [customer.address.street, `${customer.address.zipCode} ${customer.address.city}`.trim()].filter(Boolean).join('\n'),
                   salutation: customer.salutation || '',
                   invoiceType,
+                  invoiceNo,
                 });
                 setEditingInvoiceItems([]);
                 setActiveView('beleg_editor');
